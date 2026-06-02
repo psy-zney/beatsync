@@ -1,4 +1,5 @@
 "use client";
+import { LoadingEtaOverlay } from "@/components/LoadingEtaOverlay";
 import { cn, extractFileNameFromUrl } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
 import { AnimatePresence, motion } from "motion/react";
@@ -91,6 +92,7 @@ export const DemoDashboard = ({ roomId }: DemoDashboardProps) => {
   return (
     <div className="w-full h-dvh flex flex-col text-white bg-neutral-950">
       <DemoBeatFlash />
+      <LoadingEtaOverlay />
       <TopBar roomId={roomId} />
 
       {!isSynced && hasUserStartedSystem && !isLoadingAudio && <SyncProgress />}

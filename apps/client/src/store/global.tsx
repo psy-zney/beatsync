@@ -71,6 +71,12 @@ export const AudioSourceStateSchema = z.discriminatedUnion("status", [
     loadedBytes: z.number().optional(),
     /** Total bytes (from Content-Length) */
     totalBytes: z.number().optional(),
+    /** Timestamp when this client started fetching the track */
+    loadStartedAt: z.number().optional(),
+    /** Smoothed client-side transfer rate */
+    transferRateBytesPerSecond: z.number().optional(),
+    /** Estimated remaining time in milliseconds */
+    estimatedRemainingMs: z.number().optional(),
   }),
   z.object({
     source: AudioSourceSchema,
@@ -450,6 +456,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     try {
       const state = get();
       const existing = state.audioSources.find((as) => as.source.url === url);
+      const loadStartedAt = Date.now();
 
       // Skip if already loaded or in-flight
       if (existing && existing.status === "loading") {
@@ -473,7 +480,17 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       // Mark as loading
       set((currentState) => ({
         audioSources: currentState.audioSources.map((as) =>
-          as.source.url === url ? { ...as, status: "loading" } : as
+          as.source.url === url
+            ? {
+                ...as,
+                status: "loading",
+                loadStartedAt,
+                loadedBytes: 0,
+                totalBytes: undefined,
+                transferRateBytesPerSecond: undefined,
+                estimatedRemainingMs: undefined,
+              }
+            : as
         ),
       }));
 
@@ -484,9 +501,24 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         onProgress: (loaded, total) => {
           if (loaded - lastReportedBytes < PROGRESS_THRESHOLD && loaded < total) return;
           lastReportedBytes = loaded;
+          const elapsedMs = Math.max(Date.now() - loadStartedAt, 1);
+          const transferRateBytesPerSecond = (loaded / elapsedMs) * 1000;
+          const estimatedRemainingMs =
+            total > loaded && transferRateBytesPerSecond > 0
+              ? ((total - loaded) / transferRateBytesPerSecond) * 1000
+              : undefined;
+
           set((currentState) => ({
             audioSources: currentState.audioSources.map((as) =>
-              as.source.url === url && as.status === "loading" ? { ...as, loadedBytes: loaded, totalBytes: total } : as
+              as.source.url === url && as.status === "loading"
+                ? {
+                    ...as,
+                    loadedBytes: loaded,
+                    totalBytes: total,
+                    transferRateBytesPerSecond,
+                    estimatedRemainingMs,
+                  }
+                : as
             ),
           }));
         },
