@@ -7,13 +7,36 @@
 
 let cached: { apiUrl: string; wsUrl: string } | null = null;
 
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function shouldIgnoreExplicitLocalUrls(apiUrl: string, wsUrl: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const currentHostname = window.location.hostname;
+  if (isLocalHost(currentHostname)) {
+    return false;
+  }
+
+  try {
+    const apiHostname = new URL(apiUrl).hostname;
+    const wsHostname = new URL(wsUrl).hostname;
+    return isLocalHost(apiHostname) && isLocalHost(wsHostname);
+  } catch {
+    return false;
+  }
+}
+
 function resolve(): { apiUrl: string; wsUrl: string } {
   if (cached) return cached;
 
   const envApi = process.env.NEXT_PUBLIC_API_URL;
   const envWs = process.env.NEXT_PUBLIC_WS_URL;
 
-  if (envApi && envWs) {
+  if (envApi && envWs && !shouldIgnoreExplicitLocalUrls(envApi, envWs)) {
     cached = { apiUrl: envApi, wsUrl: envWs };
   } else if (typeof window !== "undefined") {
     const { protocol, host } = window.location;
