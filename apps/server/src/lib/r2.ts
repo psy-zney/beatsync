@@ -82,6 +82,15 @@ export function getPublicAudioUrl(roomId: string, fileName: string): string {
   return `${S3_CONFIG.PUBLIC_URL}/room-${roomId}/${encodedFileName}`;
 }
 
+export function getPublicUrlForKey(key: string): string {
+  const encodedKey = key
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+
+  return `${S3_CONFIG.PUBLIC_URL}/${encodedKey}`;
+}
+
 /**
  * Extract the R2 key from a public URL
  * @param url The public URL (e.g., https://cdn.example.com/room-123/song.mp3)
@@ -434,6 +443,39 @@ export async function uploadBytes(
 
   // Return public URL
   return getPublicAudioUrl(roomId, fileName);
+}
+
+export async function uploadBytesToKey(
+  bytes: Uint8Array | ArrayBuffer,
+  key: string,
+  contentType = "audio/mpeg"
+): Promise<string> {
+  const body = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes;
+
+  const command = new PutObjectCommand({
+    Bucket: S3_CONFIG.BUCKET_NAME,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  });
+
+  await r2Client.send(command);
+
+  return getPublicUrlForKey(key);
+}
+
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await r2Client.send(
+      new HeadObjectCommand({
+        Bucket: S3_CONFIG.BUCKET_NAME,
+        Key: key,
+      })
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

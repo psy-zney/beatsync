@@ -1,4 +1,4 @@
-import play from "play-dl";
+import youtubedl from "youtube-dl-exec";
 
 const YOUTUBE_PROXY_PATH = "/youtube/proxy";
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -8,6 +8,17 @@ interface CachedYoutubeStream {
   expiresAt: number;
   streamUrl: string;
   title: string;
+}
+
+interface YoutubeDlOutput {
+  title?: string;
+  url?: string;
+}
+
+export interface ResolvedYoutubeSource {
+  videoId: string;
+  title: string;
+  streamUrl: string;
 }
 
 const streamCache = new Map<string, CachedYoutubeStream>();
@@ -85,16 +96,6 @@ function parseYoutubeVideoId(input: string): string | null {
   }
 }
 
-function pickAudioStreamUrl(
-  formats: Partial<{ url: string; mimeType: string; audioQuality: string; bitrate: number }>[]
-): string | null {
-  const audioFormats = formats
-    .filter((format) => format.url && ((format.mimeType?.includes("audio") ?? false) || format.audioQuality != null))
-    .sort((left, right) => (left.bitrate ?? Number.MAX_SAFE_INTEGER) - (right.bitrate ?? Number.MAX_SAFE_INTEGER));
-
-  return audioFormats[0]?.url ?? null;
-}
-
 export function getYoutubeVideoId(url: string): string {
   assertSupportedYoutubeUrl(url);
   return parseYoutubeVideoId(url)!;
@@ -105,21 +106,10 @@ export function buildYoutubeProxyUrl(videoId: string): string {
 }
 
 export async function getYoutubeMetadata(url: string): Promise<{ title: string; videoId: string }> {
-  assertSupportedYoutubeUrl(url);
-  const videoId = parseYoutubeVideoId(url)!;
-  const cached = getCachedStream(videoId);
-
-  if (cached) {
-    return {
-      title: cached.title,
-      videoId,
-    };
-  }
-
-  const info = await play.video_basic_info(url);
+  const resolved = await resolveYoutubeSource(url);
   return {
-    title: info.video_details.title ?? "YouTube Audio",
-    videoId,
+    title: resolved.title,
+    videoId: resolved.videoId,
   };
 }
 
@@ -135,15 +125,24 @@ async function resolveYoutubeStream(videoId: string): Promise<CachedYoutubeStrea
   }
 
   const resolutionPromise = (async () => {
-    const info = await play.video_info(createWatchUrl(videoId));
-    const streamUrl = pickAudioStreamUrl(info.format);
+    const output = (await youtubedl(createWatchUrl(videoId), {
+      dumpSingleJson: true,
+      noWarnings: true,
+      callHome: false,
+      noCheckCertificates: true,
+      format: "bestaudio/best",
+      preferFreeFormats: true,
+      noPlaylist: true,
+    })) as unknown as YoutubeDlOutput;
+
+    const streamUrl = output.url;
 
     if (!streamUrl) {
       throw new Error("Failed to extract audio stream URL from YouTube link");
     }
 
     const resolved = {
-      title: info.video_details.title ?? "YouTube Audio",
+      title: output.title ?? "YouTube Audio",
       streamUrl,
       expiresAt: getCacheExpiry(streamUrl),
     };
@@ -167,6 +166,22 @@ export async function getYoutubeStreamByVideoId(videoId: string): Promise<{ stre
     streamUrl: resolved.streamUrl,
     title: resolved.title,
   };
+}
+
+export async function resolveYoutubeSource(url: string): Promise<ResolvedYoutubeSource> {
+  assertSupportedYoutubeUrl(url);
+  const videoId = parseYoutubeVideoId(url)!;
+  const resolved = await resolveYoutubeStream(videoId);
+
+  return {
+    videoId,
+    title: resolved.title,
+    streamUrl: resolved.streamUrl,
+  };
+}
+
+export function invalidateYoutubeStream(videoId: string): void {
+  streamCache.delete(videoId);
 }
 
 export function isYoutubeProxyUrl(input: string): boolean {

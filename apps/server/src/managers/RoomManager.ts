@@ -219,18 +219,22 @@ export class RoomManager {
   /**
    * Process when a client reports they've loaded the audio source
    */
-  processClientLoadedAudioSource(clientId: string, server: BunServer): void {
+  processClientLoadedAudioSource(clientId: string, sourceUrl: string | BunServer, server?: BunServer): void {
+    const resolvedServer = server ?? (sourceUrl as BunServer);
+    const resolvedSourceUrl = typeof sourceUrl === "string" ? sourceUrl : undefined;
+
     if (IS_DEMO_MODE) {
-      this.serverRef = server;
+      this.serverRef = resolvedServer;
       this.demoAudioReadyClients.add(clientId);
       this.debouncedAudioReady();
       return;
     }
 
     if (!this.pendingPlay) {
-      console.warn(
-        `Room ${this.roomId}: Client ${clientId} reported audio source loaded, but no pending play state found`
-      );
+      return;
+    }
+
+    if (resolvedSourceUrl && this.pendingPlay.playAction.audioSource !== resolvedSourceUrl) {
       return;
     }
 
@@ -244,7 +248,7 @@ export class RoomManager {
     // Check if all active clients have loaded
     if (this.allClientsLoadedPendingSource()) {
       console.log(`Room ${this.roomId}: All clients loaded. Starting playback.`);
-      this.executeScheduledPlay(server);
+      this.executeScheduledPlay(resolvedServer);
     }
   }
 
@@ -435,6 +439,31 @@ export class RoomManager {
    */
   addAudioSource(source: AudioSourceType): AudioSourceType[] {
     this.audioSources.push(source);
+    return this.audioSources;
+  }
+
+  replaceAudioSource(oldUrl: string, newSource: AudioSourceType): AudioSourceType[] {
+    const index = this.audioSources.findIndex((source) => source.url === oldUrl);
+    if (index === -1) {
+      return this.audioSources;
+    }
+
+    this.audioSources[index] = newSource;
+
+    if (this.playbackState.audioSource === oldUrl) {
+      this.playbackState = {
+        ...this.playbackState,
+        audioSource: newSource.url,
+      };
+    }
+
+    if (this.pendingPlay?.playAction.audioSource === oldUrl) {
+      this.pendingPlay.playAction = {
+        ...this.pendingPlay.playAction,
+        audioSource: newSource.url,
+      };
+    }
+
     return this.audioSources;
   }
 
@@ -641,7 +670,7 @@ export class RoomManager {
     const { clientId, clientRTT, clientCompensationMs, clientNudgeMs } = data;
     const client = this.clientData.get(clientId);
     if (!client) return;
-    client.lastNtpResponse = Date.now();
+    this.touchClientActivity(clientId);
 
     // Log first NTP probe per client (confirms probes are flowing)
     if (client.rtt === 0 && clientRTT !== undefined && clientRTT > 0) {
@@ -670,6 +699,12 @@ export class RoomManager {
     }
 
     this.clientData.set(clientId, client);
+  }
+
+  touchClientActivity(clientId: string): void {
+    const client = this.clientData.get(clientId);
+    if (!client) return;
+    client.lastNtpResponse = Date.now();
   }
 
   /**

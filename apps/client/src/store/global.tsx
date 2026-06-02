@@ -42,6 +42,7 @@ export const MAX_NTP_MEASUREMENTS = NTP_CONSTANTS.MAX_MEASUREMENTS;
 
 // LRU Cache configuration for audio buffers
 const MAX_CACHED_BUFFERS = 3;
+const MAX_BACKGROUND_PRELOADS = 1;
 
 // https://webaudioapi.com/book/Web_Audio_API_Boris_Smus_html/ch02.html
 
@@ -96,6 +97,7 @@ interface GlobalStateValues {
   // Websocket
   socket: WebSocket | null;
   lastMessageReceivedTime: number | null;
+  awaitingSyncAfterLoadUrl: string | null;
 
   // Spatial audio
   spatialConfig?: SpatialConfigType;
@@ -258,6 +260,7 @@ const initialState: GlobalStateValues = {
   // Network state
   socket: null,
   lastMessageReceivedTime: null,
+  awaitingSyncAfterLoadUrl: null,
   connectedClients: [],
   currentUser: null,
   demoUserCount: 0,
@@ -508,6 +511,17 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           source: { url },
         },
       });
+
+      const refreshedState = get();
+      if (refreshedState.awaitingSyncAfterLoadUrl === url && !refreshedState.isPlaying) {
+        set({ awaitingSyncAfterLoadUrl: null });
+        sendWSRequest({
+          ws: socket,
+          request: { type: ClientActionEnum.enum.SYNC },
+        });
+      }
+
+      eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
     } catch (error) {
       console.error(`Failed to load audio source ${url}:`, error);
       // Update the source with error status
@@ -515,22 +529,47 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         audioSources: currentState.audioSources.map((as) =>
           as.source.url === url ? { ...as, status: "error", error: String(error) } : as
         ),
+        awaitingSyncAfterLoadUrl:
+          currentState.awaitingSyncAfterLoadUrl === url ? null : currentState.awaitingSyncAfterLoadUrl,
       }));
+
+      eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
     }
   };
 
-  // Eagerly load idle audio sources (skips loading/loaded/error).
-  // In demo mode: no cap (load everything). In prod: capped to MAX_CACHED_BUFFERS.
-  const eagerLoadIdleSources = ({ skip }: { skip?: string } = {}) => {
+  // Preload queue items in the background.
+  // Demo mode loads everything; production keeps a small rolling preload window.
+  const eagerLoadIdleSources = ({ preferredUrls = [], skip }: { preferredUrls?: string[]; skip?: string } = {}) => {
     const state = get();
-    let loaded = skip ? 1 : 0;
-    for (const as of state.audioSources) {
-      if (!IS_DEMO_MODE && loaded >= MAX_CACHED_BUFFERS) break;
-      if (as.source.url === skip) continue;
-      if (as.status === "idle") {
-        loadAudioSource(as.source.url);
-        loaded++;
+    const activeCount = state.audioSources.filter((as) => as.status === "loaded" || as.status === "loading").length;
+    const loadingCount = state.audioSources.filter((as) => as.status === "loading").length;
+
+    if (IS_DEMO_MODE) {
+      for (const as of state.audioSources) {
+        if (as.source.url === skip) continue;
+        if (as.status === "idle") {
+          void loadAudioSource(as.source.url);
+        }
       }
+      return;
+    }
+
+    if (activeCount >= MAX_CACHED_BUFFERS || loadingCount >= MAX_BACKGROUND_PRELOADS) {
+      return;
+    }
+
+    const orderedUrls = [...preferredUrls, ...state.audioSources.map((as) => as.source.url)].filter(
+      (url, index, arr) => arr.indexOf(url) === index
+    );
+
+    const nextIdleUrl = orderedUrls.find((url) => {
+      if (url === skip) return false;
+      const sourceState = state.audioSources.find((as) => as.source.url === url);
+      return sourceState?.status === "idle";
+    });
+
+    if (nextIdleUrl) {
+      void loadAudioSource(nextIdleUrl);
     }
   };
 
@@ -735,6 +774,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         duration: newDuration,
       });
 
+      void loadAudioSource(url);
+      eagerLoadIdleSources({ preferredUrls: [url], skip: url });
+
       // Return the previous playing state for the skip functions to use
       return wasPlaying;
     },
@@ -870,15 +912,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
         console.warn(`Cannot play audio: Track still loading: ${data.audioSource}`);
         toast.warning(`"${extractFileNameFromUrl(data.audioSource)}" not loaded yet...`, { id: "schedulePlay" });
+        set({ awaitingSyncAfterLoadUrl: data.audioSource });
 
-        const { socket } = getSocket(state);
-        setTimeout(() => {
-          sendWSRequest({
-            ws: socket,
-            request: { type: ClientActionEnum.enum.SYNC },
-          });
-        }, 1000);
+        return;
+      }
 
+      if (audioSourceState?.status === "idle") {
+        console.warn(`Cannot play audio: Track idle, starting load first: ${data.audioSource}`);
+        set({ awaitingSyncAfterLoadUrl: data.audioSource });
+        void loadAudioSource(data.audioSource);
         return;
       }
 
@@ -1220,6 +1262,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           ...state.audioPlayer!,
           sourceNode: newSourceNode,
         },
+        awaitingSyncAfterLoadUrl: null,
         isPlaying: true,
         playbackStartTime: startTime,
         playbackOffset: data.offset,
@@ -1443,6 +1486,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       }
 
       const state = get();
+      const previousSelectedSource = state.audioSources.find((as) => as.source.url === state.selectedAudioUrl)?.source;
 
       // Clean up buffer access queue - remove URLs that are no longer in the playlist
       // const newUrls = new Set(sources.map((s) => s.url));
@@ -1452,10 +1496,21 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       // Build completely new queue based on sources order
       const newQueue: string[] = [];
+      let replacementCurrentAudioSource = currentAudioSource;
+
+      if (currentAudioSource) {
+        const currentExists = sources.some((source) => source.url === currentAudioSource);
+        if (!currentExists) {
+          const fallbackByTitle = previousSelectedSource?.title
+            ? sources.find((source) => source.title && source.title === previousSelectedSource.title)
+            : undefined;
+          replacementCurrentAudioSource = fallbackByTitle?.url;
+        }
+      }
 
       // Add current/selected track first (highest priority)
-      if (currentAudioSource && sources.some((s) => s.url === currentAudioSource)) {
-        newQueue.push(currentAudioSource);
+      if (replacementCurrentAudioSource && sources.some((s) => s.url === replacementCurrentAudioSource)) {
+        newQueue.push(replacementCurrentAudioSource);
       } else if (state.selectedAudioUrl && sources.some((s) => s.url === state.selectedAudioUrl)) {
         newQueue.push(state.selectedAudioUrl);
       }
@@ -1484,21 +1539,32 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       set({ audioSources: newAudioSources, bufferAccessQueue: newQueue });
 
       // If currentAudioSource is provided from server, update selectedAudioUrl and start loading it
-      if (currentAudioSource) {
-        set({ selectedAudioUrl: currentAudioSource });
-        loadAudioSource(currentAudioSource);
+      if (replacementCurrentAudioSource) {
+        set({ selectedAudioUrl: replacementCurrentAudioSource });
+        void loadAudioSource(replacementCurrentAudioSource);
       }
 
-      // In demo mode, eagerly load remaining sources if sync is done.
-      // In prod, sources load on-demand when the user selects them.
-      if (IS_DEMO_MODE && get().isSynced) {
-        eagerLoadIdleSources({ skip: currentAudioSource });
+      // Preload queue items as soon as they enter the room.
+      // Demo mode waits for sync; production preloads in the background immediately.
+      if (IS_DEMO_MODE ? get().isSynced : true) {
+        eagerLoadIdleSources({ preferredUrls: newQueue, skip: replacementCurrentAudioSource });
       }
 
       // Check if the currently selected/playing track was removed
-      const currentStillExists = newAudioSources.some((as) => as.source.url === state.selectedAudioUrl);
+      const replacementSelectedUrl =
+        !replacementCurrentAudioSource && previousSelectedSource?.title
+          ? newAudioSources.find((as) => as.source.title && as.source.title === previousSelectedSource.title)?.source
+              .url
+          : undefined;
+      const nextSelectedUrl = replacementCurrentAudioSource ?? replacementSelectedUrl ?? state.selectedAudioUrl;
+      const currentStillExists = newAudioSources.some((as) => as.source.url === nextSelectedUrl);
 
-      if (!currentStillExists && state.selectedAudioUrl) {
+      if (replacementSelectedUrl && replacementSelectedUrl !== state.selectedAudioUrl) {
+        set({ selectedAudioUrl: replacementSelectedUrl });
+        void loadAudioSource(replacementSelectedUrl);
+      }
+
+      if (!currentStillExists && nextSelectedUrl) {
         // Stop playback if current track was removed
         if (state.isPlaying) {
           state.pauseAudio({ when: 0 });
@@ -1661,7 +1727,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     // Audio source methods
     handleLoadAudioSource: ({ audioSourceToPlay }: LoadAudioSourceType) => {
       set({ selectedAudioUrl: audioSourceToPlay.url });
-      loadAudioSource(audioSourceToPlay.url);
+      void loadAudioSource(audioSourceToPlay.url);
+      eagerLoadIdleSources({ preferredUrls: [audioSourceToPlay.url], skip: audioSourceToPlay.url });
     },
   };
 });
