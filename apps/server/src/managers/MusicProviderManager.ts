@@ -389,10 +389,12 @@ export class MusicProviderManager {
           throw new Error(`Failed to extract audio stream URL for track ID ${id}`);
         }
 
+        const proxiedUrl = `/youtube/proxy?url=${encodeURIComponent(publicUrl)}`;
+
         const mockResponse = {
           success: true,
           data: {
-            url: publicUrl,
+            url: proxiedUrl,
           },
         };
 
