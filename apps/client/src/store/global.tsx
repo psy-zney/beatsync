@@ -350,7 +350,11 @@ const getWaitTimeSeconds = (state: GlobalState, targetServerTime: number) => {
 const resolveAudioUrl = (url: string): string => (url.startsWith("/") ? `${getApiUrl()}${url}` : url);
 
 const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: number, total: number) => void }) => {
-  const response = await fetch(resolveAudioUrl(data.url));
+  const response = await fetch(resolveAudioUrl(data.url), {
+    headers: {
+      "ngrok-skip-browser-warning": "69420",
+    },
+  });
   const contentLength = Number(response.headers.get("content-length") ?? 0);
 
   let arrayBuffer: ArrayBuffer;
