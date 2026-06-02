@@ -10,6 +10,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { R2_AUDIO_FILE_NAME_DELIMITER } from "@beatsync/shared";
 import { config } from "dotenv";
+import { isLegacyYoutubeProxyUrl, isPersistentYoutubeProxyUrl } from "@/lib/youtube";
 import sanitize from "sanitize-filename";
 
 config();
@@ -29,6 +30,7 @@ const r2Client = new S3Client({
     accessKeyId: S3_CONFIG.ACCESS_KEY_ID,
     secretAccessKey: S3_CONFIG.SECRET_ACCESS_KEY,
   },
+  forcePathStyle: true,
 });
 
 export interface AudioFileMetadata {
@@ -87,6 +89,10 @@ export function getPublicAudioUrl(roomId: string, fileName: string): string {
  */
 export function extractKeyFromUrl(url: string): string | null {
   try {
+    if (url.startsWith("/")) {
+      return null;
+    }
+
     // Parse the URL to handle it properly
     const urlParts = new URL(url);
 
@@ -108,6 +114,29 @@ export function extractKeyFromUrl(url: string): string | null {
   }
 }
 
+function isManagedR2Url(audioUrl: string): boolean {
+  if (!audioUrl) {
+    return false;
+  }
+
+  if (isPersistentYoutubeProxyUrl(audioUrl) || isLegacyYoutubeProxyUrl(audioUrl)) {
+    return false;
+  }
+
+  try {
+    const publicUrl = new URL(S3_CONFIG.PUBLIC_URL);
+    const candidate = new URL(audioUrl);
+
+    return (
+      publicUrl.origin === candidate.origin &&
+      candidate.pathname.startsWith("/") &&
+      candidate.pathname.includes("/room-")
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Validate if an audio file exists in R2 by checking its URL
  * @param audioUrl The public URL of the audio file
@@ -115,6 +144,18 @@ export function extractKeyFromUrl(url: string): string | null {
  */
 export async function validateAudioFileExists(audioUrl: string): Promise<boolean> {
   try {
+    if (isPersistentYoutubeProxyUrl(audioUrl)) {
+      return true;
+    }
+
+    if (isLegacyYoutubeProxyUrl(audioUrl)) {
+      return false;
+    }
+
+    if (!isManagedR2Url(audioUrl)) {
+      return true;
+    }
+
     // Extract the key from the public URL
     const key = extractKeyFromUrl(audioUrl);
 

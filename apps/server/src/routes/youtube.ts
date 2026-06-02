@@ -1,18 +1,18 @@
 import { globalManager } from "@/managers/GlobalManager";
+import {
+  buildYoutubeProxyUrl,
+  getYoutubeMetadata,
+  getYoutubeStreamByVideoId,
+  isTrustedYoutubeMediaUrl,
+} from "@/lib/youtube";
 import { errorResponse, jsonResponse, sendBroadcast } from "@/utils/responses";
 import type { BunServer } from "@/utils/websocket";
-import youtubedl from "youtube-dl-exec";
 import { z } from "zod";
 
 const YoutubeUploadSchema = z.object({
   roomId: z.string(),
   url: z.string().url(),
 });
-
-interface YoutubeDlOutput {
-  title?: string;
-  url?: string;
-}
 
 export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
   if (req.method !== "POST") {
@@ -34,24 +34,8 @@ export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
       return errorResponse("Room not found", 404);
     }
 
-    // Get video info and stream URL via yt-dlp
-    const output = (await youtubedl(url, {
-      dumpSingleJson: true,
-      noWarnings: true,
-      callHome: false,
-      noCheckCertificates: true,
-      format: "worstaudio",
-    })) as unknown as YoutubeDlOutput;
-
-    const title = output.title ?? "YouTube Audio";
-    const publicUrl = output.url; // Use direct stream URL, bypassing S3
-
-    if (!publicUrl) {
-      return errorResponse("Failed to extract audio stream URL from YouTube link", 400);
-    }
-
-    // Format the URL to go through our local server proxy to bypass browser CORS
-    const proxiedUrl = `/youtube/proxy?url=${encodeURIComponent(publicUrl)}`;
+    const { title, videoId } = await getYoutubeMetadata(url);
+    const proxiedUrl = buildYoutubeProxyUrl(videoId);
 
     // Add to room
     const sources = room.addAudioSource({
@@ -80,10 +64,25 @@ export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
 
 export const handleYoutubeProxy = async (req: Request) => {
   const url = new URL(req.url);
-  const targetUrl = url.searchParams.get("url");
+  const videoId = url.searchParams.get("videoId");
+  let targetUrl = url.searchParams.get("url");
+
+  if (videoId) {
+    try {
+      const resolved = await getYoutubeStreamByVideoId(videoId);
+      targetUrl = resolved.streamUrl;
+    } catch (error) {
+      console.error(`YouTube stream resolution error for video ${videoId}:`, error);
+      return errorResponse(error instanceof Error ? error.message : "Failed to resolve YouTube stream", 500);
+    }
+  }
 
   if (!targetUrl) {
-    return errorResponse("Missing 'url' parameter", 400);
+    return errorResponse("Missing 'videoId' or 'url' parameter", 400);
+  }
+
+  if (!isTrustedYoutubeMediaUrl(targetUrl)) {
+    return errorResponse("Untrusted proxy target", 400);
   }
 
   try {
@@ -96,9 +95,13 @@ export const handleYoutubeProxy = async (req: Request) => {
       "User-Agent",
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
+    headersToSend.set("Accept", "*/*");
+    headersToSend.set("Origin", "https://www.youtube.com");
+    headersToSend.set("Referer", "https://www.youtube.com/");
 
     const response = await fetch(targetUrl, {
       headers: headersToSend,
+      redirect: "follow",
     });
 
     const headers = new Headers();

@@ -40,6 +40,11 @@ describe("R2 Pure Functions", () => {
       const key = extractKeyFromUrl("not-a-url");
       expect(key).toBeNull();
     });
+
+    it("should return null for local youtube proxy URLs", () => {
+      const key = extractKeyFromUrl("/youtube/proxy?videoId=dQw4w9WgXcQ");
+      expect(key).toBeNull();
+    });
   });
 
   describe("generateAudioFileName", () => {

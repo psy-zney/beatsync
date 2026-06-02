@@ -1,6 +1,6 @@
 import { RawSearchResponseSchema, SearchParamsSchema, StreamResponseSchema, TrackParamsSchema } from "@beatsync/shared";
+import { buildYoutubeProxyUrl, getYoutubeMetadata } from "@/lib/youtube";
 import type { z } from "zod";
-import youtubedl from "youtube-dl-exec";
 
 interface MockTrack {
   id: number;
@@ -369,27 +369,9 @@ export class MusicProviderManager {
           throw new Error(`Track with ID ${id} not found in mock list`);
         }
 
-        // Use yt-dlp to extract the streaming URL
-        console.log(`Extracting YouTube audio URL for: ${mockTrack.youtubeUrl}`);
-        interface YoutubeDlOutput {
-          title?: string;
-          url?: string;
-        }
-
-        const output = (await youtubedl(mockTrack.youtubeUrl, {
-          dumpSingleJson: true,
-          noWarnings: true,
-          callHome: false,
-          noCheckCertificates: true,
-          format: "worstaudio",
-        })) as unknown as YoutubeDlOutput;
-
-        const publicUrl = output.url;
-        if (!publicUrl) {
-          throw new Error(`Failed to extract audio stream URL for track ID ${id}`);
-        }
-
-        const proxiedUrl = `/youtube/proxy?url=${encodeURIComponent(publicUrl)}`;
+        console.log(`Preparing YouTube proxy URL for: ${mockTrack.youtubeUrl}`);
+        const { videoId } = await getYoutubeMetadata(mockTrack.youtubeUrl);
+        const proxiedUrl = buildYoutubeProxyUrl(videoId);
 
         const mockResponse = {
           success: true,
