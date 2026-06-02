@@ -226,6 +226,14 @@ class AudioContextManager {
     return this.audioContext?.currentTime || 0;
   }
 
+  getOutputLatencyMs(): number {
+    try {
+      return (this.audioContext?.outputLatency ?? 0) * 1000;
+    } catch {
+      return 0;
+    }
+  }
+
   /**
    * Set a callback for state changes
    */

@@ -61,7 +61,7 @@ export const Left = ({ className }: LeftProps) => {
       <div className="flex items-center gap-3 px-3.5 py-2 text-[10px] font-mono text-neutral-500 lg:hidden">
         <span>Offset: {clockOffset.toFixed(1)}ms</span>
         <span>RTT: {roundTripEstimate.toFixed(1)}ms</span>
-        <span>OL: {((audioContextManager.getContext().outputLatency ?? 0) * 1000).toFixed(0)}ms</span>
+        <span>OL: {audioContextManager.getOutputLatencyMs().toFixed(0)}ms</span>
         <span>
           NTP: {syncMeasurementCount}/{MAX_NTP_MEASUREMENTS}
         </span>
