@@ -7,6 +7,7 @@ import { handleDiscover } from "@/routes/discover";
 import { handleRoot } from "@/routes/root";
 import { handleStats } from "@/routes/stats";
 import { handleGetPresignedURL, handleUploadComplete } from "@/routes/upload";
+import { handleYoutubeUpload, handleYoutubeProxy } from "@/routes/youtube";
 import { handleWebSocketUpgrade } from "@/routes/websocket";
 import { handleClose, handleMessage, handleOpen } from "@/routes/websocketHandlers";
 import { corsHeaders, errorResponse } from "@/utils/responses";
@@ -44,6 +45,13 @@ const server = Bun.serve<WSData>({
         case "/upload/complete":
           if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
           return handleUploadComplete(req, server);
+
+        case "/upload/youtube":
+          if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
+          return handleYoutubeUpload(req, server);
+
+        case "/youtube/proxy":
+          return handleYoutubeProxy(req);
 
         case "/stats":
           return handleStats();

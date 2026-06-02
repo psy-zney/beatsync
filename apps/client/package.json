@@ -64,7 +64,8 @@
     "tailwindcss-animate": "^1.0.7",
     "throttle-debounce": "^5.0.2",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "@beatsync/shared": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

@@ -95,7 +95,7 @@ interface PendingPlayState {
  * Each room has its own instance of RoomManager.
  */
 export class RoomManager {
-  private static readonly AUDIO_LOAD_TIMEOUT_MS = 3000; // 3 seconds max wait for audio loading
+  private static readonly AUDIO_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for audio loading
 
   private clientData = new Map<string, ClientDataType>(); // map of clientId -> client data
   private wsConnections = new Map<string, ServerWebSocket<WSData>>(); // map of clientId -> ws
