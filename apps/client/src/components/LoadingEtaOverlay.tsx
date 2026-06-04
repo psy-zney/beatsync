@@ -1,22 +1,27 @@
 "use client";
 
+import * as React from "react";
 import { formatBytes, formatEta } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
 import { Loader2 } from "lucide-react";
 
 export const LoadingEtaOverlay = () => {
-  const loadingSources = useGlobalStore((state) =>
-    state.audioSources
-      .filter((source) => source.status === "loading")
-      .slice(0, 3)
-      .map((source) => ({
-        url: source.source.url,
-        title: source.source.title ?? "Loading track",
-        loadedBytes: source.loadedBytes ?? 0,
-        totalBytes: source.totalBytes,
-        transferRateBytesPerSecond: source.transferRateBytesPerSecond,
-        estimatedRemainingMs: source.estimatedRemainingMs,
-      }))
+  const audioSources = useGlobalStore((state) => state.audioSources);
+
+  const loadingSources = React.useMemo(
+    () =>
+      audioSources
+        .filter((source) => source.status === "loading")
+        .slice(0, 3)
+        .map((source) => ({
+          url: source.source.url,
+          title: source.source.title ?? "Loading track",
+          loadedBytes: source.loadedBytes ?? 0,
+          totalBytes: source.totalBytes,
+          transferRateBytesPerSecond: source.transferRateBytesPerSecond,
+          estimatedRemainingMs: source.estimatedRemainingMs,
+        })),
+    [audioSources]
   );
 
   if (loadingSources.length === 0) return null;

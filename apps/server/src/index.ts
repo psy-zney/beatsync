@@ -100,7 +100,8 @@ if (IS_DEMO_MODE) {
 if (!IS_DEMO_MODE) {
   // Restore state from backup on startup
   BackupManager.restoreState().catch((error) => {
-    console.error("Failed to restore state on startup:", error);
+    const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+    console.error(`Failed to restore state on startup: ${msg}`);
   });
 
   // Set up periodic backups every minute (for Render persistence issues)
@@ -108,7 +109,8 @@ if (!IS_DEMO_MODE) {
   setInterval(() => {
     console.log("🔄 Performing periodic backup at", new Date().toISOString());
     BackupManager.backupState().catch((error) => {
-      console.error("Failed to perform periodic backup:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`Failed to perform periodic backup: ${msg}`);
     });
   }, BACKUP_INTERVAL_MS);
 }

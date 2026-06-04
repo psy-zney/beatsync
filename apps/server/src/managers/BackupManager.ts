@@ -135,7 +135,8 @@ export class BackupManager {
       // Clean up old backups after successful backup
       await this.cleanupOldBackups();
     } catch (error) {
-      console.error("❌ State backup failed:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`❌ State backup failed: ${msg}`);
       throw error;
     }
   }
@@ -235,7 +236,8 @@ export class BackupManager {
 
       return true;
     } catch (error) {
-      console.error("❌ State restore failed:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`❌ State restore failed: ${msg}`);
       return false;
     }
   }

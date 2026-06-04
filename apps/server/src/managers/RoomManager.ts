@@ -1178,6 +1178,10 @@ export class RoomManager {
             // Close the WebSocket - this will trigger the onClose handler
             // which will properly remove the client from the room
             ws.close(1000, "Connection timeout - no heartbeat response");
+
+            // Proactively remove from wsConnections immediately so the next heartbeat
+            // doesn't see it again if the close event is delayed.
+            this.removeClient(clientId);
           } catch (error) {
             console.error(`Error closing WebSocket for client ${clientId}:`, error);
             // If closing failed, still try to clean up
