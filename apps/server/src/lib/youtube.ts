@@ -1,4 +1,4 @@
-import youtubedl from "youtube-dl-exec";
+import { join } from "path";
 
 const YOUTUBE_PROXY_PATH = "/youtube/proxy";
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -8,11 +8,6 @@ interface CachedYoutubeStream {
   expiresAt: number;
   streamUrl: string;
   title: string;
-}
-
-interface YoutubeDlOutput {
-  title?: string;
-  url?: string;
 }
 
 export interface ResolvedYoutubeSource {
@@ -125,24 +120,39 @@ async function resolveYoutubeStream(videoId: string): Promise<CachedYoutubeStrea
   }
 
   const resolutionPromise = (async () => {
-    const output = (await youtubedl(createWatchUrl(videoId), {
-      dumpSingleJson: true,
-      noWarnings: true,
-      callHome: false,
-      noCheckCertificates: true,
-      format: "bestaudio/best",
-      preferFreeFormats: true,
-      noPlaylist: true,
-    })) as unknown as YoutubeDlOutput;
+    const exePath = join(process.cwd(), "yt-rust-extractor", "target", "release", "yt-rust-extractor.exe");
+    const proc = Bun.spawn([exePath, createWatchUrl(videoId)], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
-    const streamUrl = output.url;
+    const stdout = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`Rust extractor failed (code ${exitCode}): ${stderr || stdout}`);
+    }
+
+    let parsed: { stream_url?: string; title?: string; error?: string };
+    try {
+      parsed = JSON.parse(stdout) as { stream_url?: string; title?: string; error?: string };
+    } catch {
+      throw new Error(`Failed to parse Rust output: ${stdout}`);
+    }
+
+    if (parsed.error) {
+      throw new Error(`Rust extractor error: ${parsed.error}`);
+    }
+
+    const streamUrl = parsed.stream_url;
 
     if (!streamUrl) {
       throw new Error("Failed to extract audio stream URL from YouTube link");
     }
 
     const resolved = {
-      title: output.title ?? "YouTube Audio",
+      title: parsed.title ?? "YouTube Audio",
       streamUrl,
       expiresAt: getCacheExpiry(streamUrl),
     };
