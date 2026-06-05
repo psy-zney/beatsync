@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y nodejs npm
 
 COPY . .
-RUN npm pkg delete scripts.prepare && bun install
+RUN npm pkg delete scripts.prepare && bun install --ignore-scripts
 
 # Build the server
 RUN cd apps/server && bun run build
