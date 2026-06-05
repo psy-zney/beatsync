@@ -77,7 +77,7 @@ fn main() {
     };
 
     let result = Command::new(yt_dlp_path)
-        .args(&["--dump-json", "-f", "bestaudio", url])
+        .args(&["--dump-json", "-f", "bestaudio", "--js-runtimes", "node", url])
         .output();
 
     let output = match result {

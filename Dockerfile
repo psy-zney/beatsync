@@ -22,7 +22,8 @@ FROM oven/bun:1-slim AS runner
 WORKDIR /app
 
 # We need python3 for some yt-dlp fallback, and ffmpeg for audio processing if needed
-RUN apt-get update && apt-get install -y python3 ffmpeg curl && rm -rf /var/lib/apt/lists/*
+# We also need nodejs because yt-dlp requires a JS runtime to bypass YouTube bot protections
+RUN apt-get update && apt-get install -y python3 ffmpeg curl nodejs && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp globally
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
