@@ -17,3 +17,6 @@ local/
 
 .vscode/
 docs/
+# Ignore command logs
+commands.md
+cmd.md

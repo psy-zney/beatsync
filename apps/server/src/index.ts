@@ -34,6 +34,36 @@ const server = Bun.serve<WSData>({
         return handleServeAudio(url.pathname);
       }
 
+      // Proxy MinIO requests so Vercel client can access local MinIO through backend Ngrok
+      if (url.pathname.startsWith("/minio-proxy/")) {
+        try {
+          const minioUrl = url.pathname.replace("/minio-proxy/", "http://localhost:9000/");
+          const headersToSend = new Headers();
+          const range = req.headers.get("range");
+          if (range) headersToSend.set("range", range);
+
+          const minioResponse = await fetch(minioUrl, {
+            headers: headersToSend,
+            method: req.method,
+          });
+
+          const newHeaders = new Headers(minioResponse.headers);
+          newHeaders.set("Access-Control-Allow-Origin", "*");
+          newHeaders.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+          newHeaders.set("Access-Control-Allow-Headers", "*");
+          newHeaders.set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Content-Type");
+
+          return new Response(minioResponse.body, {
+            status: minioResponse.status,
+            statusText: minioResponse.statusText,
+            headers: newHeaders,
+          });
+        } catch (error) {
+          console.error("MinIO proxy error:", error);
+          return errorResponse("Failed to proxy MinIO request", 500);
+        }
+      }
+
       switch (url.pathname) {
         case "/":
           return handleRoot(req);
