@@ -21,6 +21,8 @@ struct YtdlOutput {
 }
 
 fn find_yt_dlp() -> Result<PathBuf, String> {
+    let ytdlp_name = if cfg!(target_os = "windows") { "yt-dlp.exe" } else { "yt-dlp" };
+
     // 1. Try relative to current exe
     if let Ok(exe_path) = env::current_exe() {
         let mut path = exe_path;
@@ -31,7 +33,7 @@ fn find_yt_dlp() -> Result<PathBuf, String> {
                 break;
             }
         }
-        let candidate = path.join("node_modules").join("youtube-dl-exec").join("bin").join("yt-dlp.exe");
+        let candidate = path.join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
         if candidate.exists() {
             return Ok(candidate);
         }
@@ -39,11 +41,11 @@ fn find_yt_dlp() -> Result<PathBuf, String> {
 
     // 2. Try relative to current working directory
     if let Ok(cwd) = env::current_dir() {
-        let candidate1 = cwd.join("node_modules").join("youtube-dl-exec").join("bin").join("yt-dlp.exe");
+        let candidate1 = cwd.join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
         if candidate1.exists() {
             return Ok(candidate1);
         }
-        let candidate2 = cwd.join("apps").join("server").join("node_modules").join("youtube-dl-exec").join("bin").join("yt-dlp.exe");
+        let candidate2 = cwd.join("apps").join("server").join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
         if candidate2.exists() {
             return Ok(candidate2);
         }
