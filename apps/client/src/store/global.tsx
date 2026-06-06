@@ -195,6 +195,7 @@ interface GlobalState extends GlobalStateValues {
   setIsSpatialAudioEnabled: (isEnabled: boolean) => void;
   processStopSpatialAudio: () => void;
   setConnectedClients: (clients: ClientDataType[]) => void;
+  updateClientPosition: (clientId: string, position: PositionType) => void;
   sendProbePair: () => void;
   nudge: (data: { amountMs: number }) => void;
   resetNTPConfig: () => void;
@@ -362,8 +363,14 @@ const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: 
   const response = await fetch(resolveAudioUrl(data.url), {
     headers: {
       "ngrok-skip-browser-warning": "69420",
+      Range: "bytes=0-", // Forces YouTube to bypass 1x streaming throttle
     },
   });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Failed to load audio: ${response.status} ${response.statusText}. ${errText}`);
+  }
   const contentLength = Number(response.headers.get("content-length") ?? 0);
 
   let arrayBuffer: ArrayBuffer;
@@ -1303,25 +1310,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     },
 
     processSpatialConfig: (config: SpatialConfigType) => {
-      const state = get();
       set({ spatialConfig: config });
-      const { listeningSource } = config;
-
-      // Don't set if we were the ones dragging the listening source
-      if (!state.isDraggingListeningSource) {
-        set({ listeningSourcePosition: listeningSource });
-      }
-
-      // Use the shared applyFinalGain method which handles global volume multiplication
-      const clientId = getClientId();
-      const user = config.gains[clientId];
-      if (!user) {
-        console.error(`No gain config found for client ${clientId}`);
-        return;
-      }
-
-      // The rampTime comes from the server-side spatial config
-      state.applyFinalGain(user.rampTime);
     },
 
     pauseAudio: (data: { when: number }) => {
@@ -1369,6 +1358,21 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         currentUser,
         ...(shouldRestoreNudge ? { nudgeOffsetMs: currentUser.nudgeMs, didRestoreNudge: true } : {}),
       });
+    },
+
+    updateClientPosition: (clientId: string, position: PositionType) => {
+      const state = get();
+      const updatedClients = state.connectedClients.map((client) => {
+        if (client.clientId === clientId) {
+          return { ...client, position };
+        }
+        return client;
+      });
+      set({ connectedClients: updatedClients });
+
+      if (clientId === getClientId() && state.currentUser) {
+        set({ currentUser: { ...state.currentUser, position } });
+      }
     },
 
     skipToNextTrack: (isAutoplay = false) => {
@@ -1447,10 +1451,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     },
 
     getCurrentSpatialGainValue: () => {
-      const state = get();
-      if (!state.spatialConfig) return 1; // Default value if no spatial config
-      const clientId = getClientId();
-      return state.spatialConfig.gains[clientId].gain;
+      // With the new client-side spatial calculation, spatial gain is continuously
+      // applied via requestAnimationFrame in SpatialAudioBackground.tsx.
+      // This is just a fallback for any components that might ask for it,
+      // though typically they shouldn't need to anymore.
+      return 1;
     },
 
     setGlobalVolume: (volume) => {
@@ -1480,15 +1485,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     applyFinalGain: (rampTime = 0.1) => {
       const state = get();
 
-      // Calculate final gain
-      let finalGain = state.globalVolume;
-
-      // If spatial audio is enabled, get the spatial gain for this client
-      if (state.isSpatialAudioEnabled && state.spatialConfig) {
-        const clientId = getClientId();
-        const spatialGain = state.spatialConfig.gains[clientId]?.gain || 1;
-        finalGain = state.globalVolume * spatialGain;
-      }
+      // Final gain is just global volume.
+      // If spatial audio is enabled, SpatialAudioBackground will continuously
+      // override this in requestAnimationFrame.
+      const finalGain = state.globalVolume;
 
       // Use singleton's setMasterGain with ramping
       audioContextManager.setMasterGain(finalGain, rampTime);

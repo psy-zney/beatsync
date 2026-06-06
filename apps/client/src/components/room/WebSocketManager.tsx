@@ -50,6 +50,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const processSpatialConfig = useGlobalStore((state) => state.processSpatialConfig);
   const addProbePairResult = useGlobalStore((state) => state.addProbePairResult);
   const setConnectedClients = useGlobalStore((state) => state.setConnectedClients);
+  const updateClientPosition = useGlobalStore((state) => state.updateClientPosition);
   const isSpatialAudioEnabled = useGlobalStore((state) => state.isSpatialAudioEnabled);
   const setIsSpatialAudioEnabled = useGlobalStore((state) => state.setIsSpatialAudioEnabled);
   const processStopSpatialAudio = useGlobalStore((state) => state.processStopSpatialAudio);
@@ -174,7 +175,15 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
         if (event.type === "CLIENT_CHANGE") {
           setConnectedClients(event.clients);
-        } else if (event.type === "SET_AUDIO_SOURCES") {
+          return;
+        }
+
+        if (event.type === "CLIENT_MOVED") {
+          updateClientPosition(event.clientId, event.position);
+          return;
+        }
+
+        if (event.type === "SET_AUDIO_SOURCES") {
           handleSetAudioSources(event);
         } else if (event.type === "SET_PLAYBACK_CONTROLS") {
           setPlaybackControlsPermissions(event.permissions);

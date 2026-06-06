@@ -69,6 +69,14 @@ export const handleStreamMusic: HandlerFunction<ExtractWSRequestFrom["STREAM_MUS
           },
         },
       });
+
+      // Pre-warm the cache in the background so the proxy is instant
+      const videoId = new URL(streamUrl, "http://localhost").searchParams.get("videoId");
+      if (videoId) {
+        void import("@/lib/youtube").then(({ getYoutubeStreamByVideoId }) => {
+          getYoutubeStreamByVideoId(videoId).catch(console.error);
+        });
+      }
       return;
     }
 

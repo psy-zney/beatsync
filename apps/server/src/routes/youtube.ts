@@ -6,7 +6,7 @@ import {
   isTrustedYoutubeMediaUrl,
   resolveYoutubeSource,
 } from "@/lib/youtube";
-import { objectExists, uploadBytesToKey, getPublicUrlForKey } from "@/lib/r2";
+import { getPublicUrlForKey, objectExists } from "@/lib/r2";
 import { errorResponse, jsonResponse, sendBroadcast } from "@/utils/responses";
 import type { BunServer } from "@/utils/websocket";
 import { z } from "zod";
@@ -15,20 +15,6 @@ const YoutubeUploadSchema = z.object({
   roomId: z.string(),
   url: z.string().url(),
 });
-
-const activeYoutubeCacheJobs = new Map<string, Promise<string>>();
-
-function getExtensionFromContentType(contentType: string): string {
-  if (contentType.includes("webm")) return "webm";
-  if (contentType.includes("mp4")) return "m4a";
-  if (contentType.includes("mpeg")) return "mp3";
-  if (contentType.includes("ogg")) return "ogg";
-  return "bin";
-}
-
-function createYoutubeCacheKey(videoId: string, contentType: string): string {
-  return `youtube-cache/${videoId}.${getExtensionFromContentType(contentType)}`;
-}
 
 async function findCachedYoutubeAudioUrl(videoId: string): Promise<string | null> {
   const candidateKeys = [
@@ -46,117 +32,6 @@ async function findCachedYoutubeAudioUrl(videoId: string): Promise<string | null
 
   return null;
 }
-
-async function ensureYoutubeAudioCached({
-  videoId,
-  title,
-  initialStreamUrl,
-}: {
-  videoId: string;
-  title: string;
-  initialStreamUrl?: string;
-}): Promise<string> {
-  const cachedUrl = await findCachedYoutubeAudioUrl(videoId);
-  if (cachedUrl) {
-    return cachedUrl;
-  }
-
-  const inflight = activeYoutubeCacheJobs.get(videoId);
-  if (inflight) {
-    return inflight;
-  }
-
-  const cachePromise = (async () => {
-    const streamUrl = initialStreamUrl ?? (await getYoutubeStreamByVideoId(videoId)).streamUrl;
-    const response = await fetch(streamUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "*/*",
-        Origin: "https://www.youtube.com",
-        Referer: "https://www.youtube.com/",
-      },
-      redirect: "follow",
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to download YouTube audio for caching: ${response.status}`);
-    }
-
-    const contentType = response.headers.get("content-type") ?? "audio/webm";
-    const key = createYoutubeCacheKey(videoId, contentType);
-    if (await objectExists(key)) {
-      return getPublicUrlForKey(key);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const cachedUrlAfterDownload = await findCachedYoutubeAudioUrl(videoId);
-    if (cachedUrlAfterDownload) {
-      return cachedUrlAfterDownload;
-    }
-
-    const cachedUrl = await uploadBytesToKey(arrayBuffer, key, contentType);
-    console.log(`Cached YouTube audio: ${videoId} (${title}) -> ${cachedUrl}`);
-    return cachedUrl;
-  })();
-
-  activeYoutubeCacheJobs.set(videoId, cachePromise);
-
-  try {
-    return await cachePromise;
-  } finally {
-    activeYoutubeCacheJobs.delete(videoId);
-  }
-}
-
-const cacheYoutubeAudioForRoom = async ({
-  roomId,
-  videoId,
-  sourceUrl,
-  title,
-  initialStreamUrl,
-  server,
-}: {
-  roomId: string;
-  videoId: string;
-  sourceUrl: string;
-  title: string;
-  initialStreamUrl?: string;
-  server: BunServer;
-}) => {
-  try {
-    const room = globalManager.getRoom(roomId);
-    if (!room) return;
-    const cachedUrl = await ensureYoutubeAudioCached({
-      videoId,
-      title,
-      initialStreamUrl,
-    });
-
-    const updatedSources = room.replaceAudioSource(sourceUrl, {
-      url: cachedUrl,
-      title,
-    });
-
-    sendBroadcast({
-      server,
-      roomId,
-      message: {
-        type: "ROOM_EVENT",
-        event: {
-          type: "SET_AUDIO_SOURCES",
-          sources: updatedSources,
-          currentAudioSource: room.getPlaybackState().audioSource || undefined,
-        },
-      },
-    });
-
-    console.log(`Bound cached YouTube audio into room ${roomId}: ${videoId} -> ${cachedUrl}`);
-  } catch (error) {
-    console.error(`YouTube cache job failed for room ${roomId}, video ${videoId}:`, error);
-    invalidateYoutubeStream(videoId);
-  }
-};
 
 export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
   if (req.method !== "POST") {
@@ -178,7 +53,7 @@ export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
       return errorResponse("Room not found", 404);
     }
 
-    const { title, videoId, streamUrl } = await resolveYoutubeSource(url);
+    const { title, videoId } = await resolveYoutubeSource(url);
     const cachedUrl = await findCachedYoutubeAudioUrl(videoId);
     const sourceUrl = cachedUrl ?? buildYoutubeProxyUrl(videoId);
 
@@ -200,16 +75,7 @@ export const handleYoutubeUpload = async (req: Request, server: BunServer) => {
       },
     });
 
-    if (!cachedUrl) {
-      void cacheYoutubeAudioForRoom({
-        roomId,
-        videoId,
-        sourceUrl,
-        title,
-        initialStreamUrl: streamUrl,
-        server,
-      });
-    }
+    // We skip caching to MinIO entirely. We let the client proxy it natively to support HTTP ranges flawlessly.
 
     return jsonResponse({ success: true, title, publicUrl: sourceUrl });
   } catch (error) {

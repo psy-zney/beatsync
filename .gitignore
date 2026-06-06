@@ -17,3 +17,7 @@ local/
 
 .vscode/
 docs/
+
+# Dev Context & Scripts
+beatsync_dev_notes.md
+test-youtube-fetch.ts

@@ -85,7 +85,7 @@ export class MusicProviderManager {
     try {
       const { id } = TrackParamsSchema.parse({ id: trackId });
 
-      if (typeof id === "string" && !this.providerUrl) {
+      if (typeof id === "string") {
         console.log(`Preparing YouTube proxy URL for string ID: ${id}`);
         const proxiedUrl = buildYoutubeProxyUrl(id);
         const mockResponse = {

@@ -2,7 +2,6 @@ import { calculateScheduleTimeMs, DEFAULT_CLIENT_RTT_MS } from "@/config";
 import { IS_DEMO_MODE } from "@/demo";
 import { deleteObjectsWithPrefix } from "@/lib/r2";
 import { ChatManager } from "@/managers/ChatManager";
-import { calculateGainFromDistanceToSource } from "@/spatial";
 import { debounce } from "@/utils/debounce";
 import { sendBroadcast, sendUnicast } from "@/utils/responses";
 import { positionClientsInCircle } from "@/utils/spatial";
@@ -30,7 +29,6 @@ interface RoomData {
   audioSources: AudioSourceType[];
   clients: ClientDataType[];
   roomId: string;
-  intervalId?: NodeJS.Timeout;
   listeningSource: PositionType;
   playbackControlsPermissions: PlaybackControlsPermissionsType;
   globalVolume: number; // Master volume multiplier (0-1)
@@ -104,7 +102,8 @@ export class RoomManager {
     x: GRID.ORIGIN_X,
     y: GRID.ORIGIN_Y,
   };
-  private intervalId?: NodeJS.Timeout;
+  private isSpatialAudioRunning = false;
+  private spatialStartTime = 0;
   private cleanupTimer?: NodeJS.Timeout;
   private pendingClientChangeCb?: () => void;
   private readonly debouncedClientChange = debounce(() => {
@@ -219,8 +218,8 @@ export class RoomManager {
   /**
    * Process when a client reports they've loaded the audio source
    */
-  processClientLoadedAudioSource(clientId: string, sourceUrl: string | BunServer, server?: BunServer): void {
-    const resolvedServer = server ?? (sourceUrl as BunServer);
+  processClientLoadedAudioSource(clientId: string, sourceUrl: string | BunServer, _server?: BunServer): void {
+    const resolvedServer = _server ?? (sourceUrl as BunServer);
     const resolvedSourceUrl = typeof sourceUrl === "string" ? sourceUrl : undefined;
 
     if (IS_DEMO_MODE) {
@@ -540,7 +539,6 @@ export class RoomManager {
       audioSources: this.audioSources,
       clients: this.getClients(),
       roomId: this.roomId,
-      intervalId: this.intervalId,
       listeningSource: this.listeningSource,
       playbackControlsPermissions: this.playbackControlsPermissions,
       globalVolume: this.globalVolume,
@@ -556,7 +554,7 @@ export class RoomManager {
       roomId: this.roomId,
       clientCount: this.getClients().length,
       audioSourceCount: this.audioSources.length,
-      hasSpatialAudio: !!this.intervalId,
+      hasSpatialAudio: this.isSpatialAudioRunning,
     };
   }
 
@@ -745,8 +743,18 @@ export class RoomManager {
     client.position = position;
     this.clientData.set(clientId, client);
 
-    // Update spatial audio config
-    this._calculateGainsAndBroadcast(server);
+    sendBroadcast({
+      server,
+      roomId: this.roomId,
+      message: {
+        type: "ROOM_EVENT",
+        event: {
+          type: "CLIENT_MOVED",
+          clientId,
+          position,
+        },
+      },
+    });
   }
 
   /**
@@ -817,78 +825,46 @@ export class RoomManager {
     return this.isMetronomeEnabled;
   }
 
+  getIsSpatialAudioRunning(): boolean {
+    return this.isSpatialAudioRunning;
+  }
+
+  getSpatialStartTime(): number {
+    return this.spatialStartTime;
+  }
+
   /**
-   * Start spatial audio interval
+   * Start spatial audio interval (now client-side)
    */
   startSpatialAudio(server: BunServer): void {
     // Don't start if already running
-    if (this.intervalId) return;
+    if (this.isSpatialAudioRunning) return;
 
-    // Create a closure for the number of loops
-    let loopCount = 0;
+    this.isSpatialAudioRunning = true;
+    this.spatialStartTime = epochNow();
 
-    const updateSpatialAudio = () => {
-      const clients = this.getClients();
-      console.log(`ROOM ${this.roomId} LOOP ${loopCount}: Connected clients: ${clients.length}`);
-      if (clients.length === 0) return;
-
-      // Calculate new position for listening source in a circle
-      const radius = 25;
-      const centerX = GRID.ORIGIN_X;
-      const centerY = GRID.ORIGIN_Y;
-      const angle = (loopCount * Math.PI) / 30; // Slow rotation
-
-      const newX = centerX + radius * Math.cos(angle);
-      const newY = centerY + radius * Math.sin(angle);
-
-      // Update the listening source position
-      this.listeningSource = { x: newX, y: newY };
-
-      // Calculate gains for each client
-      const gains = Object.fromEntries(
-        clients.map((client) => {
-          const spatialGain = calculateGainFromDistanceToSource({
-            client: client.position,
-            source: this.listeningSource,
-          });
-
-          // Send pure spatial gain - client will apply global volume
-          return [
-            client.clientId,
-            {
-              gain: spatialGain,
-              rampTime: 0.25,
-            },
-          ];
-        })
-      );
-
-      // Send the updated configuration to all clients
-      const message: WSBroadcastType = {
-        type: "SCHEDULED_ACTION",
-        serverTimeToExecute: this.getScheduledExecutionTime(),
-        scheduledAction: {
-          type: "SPATIAL_CONFIG",
-          listeningSource: this.listeningSource,
-          gains,
-        },
-      };
-
-      sendBroadcast({ server, roomId: this.roomId, message });
-      loopCount++;
+    // Send the updated configuration to all clients once
+    const message: WSBroadcastType = {
+      type: "SCHEDULED_ACTION",
+      serverTimeToExecute: this.getScheduledExecutionTime(),
+      scheduledAction: {
+        type: "SPATIAL_CONFIG",
+        centerX: GRID.ORIGIN_X,
+        centerY: GRID.ORIGIN_Y,
+        radius: 25,
+        speed: Math.PI / 3000, // equivalent to (Math.PI / 30) per 100ms
+        startTime: this.spatialStartTime,
+      },
     };
 
-    this.intervalId = setInterval(updateSpatialAudio, 100);
+    sendBroadcast({ server, roomId: this.roomId, message });
   }
 
   /**
    * Stop spatial audio interval
    */
   stopSpatialAudio(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = undefined;
-    }
+    this.isSpatialAudioRunning = false;
   }
 
   updatePlaybackSchedulePause(pauseSchema: PauseActionType, serverTimeToExecute: number): boolean {
@@ -1086,50 +1062,11 @@ export class RoomManager {
   }
 
   /**
-   * Calculate gains and broadcast to all clients
+   * No longer needed as spatial audio is client-side.
+   * Kept for interface compatibility if needed, but basically a no-op.
    */
-  private _calculateGainsAndBroadcast(server: BunServer): void {
-    const clients = this.getClients();
-
-    const gains = Object.fromEntries(
-      clients.map((client) => {
-        const spatialGain = calculateGainFromDistanceToSource({
-          client: client.position,
-          source: this.listeningSource,
-        });
-
-        // Send pure spatial gain - client will apply global volume
-        console.log(
-          `Client ${client.username} at (${client.position.x}, ${
-            client.position.y
-          }) - spatial gain: ${spatialGain.toFixed(
-            2
-          )} (global volume ${this.globalVolume.toFixed(2)} applied on client)`
-        );
-        return [
-          client.clientId,
-          {
-            gain: spatialGain,
-            rampTime: 0.25,
-          },
-        ];
-      })
-    );
-
-    // Send the updated gains to all clients
-    sendBroadcast({
-      server,
-      roomId: this.roomId,
-      message: {
-        type: "SCHEDULED_ACTION",
-        serverTimeToExecute: epochNow() + 0,
-        scheduledAction: {
-          type: "SPATIAL_CONFIG",
-          listeningSource: this.listeningSource,
-          gains,
-        },
-      },
-    });
+  private _calculateGainsAndBroadcast(_server: BunServer): void {
+    // Client handles spatial gains locally now.
   }
 
   /**

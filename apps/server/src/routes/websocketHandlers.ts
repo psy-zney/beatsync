@@ -4,7 +4,7 @@ import { sendBroadcast, sendToClient, sendUnicast } from "@/utils/responses";
 import type { BunServer, WSData } from "@/utils/websocket";
 import { dispatchMessage } from "@/websocket/dispatch";
 import type { WSBroadcastType } from "@beatsync/shared";
-import { epochNow, WSRequestSchema } from "@beatsync/shared";
+import { epochNow, WSRequestSchema, GRID } from "@beatsync/shared";
 import type { ServerWebSocket } from "bun";
 
 const createClientUpdate = (roomId: string) => {
@@ -116,6 +116,24 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
       },
     },
   });
+
+  if (room.getIsSpatialAudioRunning()) {
+    sendUnicast({
+      ws,
+      message: {
+        type: "SCHEDULED_ACTION",
+        serverTimeToExecute: now,
+        scheduledAction: {
+          type: "SPATIAL_CONFIG",
+          centerX: GRID.ORIGIN_X,
+          centerY: GRID.ORIGIN_Y,
+          radius: 25,
+          speed: Math.PI / 3000,
+          startTime: room.getSpatialStartTime(),
+        },
+      },
+    });
+  }
 
   const messages = room.getFullChatHistory();
   if (messages.length > 0) {
