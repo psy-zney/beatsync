@@ -85,7 +85,7 @@ export class MusicProviderManager {
     try {
       const { id } = TrackParamsSchema.parse({ id: trackId });
 
-      if (typeof id === "string") {
+      if (typeof id === "string" && !this.providerUrl) {
         console.log(`Preparing YouTube proxy URL for string ID: ${id}`);
         const proxiedUrl = buildYoutubeProxyUrl(id);
         const mockResponse = {
@@ -98,9 +98,7 @@ export class MusicProviderManager {
       }
 
       if (!this.providerUrl) {
-        throw new Error(
-          `Track with ID ${id} cannot be streamed because PROVIDER_URL is not set and it's not a YouTube ID`
-        );
+        throw new Error(`Track with ID ${id} cannot be streamed because PROVIDER_URL is not set`);
       }
 
       const streamUrl = new URL("/api/track", this.providerUrl);
