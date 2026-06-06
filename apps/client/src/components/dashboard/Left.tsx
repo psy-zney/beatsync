@@ -6,7 +6,6 @@ import { MAX_NTP_MEASUREMENTS, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { Hash } from "lucide-react";
 import { motion } from "motion/react";
-import { AudioUploaderMinimal } from "../AudioUploaderMinimal";
 import { YoutubeInput } from "../YoutubeInput";
 import { Separator } from "../ui/separator";
 import { ConnectedUsersList } from "./ConnectedUsersList";
@@ -97,7 +96,6 @@ export const Left = ({ className }: LeftProps) => {
         </div>
 
         <div className="pl-1">
-          <AudioUploaderMinimal />
           <YoutubeInput />
         </div>
       </motion.div>

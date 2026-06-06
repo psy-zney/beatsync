@@ -120,9 +120,7 @@ async function resolveYoutubeStream(videoId: string): Promise<CachedYoutubeStrea
   }
 
   const resolutionPromise = (async () => {
-    const isWindows = process.platform === "win32";
-    const exeName = isWindows ? "yt-rust-extractor.exe" : "yt-rust-extractor";
-    const exePath = join(process.cwd(), "yt-rust-extractor", "target", "release", exeName);
+    const exePath = join(process.cwd(), "yt-rust-extractor", "target", "release", "yt-rust-extractor.exe");
     const proc = Bun.spawn([exePath, createWatchUrl(videoId)], {
       stdout: "pipe",
       stderr: "pipe",

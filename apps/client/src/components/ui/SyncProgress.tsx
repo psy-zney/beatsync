@@ -168,7 +168,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
-            Please check your connection and try again
+            Đây là sever nghe nhạc với bạn bè nên sever chạy máy cá nhân sẽ không hoạt động liên tục
+            <br />
+            (This is a music server to listen with friends, so the personal server will not be available continuously)
           </motion.p>
         </motion.div>
       </OuterModal>
@@ -250,18 +252,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
-            {
-              "You might have a spotty connection or a new deployment is in progress. If this issue persists, please report it on the "
-            }
-            <a
-              href={SOCIAL_LINKS.discord}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary/75 underline"
-            >
-              Discord
-            </a>
-            .
+            Đây là sever nghe nhạc với bạn bè nên sever chạy máy cá nhân sẽ không hoạt động liên tục
+            <br />
+            (This is a music server to listen with friends, so the personal server will not be available continuously)
           </motion.p>
         </motion.div>
       </OuterModal>

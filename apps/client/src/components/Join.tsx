@@ -34,7 +34,7 @@ export const Join = () => {
     setValue,
   } = useForm<JoinFormData>({
     defaultValues: {
-      roomId: "",
+      roomId: "090624",
     },
   });
 
@@ -71,10 +71,7 @@ export const Join = () => {
   const handleCreateRoom = () => {
     setIsCreating(true);
 
-    // Generate a random 6-digit room ID
-    const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
-
-    router.push(`/room/${newRoomId}`);
+    router.push(`/room/090624`);
   };
 
   const handleRegenerateName = () => {

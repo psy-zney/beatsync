@@ -10,7 +10,7 @@ export const SearchParamsSchema = z.object({
 });
 
 export const TrackParamsSchema = z.object({
-  id: z.number().min(0, "ID must be 0 or greater"),
+  id: z.union([z.number(), z.string()]),
 });
 
 export const AlbumSchema = z.object({
@@ -62,7 +62,7 @@ export const TrackSchema = z.object({
   version: z.string().nullable().optional(),
   duration: z.number(),
   parental_warning: z.boolean(),
-  id: z.number(),
+  id: z.union([z.number(), z.string()]),
 });
 export type TrackType = z.infer<typeof TrackSchema>;
 
