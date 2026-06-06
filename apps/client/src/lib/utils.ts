@@ -61,10 +61,20 @@ export const trimFileName = (fileName: string) => {
 };
 
 export const extractFileNameFromUrl = (url: string) => {
+  if (url.includes("/youtube/proxy")) {
+    return "YouTube Audio";
+  }
+
   // Get everything after the last slash
   const parts = url.split("/");
   if (parts.length > 1) {
-    const encodedFileName = parts[parts.length - 1];
+    let encodedFileName = parts[parts.length - 1];
+
+    // Strip query parameters if any
+    const queryIndex = encodedFileName.indexOf("?");
+    if (queryIndex !== -1) {
+      encodedFileName = encodedFileName.substring(0, queryIndex);
+    }
 
     // Decode the URL-encoded filename to get the original characters
     const fullFileName = decodeURIComponent(encodedFileName);
