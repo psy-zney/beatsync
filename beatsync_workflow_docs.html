@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài liệu Workflow & Cập nhật nhạc YouTube - Beatsync</title>
+    <style>
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 3px solid #e74c3c;
+            padding-bottom: 10px;
+            text-align: center;
+        }
+        h2 {
+            margin-top: 35px;
+            border-bottom: 2px solid #bdc3c7;
+            padding-bottom: 8px;
+            color: #2980b9;
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #e1e8ed;
+            padding: 15px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #2c3e50;
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .highlight {
+            background-color: #fdf2e9;
+            border-left: 4px solid #e67e22;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        code {
+            background-color: #f1f2f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #d35400;
+        }
+        .workflow-step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        .step-number {
+            background-color: #3498db;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Luồng Hoạt Động (Workflow) Hệ Thống Beatsync</h1>
+        
+        <h2>1. Tổng quan Flow Hoạt động của Repository</h2>
+        <div class="highlight">
+            <p><strong>Beatsync</strong> là hệ thống Real-time Audio Sync, được chia làm 3 trục chính giao tiếp với nhau:</p>
+            <ul>
+                <li><strong>Next.js Client</strong> (Giao diện người dùng): Gửi lệnh, phát nhạc, đồng bộ thời gian (NTP Protocol).</li>
+                <li><strong>Bun Server</strong> (Xử lý trung tâm): Quản lý Room State (RAM), xử lý WebSocket, làm cầu nối xử lý các logic nặng.</li>
+                <li><strong>Cloud Storage (R2/MinIO)</strong>: Lưu trữ các file nhạc cache hoặc file người dùng upload để tăng tốc độ truyền tải và giảm tải băng thông.</li>
+            </ul>
+        </div>
+        <p>Quy trình tiêu chuẩn của một sự kiện trong phòng:</p>
+        <div class="workflow-step">
+            <div class="step-number">1</div>
+            <div><strong>Client Action:</strong> Người dùng thao tác (Play/Pause/Thêm nhạc). Client gửi Event qua WebSocket dưới dạng JSON đã được <code>zod</code> schema chuẩn hoá trong <code>packages/shared</code>.</div>
+        </div>
+        <div class="workflow-step">
+            <div class="step-number">2</div>
+            <div><strong>Server Handling:</strong> Bun Server nhận Event, cập nhật State của Room trên RAM thông qua <code>GlobalManager</code> và <code>RoomManager</code>.</div>
+        </div>
+        <div class="workflow-step">
+            <div class="step-number">3</div>
+            <div><strong>Broadcast:</strong> Server phát lại (Broadcast) sự thay đổi State cho toàn bộ Client trong Room cùng biết để đồng bộ giao diện.</div>
+        </div>
+
+        <h2>2. Phân tích chi tiết: Tính năng Cập nhật nhạc qua Link YouTube (ytb)</h2>
+        <p>Tính năng này cho phép người dùng dán 1 link YouTube vào ứng dụng và phát nhạc trực tiếp cho cả phòng nghe. Dưới đây là bảng phân tích toàn diện về tính năng này:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Khía cạnh</th>
+                    <th>Chi tiết Phân tích</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Cách hoạt động (Mô hình Proxy & Cache)</strong></td>
+                    <td>
+                        Thay vì chỉ lấy link gốc (stream URL) của YouTube và bắt Client tự load (điều này thường lỗi do CORS và URL hết hạn), hệ thống áp dụng cơ chế <strong>Phản hồi ngay - Cache ngầm (Lazy-Caching)</strong>: <br><br>
+                        1. Server phân tích lấy Stream URL thực của YouTube. <br>
+                        2. Cung cấp ngay một URL Proxy <code>/youtube/proxy</code> cho Client để phát nhạc lập tức (Server sẽ proxy dữ liệu stream từ YT về cho Client).<br>
+                        3. Ở dưới nền, Server tải file nhạc đó xuống và upload lên S3/R2. <br>
+                        4. Khi tải xong, Server cập nhật lại link nhạc từ Proxy thành link S3/R2 vĩnh viễn để các lần sau không bị phụ thuộc YouTube.
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Luồng di chuyển (Data Flow)</strong></td>
+                    <td>
+                        <ol>
+                            <li><strong>Client:</strong> Gửi HTTP POST request lên <code>/api/youtube/upload</code> chứa <code>roomId</code> và <code>url</code> YouTube.</li>
+                            <li><strong>Server (API):</strong> Gọi hàm <code>resolveYoutubeSource(url)</code>. Kích hoạt một Child Process chạy tool <strong>yt-rust-extractor</strong> (viết bằng Rust để tối ưu tốc độ) nhằm trích xuất Stream URL mượt nhất.</li>
+                            <li><strong>Server (Check Cache):</strong> Kiểm tra trong S3/R2 xem VideoID này đã được cache trước đây chưa (VD: <code>youtube-cache/{videoId}.webm</code>).</li>
+                            <li><strong>Server (WS Broadcast):</strong> Nếu chưa cache, Server trả ngay 1 AudioSource có dạng <code>/youtube/proxy?videoId=...</code> và thông báo qua WebSocket để cả phòng bắt đầu phát bài hát.</li>
+                            <li><strong>Server (Background Job):</strong> Chạy ngầm hàm <code>cacheYoutubeAudioForRoom</code>. Hàm này tải file stream và đẩy thẳng lên bucket R2.</li>
+                            <li><strong>Server (WS Update):</strong> Khi Background Job hoàn thành, gửi tín hiệu WebSocket lần 2 (<code>SET_AUDIO_SOURCES</code>) để thay thế Proxy URL tạm thời bằng URL chuẩn của R2.</li>
+                        </ol>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Cấu trúc Dữ liệu (Data Structure)</strong></td>
+                    <td>
+                        <ul>
+                            <li><strong>YoutubeUploadSchema:</strong> Xác thực đầu vào gồm <code>roomId (string)</code> và <code>url (string dạng URL)</code>.</li>
+                            <li><strong>ResolvedYoutubeSource:</strong> Struct lưu trữ trung gian gồm <code>videoId</code>, <code>title</code> và <code>streamUrl</code> thật của Youtube.</li>
+                            <li><strong>CachedYoutubeStream:</strong> Lưu trong bộ nhớ RAM tạm của Server để quản lý việc expire của Stream URL: <code>expiresAt</code>, <code>streamUrl</code>, <code>title</code>.</li>
+                            <li><strong>ActiveYoutubeCacheJobs (Map):</strong> Một cấu trúc Map lưu các <code>Promise</code> đang chạy nền. Giúp chặn việc xử lý tải lại cùng 1 link Youtube nếu 2 người gửi cùng lúc.</li>
+                            <li><strong>AudioSourceSchema (Shared):</strong> Định dạng dữ liệu đẩy về Client gồm <code>url</code>, <code>title</code>, <code>duration</code>...</li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Thuật toán & Cơ chế Tối ưu (Algorithms)</strong></td>
+                    <td>
+                        <ul>
+                            <li><strong>Thuật toán Deduplication (Chống trùng lặp):</strong> Khi đang tải 1 file youtube, url được đưa vào Map <code>activeYoutubeCacheJobs</code>. Bất kỳ request nào vào sau hỏi cùng VideoID sẽ nhận được Promise đang chạy thay vì spawn thêm process mới.</li>
+                            <li><strong>Concurrency bằng Child Process:</strong> Parsing thuật toán phức tạp của YT được đẩy sang thư viện viết bằng Rust (yt-rust-extractor). Server dùng <code>Bun.spawn</code> để gọi Rust binary, lấy dữ liệu qua luồng stdout, tránh block Event Loop của Node/Bun.</li>
+                            <li><strong>Cơ chế Range Requests Proxy:</strong> Khi proxy nhạc (<code>handleYoutubeProxy</code>), thuật toán đảm bảo copy các Header liên quan đến Byte Range (<code>Content-Range</code>, <code>Accept-Ranges</code>) từ YT Server trả về cho Client, giúp Client có thể Tua (Seek) nhanh chóng mà không cần load cả bài.</li>
+                            <li><strong>Auto-Refresh Expired Streams:</strong> Nếu quá trình proxy gặp lỗi 403 Forbidden (do URL hết hạn), hệ thống tự động catch lỗi, gọi lại <code>getYoutubeStreamByVideoId()</code> để làm mới Stream URL và thử tải lại ngay tức thì (Retry Mechanism).</li>
+                        </ul>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+</body>
+</html>

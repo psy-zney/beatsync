@@ -21,28 +21,32 @@ export class MusicProviderManager {
       console.log(`Searching YouTube for query: "${q}"`);
       const results = await youtube.search(q);
 
+      const videosWithDuration = results.videos.map((video) => {
+        let durationSec = 0;
+        if (video.duration?.text) {
+          const parts = video.duration.text.split(":").map(Number);
+          if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
+          else if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        }
+        return { ...video, durationSec };
+      });
+
+      const filteredVideos = videosWithDuration.filter((v) => v.durationSec > 0 && v.durationSec <= 360);
+
       const limit = 10;
-      const pagedTracks = results.videos.slice(validOffset, validOffset + limit);
+      const pagedTracks = filteredVideos.slice(validOffset, validOffset + limit);
 
       const mockResponse = {
         data: {
           tracks: {
             limit,
             offset: validOffset,
-            total: results.videos.length,
+            total: filteredVideos.length,
             items: pagedTracks.map((video) => {
-              // Parse duration
-              let durationSec = 0;
-              if (video.duration?.text) {
-                const parts = video.duration.text.split(":").map(Number);
-                if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
-                else if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
-              }
-
               return {
                 id: video.id,
                 title: video.title,
-                duration: durationSec,
+                duration: video.durationSec,
                 parental_warning: false,
                 track_number: 1,
                 isrc: null,
@@ -54,7 +58,7 @@ export class MusicProviderManager {
                 album: {
                   id: "yt_album",
                   title: "YouTube",
-                  duration: durationSec,
+                  duration: video.durationSec,
                   parental_warning: false,
                   release_date_original: "Unknown",
                   image: {

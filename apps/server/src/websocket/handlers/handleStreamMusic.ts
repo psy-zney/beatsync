@@ -1,5 +1,6 @@
 import { IS_DEMO_MODE } from "@/demo";
 import { generateAudioFileName, uploadBytes } from "@/lib/r2";
+import { isYoutubeProxyUrl } from "@/lib/youtube";
 import { globalManager } from "@/managers";
 import { MUSIC_PROVIDER_MANAGER } from "@/managers/MusicProviderManager";
 import { sendBroadcast } from "@/utils/responses";
@@ -52,6 +53,25 @@ export const handleStreamMusic: HandlerFunction<ExtractWSRequestFrom["STREAM_MUS
     // Use provided track name or fallback to track ID
     const originalName = message.trackName ?? `track-${message.trackId}`;
 
+    if (isYoutubeProxyUrl(streamUrl)) {
+      console.log(`Bypassing R2 upload for YouTube proxy URL: ${streamUrl}`);
+      const sources = room.addAudioSource({ url: streamUrl, title: originalName });
+
+      console.log(`Broadcasting new audio sources to room ${roomId}: ${sources.length} total sources`);
+      sendBroadcast({
+        server,
+        roomId,
+        message: {
+          type: "ROOM_EVENT",
+          event: {
+            type: "SET_AUDIO_SOURCES",
+            sources,
+          },
+        },
+      });
+      return;
+    }
+
     // Download the audio file
     console.log(`Downloading audio from: ${streamUrl}`);
     const response = await fetch(streamUrl, {
@@ -79,7 +99,7 @@ export const handleStreamMusic: HandlerFunction<ExtractWSRequestFrom["STREAM_MUS
     const r2Url = await uploadBytes(arrayBuffer, roomId, fileName, contentType);
 
     // Add the audio source to the room and get updated sources list
-    const sources = room.addAudioSource({ url: r2Url });
+    const sources = room.addAudioSource({ url: r2Url, title: originalName });
 
     console.log(`Successfully uploaded track to R2: ${r2Url}`);
     console.log(`Broadcasting new audio sources to room ${roomId}: ${sources.length} total sources`);
