@@ -11,32 +11,31 @@ function isLocalHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-function shouldIgnoreExplicitLocalUrls(apiUrl: string, wsUrl: string): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const currentHostname = window.location.hostname;
-  if (isLocalHost(currentHostname)) {
-    return false;
-  }
-
-  try {
-    const apiHostname = new URL(apiUrl).hostname;
-    const wsHostname = new URL(wsUrl).hostname;
-    return isLocalHost(apiHostname) && isLocalHost(wsHostname);
-  } catch {
-    return false;
-  }
-}
-
 function resolve(): { apiUrl: string; wsUrl: string } {
   if (cached) return cached;
 
   const envApi = process.env.NEXT_PUBLIC_API_URL;
   const envWs = process.env.NEXT_PUBLIC_WS_URL;
 
-  if (envApi && envWs && !shouldIgnoreExplicitLocalUrls(envApi, envWs)) {
+  if (typeof window !== "undefined") {
+    const currentHostname = window.location.hostname;
+    const isLocalIP =
+      currentHostname.startsWith("192.168.") ||
+      currentHostname.startsWith("10.") ||
+      currentHostname.startsWith("172.") ||
+      currentHostname.startsWith("100."); // Tailscale
+
+    if (isLocalIP || isLocalHost(currentHostname)) {
+      cached = {
+        apiUrl: `http://${currentHostname}:8080`,
+        wsUrl: `ws://${currentHostname}:8080/ws`,
+      };
+      return cached;
+    }
+  }
+
+  // Fallback to explicit env URLs (like ngrok/localtunnel) for remote users
+  if (envApi && envWs) {
     cached = { apiUrl: envApi, wsUrl: envWs };
   } else if (typeof window !== "undefined") {
     const { protocol, host } = window.location;
@@ -46,7 +45,6 @@ function resolve(): { apiUrl: string; wsUrl: string } {
       wsUrl: `${isSecure ? "wss" : "ws"}://${host}/ws`,
     };
   } else {
-    // SSR fallback — don't cache empty strings so client can resolve properly after hydration
     return { apiUrl: "", wsUrl: "" };
   }
 
