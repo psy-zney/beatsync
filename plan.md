@@ -4,3 +4,4 @@
 - trả hết thay đổi từ khi up lên render
 -   giữ tính năng lưu list nhạc kể cả khi tắt list nhạc
 - clean và fix lỗi change ảo rất nhiều file
+https://unbridle-placate-hull.ngrok-free.dev

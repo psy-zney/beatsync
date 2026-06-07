@@ -363,6 +363,7 @@ const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: 
   const response = await fetch(resolveAudioUrl(data.url), {
     headers: {
       "ngrok-skip-browser-warning": "69420",
+      "bypass-tunnel-reminder": "true",
       Range: "bytes=0-", // Forces YouTube to bypass 1x streaming throttle
     },
   });

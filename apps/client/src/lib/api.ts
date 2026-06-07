@@ -16,6 +16,7 @@ const baseAxios = axios.create({
   },
   headers: {
     "ngrok-skip-browser-warning": "69420",
+    "bypass-tunnel-reminder": "true",
   },
 });
 
@@ -101,6 +102,7 @@ export async function fetchDefaultAudioSources() {
     const response = await fetch(`${getApiUrl()}/default`, {
       headers: {
         "ngrok-skip-browser-warning": "69420",
+        "bypass-tunnel-reminder": "true",
       },
     });
 
@@ -121,6 +123,7 @@ export async function fetchActiveRooms() {
   const response = await fetch(`${getApiUrl()}/active-rooms`, {
     headers: {
       "ngrok-skip-browser-warning": "69420",
+      "bypass-tunnel-reminder": "true",
     },
   });
   const data: GetActiveRoomsType = await response.json();
@@ -131,6 +134,7 @@ export async function fetchDiscoverRooms() {
   const response = await fetch(`${getApiUrl()}/discover`, {
     headers: {
       "ngrok-skip-browser-warning": "69420",
+      "bypass-tunnel-reminder": "true",
     },
   });
   const data: DiscoverRoomsType = await response.json();
