@@ -1,8 +1,17 @@
 import { RawSearchResponseSchema, SearchParamsSchema, StreamResponseSchema, TrackParamsSchema } from "@beatsync/shared";
-import { buildYoutubeProxyUrl } from "@/lib/youtube";
+import { buildYoutubeProxyUrl, parseYoutubeVideoId } from "@/lib/youtube";
 import type { z } from "zod";
 
 import * as youtube from "youtube-ext";
+
+interface YoutubeVideo {
+  id: string;
+  title: string;
+  durationSec?: number;
+  duration?: { text: string };
+  channel?: { name?: string };
+  thumbnails?: { url: string }[];
+}
 
 export class MusicProviderManager {
   private providerUrl: string | undefined;
@@ -19,16 +28,47 @@ export class MusicProviderManager {
       });
 
       console.log(`Searching YouTube for query: "${q}"`);
-      const results = await youtube.search(q);
+
+      let results: { videos: YoutubeVideo[] };
+      const videoId = parseYoutubeVideoId(q);
+      if (videoId) {
+        try {
+          const info = await youtube.videoInfo(q);
+          const durationSeconds = Number(info.duration?.lengthSec ?? 0);
+          const m = Math.floor(durationSeconds / 60);
+          const s = durationSeconds % 60;
+          const durationText = `${m}:${s.toString().padStart(2, "0")}`;
+
+          results = {
+            videos: [
+              {
+                id: info.id,
+                title: info.title,
+                durationSec: durationSeconds,
+                duration: { text: durationText },
+                channel: { name: info.channel?.name },
+                thumbnails: info.thumbnails,
+              },
+            ],
+          };
+        } catch (error) {
+          console.warn(`videoInfo failed for URL: ${q}, falling back to search`, error);
+          const searchResult = await youtube.search(q);
+          results = { videos: searchResult.videos as YoutubeVideo[] };
+        }
+      } else {
+        const searchResult = await youtube.search(q);
+        results = { videos: searchResult.videos as YoutubeVideo[] };
+      }
 
       const videosWithDuration = results.videos.map((video) => {
-        let durationSec = 0;
-        if (video.duration?.text) {
+        let durationSec = video.durationSec;
+        if (durationSec === undefined && video.duration?.text) {
           const parts = video.duration.text.split(":").map(Number);
           if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
           else if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
         }
-        return { ...video, durationSec };
+        return { ...video, durationSec: durationSec ?? 0 };
       });
 
       const filteredVideos = videosWithDuration.filter((v) => v.durationSec > 0 && v.durationSec <= 360);
@@ -53,7 +93,7 @@ export class MusicProviderManager {
                 version: null,
                 performer: {
                   id: 0,
-                  name: video.channel?.name || "YouTube User",
+                  name: video.channel?.name ?? "YouTube User",
                 },
                 album: {
                   id: "yt_album",
@@ -62,12 +102,12 @@ export class MusicProviderManager {
                   parental_warning: false,
                   release_date_original: "Unknown",
                   image: {
-                    small: video.thumbnails?.[0]?.url || "",
-                    thumbnail: video.thumbnails?.[0]?.url || "",
-                    large: video.thumbnails?.[video.thumbnails.length - 1]?.url || "",
+                    small: video.thumbnails?.[0]?.url ?? "",
+                    thumbnail: video.thumbnails?.[0]?.url ?? "",
+                    large: video.thumbnails?.[(video.thumbnails?.length ?? 1) - 1]?.url ?? "",
                     back: null,
                   },
-                  artists: [{ id: 0, name: video.channel?.name || "YouTube User", roles: ["Main Artist"] }],
+                  artists: [{ id: 0, name: video.channel?.name ?? "YouTube User", roles: ["Main Artist"] }],
                 },
               };
             }),

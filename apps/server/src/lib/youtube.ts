@@ -63,7 +63,7 @@ function assertSupportedYoutubeUrl(url: string): void {
   }
 }
 
-function parseYoutubeVideoId(input: string): string | null {
+export function parseYoutubeVideoId(input: string): string | null {
   try {
     const url = new URL(input);
     const hostname = url.hostname.toLowerCase();
@@ -120,7 +120,22 @@ async function resolveYoutubeStream(videoId: string): Promise<CachedYoutubeStrea
   }
 
   const resolutionPromise = (async () => {
-    const exePath = join(process.cwd(), "yt-rust-extractor", "target", "release", "yt-rust-extractor.exe");
+    const exeName = process.platform === "win32" ? "yt-rust-extractor.exe" : "yt-rust-extractor";
+    const candidates = [
+      join(process.cwd(), "yt-rust-extractor", "target", "release", exeName),
+      join(process.cwd(), "apps", "server", "yt-rust-extractor", "target", "release", exeName),
+      join(__dirname, "..", "..", "yt-rust-extractor", "target", "release", exeName),
+      join(__dirname, "..", "yt-rust-extractor", "target", "release", exeName),
+    ];
+
+    let exePath = candidates[0];
+    for (const candidate of candidates) {
+      if (await Bun.file(candidate).exists()) {
+        exePath = candidate;
+        break;
+      }
+    }
+
     const proc = Bun.spawn([exePath, createWatchUrl(videoId)], {
       stdout: "pipe",
       stderr: "pipe",
