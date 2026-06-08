@@ -41,6 +41,23 @@ export class BackupManager {
       // Filter out audio sources that are not valid
       const validAudioSources = roomData.audioSources.filter((_, index) => validationResults[index]);
 
+      // Heal missing titles for YouTube cached tracks
+      for (const source of validAudioSources) {
+        if (!source.title && source.url.includes("/youtube-cache/")) {
+          const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
+          if (match && match[1]) {
+            try {
+              console.log(`[Heal] Fetching missing title for YouTube track ${match[1]}...`);
+              const { getYoutubeMetadata } = await import("@/lib/youtube");
+              const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
+              source.title = title;
+            } catch (err) {
+              console.error(`[Heal] Failed to fetch title for ${match[1]}:`, err);
+            }
+          }
+        }
+      }
+
       // Restore audio sources
       room.setAudioSources(validAudioSources);
 
