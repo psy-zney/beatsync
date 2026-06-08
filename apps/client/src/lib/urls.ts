@@ -34,7 +34,7 @@ function resolve(): { apiUrl: string; wsUrl: string } {
     }
   }
 
-  // Fallback to explicit env URLs (like ngrok/localtunnel) for remote users
+  // Fallback to explicit env URLs (like Cloudflare Tunnels) for remote users
   if (envApi && envWs) {
     cached = { apiUrl: envApi, wsUrl: envWs };
   } else if (typeof window !== "undefined") {
