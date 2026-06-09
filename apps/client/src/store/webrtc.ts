@@ -126,6 +126,19 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           },
         });
       }
+    } else {
+      // I am the answerer. Tell the other side to send an offer if they are ready!
+      const { socket } = useGlobalStore.getState();
+      if (socket) {
+        sendWSRequest({
+          ws: socket,
+          request: {
+            type: ClientActionEnum.enum.WEBRTC_SIGNAL,
+            targetClientId,
+            signalData: { type: "request-offer" },
+          },
+        });
+      }
     }
   },
 
@@ -154,6 +167,16 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     if (!isVoiceActive || !localStream) return;
 
     let pc = get().peerConnections[sourceClientId];
+
+    if (signalData.type === "request-offer") {
+      // The other side is ready and wants me to send an offer.
+      // If I am active, and myId > sourceClientId, I will initiate!
+      const myId = getClientId();
+      if (myId > sourceClientId) {
+        get().handleClientJoined(sourceClientId);
+      }
+      return;
+    }
 
     if (!pc && signalData.type === "offer") {
       // Create answerer PC

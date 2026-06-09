@@ -42,8 +42,11 @@ export const SpatialAudioBackground = () => {
         source: listeningSource,
       });
 
+      // Get latest personal volume from store
+      const personalVolume = useGlobalStore.getState().personalVolume;
+
       // Apply to audio context
-      const finalGain = globalVolume * spatialGain;
+      const finalGain = globalVolume * spatialGain * personalVolume;
       // Use 0.05s ramp time for smooth continuous updates without heavy popping
       audioContextManager.setMasterGain(finalGain, 0.05);
 

@@ -11,16 +11,34 @@ import { Slider } from "../ui/slider";
 import { Input } from "../ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Avatar, AvatarFallback } from "../ui/avatar";
+import { useAudioVolume } from "@/hooks/useAudioVolume";
+import { AudioWaveform } from "../ui/AudioWaveform";
 
 // Component to render individual remote audio
-const RemoteAudio = ({ clientId, stream }: { clientId: string; stream: MediaStream }) => {
+const RemoteAudio = ({
+  clientId,
+  stream,
+  onSpeechStateChange,
+}: {
+  clientId: string;
+  stream: MediaStream;
+  onSpeechStateChange?: (isSpeaking: boolean) => void;
+}) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const micVolumes = useGlobalStore((state) => state.micVolumes);
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
+  const volume = useAudioVolume(stream);
+
+  useEffect(() => {
+    if (onSpeechStateChange) {
+      onSpeechStateChange(volume > 0.05 && !isDeafened && micVolumes[clientId] !== 0);
+    }
+  }, [volume > 0.05, isDeafened, micVolumes[clientId], onSpeechStateChange]);
 
   useEffect(() => {
     if (audioRef.current && stream) {
       audioRef.current.srcObject = stream;
+      audioRef.current.play().catch((err) => console.error("Remote audio play failed:", err));
     }
   }, [stream]);
 
@@ -93,7 +111,9 @@ const VolumeControl = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs text-neutral-300">
           {icon}
-          <span className="truncate max-w-[120px]" title={label}>{label}</span>
+          <span className="truncate max-w-[120px]" title={label}>
+            {label}
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <Input
@@ -137,6 +157,11 @@ export const UserVoicePanel = () => {
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
   const toggleDeafen = useWebRTCStore((state) => state.toggleDeafen);
   const remoteStreams = useWebRTCStore((state) => state.remoteStreams);
+  const localStream = useWebRTCStore((state) => state.localStream);
+
+  const localVolume = useAudioVolume(localStream);
+  const [remoteSpeechStates, setRemoteSpeechStates] = useState<Record<string, boolean>>({});
+  const isHearingRemote = Object.values(remoteSpeechStates).some(Boolean);
 
   // Current client
   const currentUser = connectedClients.find((c) => c.clientId === clientId);
@@ -169,18 +194,14 @@ export const UserVoicePanel = () => {
         {/* User Info */}
         <div className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/5 rounded-md p-1 cursor-pointer transition-colors">
           <Avatar className="h-8 w-8 rounded-full border-none ring-0">
-            <AvatarFallback className="bg-indigo-500 text-white text-xs font-medium">
-              {initials}
-            </AvatarFallback>
+            <AvatarFallback className="bg-indigo-500 text-white text-xs font-medium">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-semibold text-white truncate leading-none mb-1">
-              {username}
-            </span>
+            <span className="text-sm font-semibold text-white truncate leading-none mb-1">{username}</span>
             <span className="text-[10px] text-neutral-400 truncate leading-none flex items-center gap-1">
               {isVoiceActive ? (
-                <span className="text-emerald-400 flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-emerald-400 flex items-center gap-1.5 h-3">
+                  <AudioWaveform volume={localVolume} className="mb-[1px]" />
                   Voice Connected
                 </span>
               ) : (
@@ -204,25 +225,31 @@ export const UserVoicePanel = () => {
           >
             {isVoiceActive ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
           </Button>
-          
+
           <Button
             variant="ghost"
             size="icon"
             className={cn(
-              "h-8 w-8 rounded-md hover:bg-white/10 text-neutral-400 hover:text-neutral-200 transition-colors",
-              isDeafened && "text-red-400 hover:text-red-300"
+              "h-8 w-8 rounded-md hover:bg-white/10 transition-colors flex items-center justify-center",
+              isDeafened
+                ? "text-red-400 hover:text-red-300"
+                : isHearingRemote
+                  ? "text-emerald-400 animate-pulse"
+                  : "text-neutral-400 hover:text-neutral-200"
             )}
             onClick={toggleDeafen}
             title={isDeafened ? "Undeafen" : "Deafen"}
           >
-            {isDeafened ? (
-              <div className="relative">
+            <div className={cn("transition-transform duration-200", isHearingRemote && !isDeafened && "scale-110")}>
+              {isDeafened ? (
+                <div className="relative">
+                  <Headphones className="h-4 w-4" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-0.5 bg-current rotate-45" />
+                </div>
+              ) : (
                 <Headphones className="h-4 w-4" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-0.5 bg-current rotate-45" />
-              </div>
-            ) : (
-              <Headphones className="h-4 w-4" />
-            )}
+              )}
+            </div>
           </Button>
 
           <Popover>
@@ -236,17 +263,15 @@ export const UserVoicePanel = () => {
                 <Settings className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent 
-              side="top" 
-              align="end" 
+            <PopoverContent
+              side="top"
+              align="end"
               className="w-72 bg-[#2b2d31] border-neutral-800 p-0 shadow-xl overflow-hidden"
             >
               <div className="p-3 bg-black/20 border-b border-neutral-800/50">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-                  Voice & Audio Settings
-                </h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Voice & Audio Settings</h3>
               </div>
-              
+
               <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
                 {/* Personal Music Volume */}
                 <div className="bg-black/10 p-2.5 rounded-md border border-white/5">
@@ -273,10 +298,7 @@ export const UserVoicePanel = () => {
                         const hasStream = !!remoteStreams[client.clientId];
 
                         return (
-                          <div
-                            key={client.clientId}
-                            className="p-1.5 hover:bg-white/5 rounded-md transition-colors"
-                          >
+                          <div key={client.clientId} className="p-1.5 hover:bg-white/5 rounded-md transition-colors">
                             <VolumeControl
                               icon={
                                 vol === 0 ? (
@@ -304,7 +326,14 @@ export const UserVoicePanel = () => {
 
       {/* Render Remote Audios */}
       {Object.entries(remoteStreams).map(([id, stream]) => (
-        <RemoteAudio key={id} clientId={id} stream={stream} />
+        <RemoteAudio
+          key={id}
+          clientId={id}
+          stream={stream}
+          onSpeechStateChange={(isSpeaking) => {
+            setRemoteSpeechStates((prev) => ({ ...prev, [id]: isSpeaking }));
+          }}
+        />
       ))}
     </div>
   );

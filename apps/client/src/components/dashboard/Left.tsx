@@ -80,8 +80,6 @@ export const Left = ({ className }: LeftProps) => {
         <Separator className="bg-neutral-800/50" />
       </div>
 
-
-
       {/* Connected Users List */}
       <ConnectedUsersList />
 

@@ -1506,15 +1506,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     applyFinalGain: (rampTime = 0.1) => {
       const state = get();
 
-      // Calculate final gain
-      let finalGain = state.globalVolume * state.personalVolume;
-
-      // If spatial audio is enabled, get the spatial gain for this client
-      if (state.isSpatialAudioEnabled && state.spatialConfig) {
-        const clientId = getClientId();
-        const spatialGain = state.spatialConfig.gains[clientId]?.gain || 1;
-        finalGain = state.globalVolume * spatialGain * state.personalVolume;
-      }
+      // Calculate final gain. If spatial audio is enabled, SpatialAudioBackground
+      // will continuously override this in requestAnimationFrame.
+      const finalGain = state.globalVolume * state.personalVolume;
 
       // Use singleton's setMasterGain with ramping
       audioContextManager.setMasterGain(finalGain, rampTime);

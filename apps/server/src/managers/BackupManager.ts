@@ -78,7 +78,6 @@ export class BackupManager {
         // Don't restore any playback state
       }
 
-
       // Always schedule cleanup on restoration because we don't know if any clients will reconnect.
       globalManager.scheduleRoomCleanup(roomId);
       return {
