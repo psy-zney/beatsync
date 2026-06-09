@@ -16,7 +16,7 @@ export const NTP_CONSTANTS = {
   // Large enough gap to avoid TCP coalescing where browsers batch small writes into one segment
   PROBE_GAP_MS: 25,
   // Coded probes — client accepts server gap within ±this tolerance
-  PROBE_GAP_TOLERANCE_MS: 5,
+  PROBE_GAP_TOLERANCE_MS: 15,
 } as const;
 
 export const LOW_PASS_CONSTANTS = {

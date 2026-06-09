@@ -7,12 +7,34 @@
 
 let cached: { apiUrl: string; wsUrl: string } | null = null;
 
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 function resolve(): { apiUrl: string; wsUrl: string } {
   if (cached) return cached;
 
   const envApi = process.env.NEXT_PUBLIC_API_URL;
   const envWs = process.env.NEXT_PUBLIC_WS_URL;
 
+  if (typeof window !== "undefined") {
+    const currentHostname = window.location.hostname;
+    const isLocalIP =
+      currentHostname.startsWith("192.168.") ||
+      currentHostname.startsWith("10.") ||
+      currentHostname.startsWith("172.") ||
+      currentHostname.startsWith("100."); // Tailscale
+
+    if (isLocalIP || isLocalHost(currentHostname)) {
+      cached = {
+        apiUrl: `http://${currentHostname}:8080`,
+        wsUrl: `ws://${currentHostname}:8080/ws`,
+      };
+      return cached;
+    }
+  }
+
+  // Fallback to explicit env URLs (like Cloudflare Tunnels) for remote users
   if (envApi && envWs) {
     cached = { apiUrl: envApi, wsUrl: envWs };
   } else if (typeof window !== "undefined") {
@@ -23,7 +45,6 @@ function resolve(): { apiUrl: string; wsUrl: string } {
       wsUrl: `${isSecure ? "wss" : "ws"}://${host}/ws`,
     };
   } else {
-    // SSR fallback — don't cache empty strings so client can resolve properly after hydration
     return { apiUrl: "", wsUrl: "" };
   }
 

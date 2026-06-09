@@ -6,6 +6,7 @@ import { MAX_NTP_MEASUREMENTS, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { Hash } from "lucide-react";
 import { motion } from "motion/react";
+import { YoutubeInput } from "../YoutubeInput";
 import { Separator } from "../ui/separator";
 import { ConnectedUsersList } from "./ConnectedUsersList";
 import { RoomQRCode } from "./CopyRoom";
@@ -60,7 +61,7 @@ export const Left = ({ className }: LeftProps) => {
       <div className="flex items-center gap-3 px-3.5 py-2 text-[10px] font-mono text-neutral-500 lg:hidden">
         <span>Offset: {clockOffset.toFixed(1)}ms</span>
         <span>RTT: {roundTripEstimate.toFixed(1)}ms</span>
-        <span>OL: {((audioContextManager.getContext().outputLatency ?? 0) * 1000).toFixed(0)}ms</span>
+        <span>OL: {audioContextManager.getOutputLatencyMs().toFixed(0)}ms</span>
         <span>
           NTP: {syncMeasurementCount}/{MAX_NTP_MEASUREMENTS}
         </span>
@@ -97,6 +98,9 @@ export const Left = ({ className }: LeftProps) => {
           </ul>
         </div>
 
+        <div className="pl-1">
+          <YoutubeInput />
+        </div>
         <UserVoicePanel />
       </motion.div>
     </motion.div>

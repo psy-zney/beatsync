@@ -30,16 +30,51 @@ export function formatTime(seconds: number): string {
   return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const precision = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+export function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "soon";
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.ceil(seconds % 60);
+  return `${minutes}m ${remainingSeconds.toString().padStart(2, "0")}s`;
+}
+
 export const trimFileName = (fileName: string) => {
   // Remove file extensions like .mp3, .wav, etc.
   return fileName.replace(/\.[^/.]+$/, "");
 };
 
 export const extractFileNameFromUrl = (url: string) => {
+  if (url.includes("/youtube/proxy")) {
+    return "YouTube Audio";
+  }
+
   // Get everything after the last slash
   const parts = url.split("/");
   if (parts.length > 1) {
-    const encodedFileName = parts[parts.length - 1];
+    let encodedFileName = parts[parts.length - 1];
+
+    // Strip query parameters if any
+    const queryIndex = encodedFileName.indexOf("?");
+    if (queryIndex !== -1) {
+      encodedFileName = encodedFileName.substring(0, queryIndex);
+    }
 
     // Decode the URL-encoded filename to get the original characters
     const fullFileName = decodeURIComponent(encodedFileName);

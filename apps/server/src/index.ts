@@ -7,15 +7,19 @@ import { handleDiscover } from "@/routes/discover";
 import { handleRoot } from "@/routes/root";
 import { handleStats } from "@/routes/stats";
 import { handleGetPresignedURL, handleUploadComplete } from "@/routes/upload";
+import { handleYoutubeUpload, handleYoutubeProxy } from "@/routes/youtube";
 import { handleWebSocketUpgrade } from "@/routes/websocket";
 import { handleClose, handleMessage, handleOpen } from "@/routes/websocketHandlers";
 import { corsHeaders, errorResponse } from "@/utils/responses";
 import type { WSData } from "@/utils/websocket";
 
 // Bun.serve with WebSocket support
+const SERVER_HOST = process.env.HOST ?? "0.0.0.0";
+const SERVER_PORT = Number(process.env.PORT ?? "8080");
+
 const server = Bun.serve<WSData>({
-  hostname: "0.0.0.0",
-  port: 8080,
+  hostname: SERVER_HOST,
+  port: SERVER_PORT,
   async fetch(req, server) {
     const url = new URL(req.url);
 
@@ -44,6 +48,13 @@ const server = Bun.serve<WSData>({
         case "/upload/complete":
           if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
           return handleUploadComplete(req, server);
+
+        case "/upload/youtube":
+          if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
+          return handleYoutubeUpload(req, server);
+
+        case "/youtube/proxy":
+          return handleYoutubeProxy(req);
 
         case "/stats":
           return handleStats();
@@ -89,7 +100,8 @@ if (IS_DEMO_MODE) {
 if (!IS_DEMO_MODE) {
   // Restore state from backup on startup
   BackupManager.restoreState().catch((error) => {
-    console.error("Failed to restore state on startup:", error);
+    const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+    console.error(`Failed to restore state on startup: ${msg}`);
   });
 
   // Set up periodic backups every minute (for Render persistence issues)
@@ -97,7 +109,8 @@ if (!IS_DEMO_MODE) {
   setInterval(() => {
     console.log("🔄 Performing periodic backup at", new Date().toISOString());
     BackupManager.backupState().catch((error) => {
-      console.error("Failed to perform periodic backup:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`Failed to perform periodic backup: ${msg}`);
     });
   }, BACKUP_INTERVAL_MS);
 }

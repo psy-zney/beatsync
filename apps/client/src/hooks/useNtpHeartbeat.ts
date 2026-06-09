@@ -9,6 +9,7 @@ interface UseNtpHeartbeatProps {
 export const useNtpHeartbeat = ({ onConnectionStale }: UseNtpHeartbeatProps) => {
   const ntpTimerRef = useRef<number | null>(null);
   const lastNtpRequestTime = useRef<number | null>(null);
+  const consecutiveTimeoutsRef = useRef(0);
   const sendProbePair = useGlobalStore((state) => state.sendProbePair);
 
   // Store the schedule function in a ref to allow self-referencing without
@@ -32,10 +33,23 @@ export const useNtpHeartbeat = ({ onConnectionStale }: UseNtpHeartbeatProps) => 
     ntpTimerRef.current = window.setTimeout(() => {
       // Check if we have a pending request that timed out BEFORE resetting timer
       if (lastNtpRequestTime.current && Date.now() - lastNtpRequestTime.current > NTP_CONSTANTS.RESPONSE_TIMEOUT_MS) {
-        console.error("NTP request timed out - connection may be stale");
-        // Notify parent component that connection is stale
-        onConnectionStale?.();
-        return; // Don't send another request or schedule next
+        const lastMessageReceivedTime = useGlobalStore.getState().lastMessageReceivedTime;
+        const recentlyHeardFromServer =
+          lastMessageReceivedTime !== null && Date.now() - lastMessageReceivedTime <= NTP_CONSTANTS.RESPONSE_TIMEOUT_MS;
+
+        if (!recentlyHeardFromServer) {
+          consecutiveTimeoutsRef.current += 1;
+
+          if (consecutiveTimeoutsRef.current >= 2) {
+            console.error("NTP heartbeat timed out twice without any inbound server message");
+            onConnectionStale?.();
+            return;
+          }
+        } else {
+          consecutiveTimeoutsRef.current = 0;
+        }
+
+        lastNtpRequestTime.current = null;
       }
 
       // Only reset timer and send request if the previous one didn't timeout
@@ -62,11 +76,13 @@ export const useNtpHeartbeat = ({ onConnectionStale }: UseNtpHeartbeatProps) => 
       ntpTimerRef.current = null;
     }
     lastNtpRequestTime.current = null;
+    consecutiveTimeoutsRef.current = 0;
   }, []);
 
   // Mark that we received an NTP response
   const markNTPResponseReceived = useCallback(() => {
     lastNtpRequestTime.current = null;
+    consecutiveTimeoutsRef.current = 0;
   }, []);
 
   // Cleanup on unmount

@@ -4,7 +4,7 @@ import { sendBroadcast, sendToClient, sendUnicast } from "@/utils/responses";
 import type { BunServer, WSData } from "@/utils/websocket";
 import { dispatchMessage } from "@/websocket/dispatch";
 import type { WSBroadcastType } from "@beatsync/shared";
-import { epochNow, WSRequestSchema } from "@beatsync/shared";
+import { epochNow, WSRequestSchema, GRID } from "@beatsync/shared";
 import type { ServerWebSocket } from "bun";
 
 const createClientUpdate = (roomId: string) => {
@@ -117,6 +117,24 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     },
   });
 
+  if (room.getIsSpatialAudioRunning()) {
+    sendUnicast({
+      ws,
+      message: {
+        type: "SCHEDULED_ACTION",
+        serverTimeToExecute: now,
+        scheduledAction: {
+          type: "SPATIAL_CONFIG",
+          centerX: GRID.ORIGIN_X,
+          centerY: GRID.ORIGIN_Y,
+          radius: 25,
+          speed: Math.PI / 3000,
+          startTime: room.getSpatialStartTime(),
+        },
+      },
+    });
+  }
+
   const messages = room.getFullChatHistory();
   if (messages.length > 0) {
     sendToClient({
@@ -167,6 +185,8 @@ export const handleMessage = async (ws: ServerWebSocket<WSData>, message: string
 
   try {
     const parsedData: unknown = JSON.parse(message.toString());
+    const room = globalManager.getRoom(roomId);
+    room?.touchClientActivity(ws.data.clientId);
 
     // Fast path: NTP requests skip Zod validation and dispatch overhead.
     // t1 is already captured above; t2 is captured right before ws.send()
@@ -181,7 +201,6 @@ export const handleMessage = async (ws: ServerWebSocket<WSData>, message: string
         probeGroupIndex: number;
       };
 
-      const room = globalManager.getRoom(roomId);
       if (room) {
         room.processNTPRequestFrom({
           clientId: ws.data.clientId,

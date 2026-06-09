@@ -1,4 +1,7 @@
+"use client";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LoadingEtaOverlay } from "@/components/LoadingEtaOverlay";
 import { useGlobalStore } from "@/store/global";
 import { Library, ListMusic, PartyPopper } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -35,6 +38,7 @@ export const Dashboard = ({ roomId }: DashboardProps) => {
   return (
     <div className="w-full h-dvh flex flex-col text-white bg-neutral-950">
       <BeatFlash />
+      <LoadingEtaOverlay />
       {/* Top bar: Fixed height */}
       <TopBar roomId={roomId} />
 

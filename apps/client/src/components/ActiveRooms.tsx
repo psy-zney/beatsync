@@ -115,7 +115,15 @@ export const ActiveRooms = () => {
                   {/* Top row: Track title + track count */}
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-white truncate leading-tight">
-                      {extractFileNameFromUrl(room.playbackState.audioSource) || "No track playing"}
+                      {(() => {
+                        const activeSource = room.audioSources.find((s) => s.url === room.playbackState.audioSource);
+                        return (
+                          activeSource?.title ??
+                          (room.playbackState.audioSource
+                            ? extractFileNameFromUrl(room.playbackState.audioSource)
+                            : "No track playing")
+                        );
+                      })()}
                     </p>
                     {room.audioSources.length > 1 && (
                       <span className="text-[11px] text-neutral-500 font-medium flex-shrink-0">

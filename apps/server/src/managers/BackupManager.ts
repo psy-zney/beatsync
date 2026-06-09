@@ -41,6 +41,23 @@ export class BackupManager {
       // Filter out audio sources that are not valid
       const validAudioSources = roomData.audioSources.filter((_, index) => validationResults[index]);
 
+      // Heal missing titles for YouTube cached tracks
+      for (const source of validAudioSources) {
+        if (!source.title && source.url.includes("/youtube-cache/")) {
+          const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
+          if (match && match[1]) {
+            try {
+              console.log(`[Heal] Fetching missing title for YouTube track ${match[1]}...`);
+              const { getYoutubeMetadata } = await import("@/lib/youtube");
+              const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
+              source.title = title;
+            } catch (err) {
+              console.error(`[Heal] Failed to fetch title for ${match[1]}:`, err);
+            }
+          }
+        }
+      }
+
       // Restore audio sources
       room.setAudioSources(validAudioSources);
 
@@ -130,7 +147,8 @@ export class BackupManager {
       // Clean up old backups after successful backup
       await this.cleanupOldBackups();
     } catch (error) {
-      console.error("❌ State backup failed:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`❌ State backup failed: ${msg}`);
       throw error;
     }
   }
@@ -149,7 +167,7 @@ export class BackupManager {
         console.log("📭 No backups found");
 
         // Still clean up orphaned rooms even if no backup exists
-        await this.cleanupOrphanedRooms();
+        // await this.cleanupOrphanedRooms(); // DISABLED to keep music list even when closed
 
         return false;
       }
@@ -226,11 +244,12 @@ export class BackupManager {
       }
 
       // Clean up orphaned rooms after state restore
-      await this.cleanupOrphanedRooms();
+      // await this.cleanupOrphanedRooms(); // DISABLED to keep music list even when closed
 
       return true;
     } catch (error) {
-      console.error("❌ State restore failed:", error);
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`❌ State restore failed: ${msg}`);
       return false;
     }
   }

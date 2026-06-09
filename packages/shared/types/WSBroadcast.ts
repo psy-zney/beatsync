@@ -28,6 +28,12 @@ const ClientChangeMessageSchema = z.object({
   clients: z.array(ClientDataSchema),
 });
 
+const ClientMovedSchema = z.object({
+  type: z.literal("CLIENT_MOVED"),
+  clientId: z.string(),
+  position: PositionSchema,
+});
+
 // Set audio sources
 const SetAudioSourcesSchema = z.object({
   type: z.literal("SET_AUDIO_SOURCES"),
@@ -56,6 +62,7 @@ const RoomEventSchema = z.object({
   type: z.literal("ROOM_EVENT"),
   event: z.discriminatedUnion("type", [
     ClientChangeMessageSchema,
+    ClientMovedSchema,
     SetAudioSourcesSchema,
     SetPlaybackControlsSchema,
     ChatUpdateSchema,
@@ -66,11 +73,11 @@ const RoomEventSchema = z.object({
 // SCHEDULED ACTIONS
 const SpatialConfigSchema = z.object({
   type: z.literal("SPATIAL_CONFIG"),
-  gains: z.record(
-    z.string(),
-    z.object({ gain: z.number().min(0).max(1), rampTime: z.number() })
-  ),
-  listeningSource: PositionSchema,
+  centerX: z.number(),
+  centerY: z.number(),
+  radius: z.number(),
+  speed: z.number(),
+  startTime: z.number(),
 });
 
 export type SpatialConfigType = z.infer<typeof SpatialConfigSchema>;

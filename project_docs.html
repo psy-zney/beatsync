@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài liệu Cấu trúc Dự án Beatsync</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            text-align: center;
+        }
+        h2 {
+            margin-top: 30px;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .code-block {
+            background-color: #f1f2f6;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .section-box {
+            background-color: #f8f9fa;
+            border: 1px solid #e1e8ed;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        ul, ol {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            background-color: #3498db;
+            color: white;
+            margin-right: 5px;
+        }
+        .badge.server { background-color: #2ecc71; }
+        .badge.client { background-color: #9b59b6; }
+        .badge.shared { background-color: #f1c40f; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tài liệu Cấu trúc & Kỹ thuật Dự án Beatsync</h1>
+        
+        <p><strong>Beatsync</strong> là một ứng dụng phát nhạc trên web với độ chính xác cao, cho phép đồng bộ hóa việc phát nhạc trên nhiều thiết bị cùng lúc. Dự án được xây dựng theo kiến trúc <strong>Monorepo</strong> sử dụng <strong>Turborepo</strong>.</p>
+
+        <h2>1. Cấu trúc Tổng quan (Monorepo)</h2>
+        <p>Dự án được chia thành 3 phần chính (packages) để phân tách logic và dễ quản lý:</p>
+        <div class="section-box">
+            <ul>
+                <li><span class="badge client">apps/client</span> <strong>Ứng dụng Front-end</strong>: Xây dựng bằng Next.js 15 (App Router), React 19, Tailwind v4, và Shadcn/ui. Quản lý giao diện hiển thị cho người dùng.</li>
+                <li><span class="badge server">apps/server</span> <strong>Máy chủ Back-end</strong>: Xây dựng bằng Bun HTTP + WebSocket server (sử dụng native <code>Bun.serve</code>). Quản lý phòng, đồng bộ người dùng và xử lý logic kết nối.</li>
+                <li><span class="badge shared">packages/shared</span> <strong>Code dùng chung</strong>: Chứa các cấu trúc dữ liệu, chuẩn (Zod schemas) dùng chung để xác thực dữ liệu API/WebSocket giúp client và server hiểu nhau.</li>
+            </ul>
+        </div>
+
+        <h2>2. Phân tích Chi tiết Front-end (Client)</h2>
+        <div class="section-box">
+            <p><strong>Vị trí:</strong> <code>apps/client/</code></p>
+            <p><strong>Công nghệ:</strong> Next.js, React, Zustand (Quản lý state), TailwindCSS.</p>
+            <h3>Quản lý Trạng thái (State Management)</h3>
+            <p>Client không lưu lộn xộn mà gom thành 3 kho lưu trữ trạng thái (store) chính bằng Zustand nằm trong <code>apps/client/src/store/</code>:</p>
+            <ul>
+                <li><code>global.tsx</code>: Quản lý các cấu hình lớn như kết nối WebSocket, bài hát đang phát, danh sách nhạc, cấu hình âm thanh không gian. </li>
+                <li><code>room.tsx</code>: Quản lý riêng thông tin hiển thị của phòng hiện tại (mã phòng, tên người dùng).</li>
+                <li><code>chat.tsx</code>: Xử lý hiển thị và lưu lịch sử các tin nhắn trong phòng.</li>
+            </ul>
+        </div>
+
+        <h2>3. Phân tích Chi tiết Back-end (Server)</h2>
+        <div class="section-box">
+            <p><strong>Vị trí:</strong> <code>apps/server/</code></p>
+            <p><strong>Công nghệ:</strong> Bun, WebSocket.</p>
+            <h3>Kiến trúc Server (Không dùng Database)</h3>
+            <p>Điểm đặc biệt là server <strong>không cần database</strong> như MySQL hay MongoDB, mọi thứ lưu trên RAM và chia cho các người quản lý (Manager):</p>
+            <ul>
+                <li><strong>GlobalManager</strong> (Người quản lý tổng): Nắm danh sách toàn bộ các phòng đang mở.</li>
+                <li><strong>RoomManager</strong> (Người quản lý phòng): Mỗi phòng có 1 quản lý này để kiểm soát người vào/ra, bài đang phát, chat.</li>
+                <li><strong>BackupManager</strong> (Quản lý sao lưu): Mỗi 60 giây sẽ tự động lưu dữ liệu lên đám mây (Cloudflare R2) phòng trường hợp sập server.</li>
+                <li><strong>MusicProviderManager</strong>: Quản lý việc tìm kiếm và lấy nhạc từ các nguồn bên ngoài.</li>
+            </ul>
+        </div>
+
+        <h2>4. Các Cơ chế Hoạt động Đặc biệt</h2>
+        
+        <h3>4.1. Giao tiếp thời gian thực (WebSocket)</h3>
+        <div class="section-box">
+            <p>Thay vì load lại trang, mọi thao tác như nhắn tin, đổi bài hát đều truyền qua WebSocket:</p>
+            <ol>
+                <li>Tin nhắn gửi lên luôn được kiểm tra định dạng qua `WSRequestSchema` để tránh lỗi.</li>
+                <li>Server phản hồi bằng 3 cách: Báo cho <strong>tất cả</strong> mọi người trong phòng (`WSBroadcast`), chỉ báo cho <strong>1 người</strong> (`WSUnicast`), hoặc kết hợp cả 2 (`WSResponse`).</li>
+            </ol>
+        </div>
+
+        <h3>4.2. Đồng bộ hóa Phát nhạc (Cực kỳ chính xác)</h3>
+        <div class="section-box">
+            <p>Làm sao để 10 cái điện thoại phát nhạc cùng 1 mili-giây mà không bị vang/lệch tiếng?</p>
+            <ul>
+                <li>Server và Client liên tục gửi tín hiệu "ping" để tính ra <strong>độ trễ mạng</strong> của từng thiết bị.</li>
+                <li>Khi một người bấm <strong>Play</strong>, máy chủ <span class="highlight">không ra lệnh phát ngay</span>. Thay vào đó, máy chủ tính toán độ trễ lớn nhất và ra lệnh: <em>"Tất cả hãy chờ sẵn, đúng 3 giây nữa đồng loạt phát nhạc nhé"</em>.</li>
+                <li>Các máy trễ mạng nhiều sẽ nhận lệnh muộn nhưng vẫn căn đúng giờ hẹn, các máy mạng nhanh nhận lệnh sớm thì nằm chờ. Kết quả là tất cả phát cùng lúc.</li>
+            </ul>
+        </div>
+
+        <h3>4.3. Quản lý Upload File Âm thanh</h3>
+        <div class="section-box">
+            <p>Để server không bị quá tải khi nhiều người up nhạc:</p>
+            <ol>
+                <li>Client gửi yêu cầu "Cho tôi xin cái thẻ để up file lên Cloud".</li>
+                <li>Server tạo 1 "vé" tạm thời (Presigned URL) và đưa cho Client.</li>
+                <li>Client dùng "vé" đó <strong>đẩy file thẳng lên máy chủ Cloud (Cloudflare R2)</strong>, server không tốn băng thông trung chuyển.</li>
+            </ol>
+        </div>
+
+        <h2>5. Cách Khởi chạy Dự án Dành cho Dev</h2>
+        <div class="code-block">
+            <p># 1. Cài đặt toàn bộ thư viện (chạy ở thư mục gốc có file package.json)</p>
+            <code>bun install</code><br><br>
+            <p># 2. Chạy môi trường phát triển (sẽ mở cả Client và Server cùng lúc)</p>
+            <code>bun dev</code><br><br>
+            <p># 3. Hoặc chạy từng thành phần riêng lẻ</p>
+            <code>bun client   # Chỉ chạy giao diện (Cổng 3000)</code><br>
+            <code>bun server   # Chỉ chạy máy chủ (Cổng 8080)</code><br>
+        </div>
+
+    </div>
+</body>
+</html>
