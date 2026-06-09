@@ -124,6 +124,8 @@ interface GlobalStateValues {
   duration: number;
   volume: number;
   globalVolume: number; // Master volume (0-1)
+  personalVolume: number; // Client-side personal music volume (0-1)
+  micVolumes: Record<string, number>; // Client-side mic volume for each client (0-1)
 
   // Tracking properties
   playbackStartTime: number;
@@ -202,6 +204,8 @@ interface GlobalState extends GlobalStateValues {
   getCurrentGainValue: () => number;
   getCurrentSpatialGainValue: () => number;
   setGlobalVolume: (volume: number) => void;
+  setPersonalVolume: (volume: number) => void;
+  setMicVolume: (clientId: string, volume: number) => void;
   sendGlobalVolumeUpdate: (volume: number) => void;
   processGlobalVolumeConfig: (config: GlobalVolumeConfigType) => void;
   applyFinalGain: (rampTime?: number) => void;
@@ -280,6 +284,8 @@ const initialState: GlobalStateValues = {
   duration: 0,
   volume: 0.5,
   globalVolume: 1.0, // Default 100%
+  personalVolume: 1.0, // Default 100%
+  micVolumes: {},
   reconnectionInfo: {
     isReconnecting: false,
     currentAttempt: 0,
@@ -1379,6 +1385,17 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       get().applyFinalGain();
     },
 
+    setPersonalVolume: (volume) => {
+      set({ personalVolume: Math.max(0, Math.min(1, volume)) });
+      get().applyFinalGain();
+    },
+
+    setMicVolume: (clientId, volume) => {
+      set((state) => ({
+        micVolumes: { ...state.micVolumes, [clientId]: Math.max(0, Math.min(1, volume)) },
+      }));
+    },
+
     sendGlobalVolumeUpdate: (volume) => {
       const state = get();
       const { socket } = getSocket(state);
@@ -1402,13 +1419,13 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       const state = get();
 
       // Calculate final gain
-      let finalGain = state.globalVolume;
+      let finalGain = state.globalVolume * state.personalVolume;
 
       // If spatial audio is enabled, get the spatial gain for this client
       if (state.isSpatialAudioEnabled && state.spatialConfig) {
         const clientId = getClientId();
         const spatialGain = state.spatialConfig.gains[clientId]?.gain || 1;
-        finalGain = state.globalVolume * spatialGain;
+        finalGain = state.globalVolume * spatialGain * state.personalVolume;
       }
 
       // Use singleton's setMasterGain with ramping

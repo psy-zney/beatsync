@@ -970,6 +970,10 @@ export class RoomManager {
     return this.clientData.get(clientId);
   }
 
+  getClientWs(clientId: string): ServerWebSocket<WSData> | undefined {
+    return this.wsConnections.get(clientId);
+  }
+
   /**
    * Get the backup state for this room
    */
