@@ -45,7 +45,7 @@ export class BackupManager {
       for (const source of validAudioSources) {
         if (!source.title && source.url.includes("/youtube-cache/")) {
           const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
-          if (match && match[1]) {
+          if (match?.[1]) {
             try {
               console.log(`[Heal] Fetching missing title for YouTube track ${match[1]}...`);
               const { getYoutubeMetadata } = await import("@/lib/youtube");

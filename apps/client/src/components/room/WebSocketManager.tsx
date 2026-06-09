@@ -12,7 +12,6 @@ import { validateProbePair, getProbeStats, NTPMeasurement } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, epochNow, NTPResponseMessageType, WSResponseSchema } from "@beatsync/shared";
 import { useEffect } from "react";
-import { useWebRTCStore } from "@/store/webrtc";
 
 /**
  * Process an NTP_RESPONSE into a measurement and attempt to complete a probe pair.
@@ -258,7 +257,10 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
           useGlobalStore.setState({ demoAudioReadyCount: response.count });
         }
       } else if (response.type === "WEBRTC_SIGNAL") {
-        useWebRTCStore.getState().handleSignalingMessage(response);
+        const onWebRTCSignal = useGlobalStore.getState().onWebRTCSignal;
+        if (onWebRTCSignal) {
+          onWebRTCSignal(response);
+        }
       } else {
         console.log("Unknown response type:", response);
       }

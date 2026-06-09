@@ -19,7 +19,7 @@ import type {
   RoomType,
   WSBroadcastType,
 } from "@beatsync/shared";
-import { ChatMessageSchema, ClientDataSchema, epochNow, LOW_PASS_CONSTANTS, NTP_CONSTANTS } from "@beatsync/shared";
+import { ClientDataSchema, epochNow, LOW_PASS_CONSTANTS, NTP_CONSTANTS } from "@beatsync/shared";
 import { AudioSourceSchema, GRID } from "@beatsync/shared/types/basic";
 import type { SendLocationSchema } from "@beatsync/shared/types/WSRequest";
 import type { ServerWebSocket } from "bun";
@@ -505,6 +505,13 @@ export class RoomManager {
   }
 
   /**
+   * Get a client's WebSocket connection
+   */
+  getClientWs(clientId: string): ServerWebSocket<WSData> | undefined {
+    return this.wsConnections.get(clientId);
+  }
+
+  /**
    * Check if the room has any active clients based on recent NTP heartbeats
    * This is more reliable than checking WebSocket readyState which can be inconsistent
    */
@@ -971,10 +978,6 @@ export class RoomManager {
 
   getClient(clientId: string): ClientDataType | undefined {
     return this.clientData.get(clientId);
-  }
-
-  getClientWs(clientId: string): ServerWebSocket<WSData> | undefined {
-    return this.wsConnections.get(clientId);
   }
 
   /**

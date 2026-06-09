@@ -95,7 +95,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               request: {
                 type: ClientActionEnum.enum.WEBRTC_SIGNAL,
                 targetClientId,
-                signalData: { type: "ice-candidate", candidate: event.candidate },
+                signal: { type: "ice-candidate", candidate: event.candidate },
               },
             });
           }
@@ -122,7 +122,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           request: {
             type: ClientActionEnum.enum.WEBRTC_SIGNAL,
             targetClientId,
-            signalData: { type: "offer", sdp: offer },
+            signal: { type: "offer", sdp: offer },
           },
         });
       }
@@ -135,7 +135,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           request: {
             type: ClientActionEnum.enum.WEBRTC_SIGNAL,
             targetClientId,
-            signalData: { type: "request-offer" },
+            signal: { type: "request-offer" },
           },
         });
       }
@@ -161,14 +161,14 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   },
 
   handleSignalingMessage: async (msg: WebRTCSignalUnicastType) => {
-    const { sourceClientId, signalData } = msg;
+    const { sourceClientId, signal } = msg;
     const { isVoiceActive, localStream } = get();
 
     if (!isVoiceActive || !localStream) return;
 
     let pc = get().peerConnections[sourceClientId];
 
-    if (signalData.type === "request-offer") {
+    if (signal.type === "request-offer") {
       // The other side is ready and wants me to send an offer.
       // If I am active, and myId > sourceClientId, I will initiate!
       const myId = getClientId();
@@ -178,7 +178,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       return;
     }
 
-    if (!pc && signalData.type === "offer") {
+    if (!pc && signal.type === "offer") {
       // Create answerer PC
       pc = new RTCPeerConnection(configuration);
 
@@ -195,7 +195,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               request: {
                 type: ClientActionEnum.enum.WEBRTC_SIGNAL,
                 targetClientId: sourceClientId,
-                signalData: { type: "ice-candidate", candidate: event.candidate },
+                signal: { type: "ice-candidate", candidate: event.candidate },
               },
             });
           }
@@ -216,8 +216,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     if (!pc) return;
 
     try {
-      if (signalData.type === "offer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
+      if (signal.type === "offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
@@ -228,14 +228,14 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
             request: {
               type: ClientActionEnum.enum.WEBRTC_SIGNAL,
               targetClientId: sourceClientId,
-              signalData: { type: "answer", sdp: answer },
+              signal: { type: "answer", sdp: answer },
             },
           });
         }
-      } else if (signalData.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
-      } else if (signalData.type === "ice-candidate") {
-        await pc.addIceCandidate(new RTCIceCandidate(signalData.candidate));
+      } else if (signal.type === "answer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      } else if (signal.type === "ice-candidate") {
+        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
       }
     } catch (err) {
       console.error("Error handling signaling message", err);

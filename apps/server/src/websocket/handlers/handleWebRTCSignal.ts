@@ -1,42 +1,27 @@
-import type { ExtractWSRequestFrom, WebRTCSignalUnicastType } from "@beatsync/shared";
-import type { ClientActionEnum } from "@beatsync/shared";
-import { globalManager } from "@/managers";
+import type { ExtractWSRequestFrom } from "@beatsync/shared";
+import type { HandlerFunction } from "@/websocket/types";
+import { requireRoom } from "@/websocket/middlewares";
 import { sendUnicast } from "@/utils/responses";
-import type { ServerWebSocket } from "bun";
-import type { BunServer, WSData } from "@/utils/websocket";
 
-export function handleWebRTCSignal({
-  ws,
-  message,
-}: {
-  ws: ServerWebSocket<WSData>;
-  message: ExtractWSRequestFrom[typeof ClientActionEnum.enum.WEBRTC_SIGNAL];
-}) {
-  const sourceClientId = ws.data.clientId;
-  const targetClientId = message.targetClientId;
-  const roomId = ws.data.roomId;
+export const handleWebRTCSignal: HandlerFunction<ExtractWSRequestFrom["WEBRTC_SIGNAL"]> = ({ ws, message }) => {
+  const { room } = requireRoom(ws);
 
-  const room = globalManager.getRoom(roomId);
-  if (!room) {
-    return;
-  }
+  // Find the target client's WebSocket connection
+  const targetWs = room.getClientWs(message.targetClientId);
 
-  // Find target client in the room
-  const targetWs = room.getClientWs(targetClientId);
   if (!targetWs) {
+    console.warn(`[WebRTC] Target client ${message.targetClientId} not connected in room ${room.getRoomId()}`);
     return;
   }
 
-  // Forward the signaling message directly to the target client (Unicast)
-  const broadcast: WebRTCSignalUnicastType = {
-    type: "WEBRTC_SIGNAL",
-    sourceClientId,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    signalData: message.signalData,
-  };
-
+  // Forward the signal to the target client using sendUnicast
   sendUnicast({
     ws: targetWs,
-    message: broadcast,
+    message: {
+      type: "WEBRTC_SIGNAL",
+      sourceClientId: ws.data.clientId,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      signal: message.signal,
+    },
   });
-}
+};

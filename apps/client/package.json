@@ -20,6 +20,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@beatsync/shared": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
@@ -64,8 +65,7 @@
     "tailwindcss-animate": "^1.0.7",
     "throttle-debounce": "^5.0.2",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11",
-    "@beatsync/shared": "workspace:*"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

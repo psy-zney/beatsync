@@ -20,11 +20,10 @@ export const MusicSearchResponseSchema = z.object({
 });
 export type MusicSearchResponseType = z.infer<typeof MusicSearchResponseSchema>;
 
-// WebRTC Signaling
-const WebRTCSignalUnicastSchema = z.object({
+export const WebRTCSignalUnicastSchema = z.object({
   type: z.literal("WEBRTC_SIGNAL"),
-  sourceClientId: z.string(), // The client who sent the signal
-  signalData: z.any(), // RTCSessionDescriptionInit or RTCIceCandidateInit
+  sourceClientId: z.string(), // The client who sent this signal
+  signal: z.any(), // The RTCSessionDescriptionInit or RTCIceCandidateInit object
 });
 export type WebRTCSignalUnicastType = z.infer<typeof WebRTCSignalUnicastSchema>;
 

@@ -13,6 +13,8 @@ interface NewSyncerProps {
   roomId: string;
 }
 
+import { VoiceChatProvider } from "./room/VoiceChatProvider";
+
 // Main component has been refactored into smaller components
 export const NewSyncer = ({ roomId }: NewSyncerProps) => {
   const setUsername = useRoomStore((state) => state.setUsername);
@@ -31,14 +33,16 @@ export const NewSyncer = ({ roomId }: NewSyncerProps) => {
   }, [setUsername, username, roomId, setRoomId]);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      {/* WebSocket connection manager (non-visual component) */}
-      <WebSocketManager roomId={roomId} username={username} />
+    <VoiceChatProvider>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+        {/* WebSocket connection manager (non-visual component) */}
+        <WebSocketManager roomId={roomId} username={username} />
 
-      {/* Spatial audio background effects */}
-      {/* <SpatialAudioBackground /> */}
+        {/* Spatial audio background effects */}
+        {/* <SpatialAudioBackground /> */}
 
-      {IS_DEMO_MODE ? <DemoDashboard roomId={roomId} /> : <Dashboard roomId={roomId} />}
-    </motion.div>
+        {IS_DEMO_MODE ? <DemoDashboard roomId={roomId} /> : <Dashboard roomId={roomId} />}
+      </motion.div>
+    </VoiceChatProvider>
   );
 };

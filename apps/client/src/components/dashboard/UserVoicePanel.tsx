@@ -282,7 +282,7 @@ export const UserVoicePanel = () => {
                     onChange={setPersonalVolume}
                   />
                   <p className="text-[10px] text-neutral-500 mt-2 leading-tight">
-                    This controls the music volume only for you, independent of the room's master volume.
+                    This controls the music volume only for you, independent of the room&apos;s master volume.
                   </p>
                 </div>
 

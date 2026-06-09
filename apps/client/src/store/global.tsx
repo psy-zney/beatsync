@@ -28,6 +28,7 @@ import {
   NTP_CONSTANTS,
   PlaybackControlsPermissionsEnum,
   PlaybackControlsPermissionsType,
+  WebRTCSignalUnicastType,
   PositionType,
   SearchResponseType,
   SetAudioSourcesType,
@@ -169,6 +170,8 @@ interface GlobalStateValues {
 
   // Whether nudge has been restored from server this connection (prevents re-restore on subsequent CLIENT_CHANGE)
   didRestoreNudge: boolean;
+
+  onWebRTCSignal: ((msg: WebRTCSignalUnicastType) => void) | null;
 }
 
 interface GlobalState extends GlobalStateValues {
@@ -244,8 +247,9 @@ interface GlobalState extends GlobalStateValues {
   processLowPassConfig: (config: LowPassConfigType) => void;
 
   // Audio source methods
-  handleLoadAudioSource: (sources: LoadAudioSourceType) => void;
   broadcastReorder: (urls: AudioSourceType[]) => void;
+  setOnWebRTCSignal: (callback: ((msg: WebRTCSignalUnicastType) => void) | null) => void;
+  handleLoadAudioSource: (event: LoadAudioSourceType) => void;
 }
 
 // Define initial state values
@@ -323,6 +327,8 @@ const initialState: GlobalStateValues = {
   lowPassFreq: LOW_PASS_CONSTANTS.MAX_FREQ,
 
   didRestoreNudge: false,
+
+  onWebRTCSignal: null,
 };
 
 const getAudioPlayer = (state: GlobalState) => {
@@ -1280,7 +1286,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           const expectedEndTime =
             currentState.playbackStartTime + (currentState.duration - currentState.playbackOffset);
           // Use a tolerance for timing discrepancies (e.g., 0.5 seconds)
-          const endedNaturally = Math.abs(audioContext.currentTime - expectedEndTime) < 0.5;
+          const endedNaturally = audioContext.currentTime >= expectedEndTime - 0.5;
 
           if (endedNaturally) {
             console.log("Track ended naturally, skipping to next via autoplay.");
@@ -1781,6 +1787,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       set({ selectedAudioUrl: audioSourceToPlay.url });
       void loadAudioSource(audioSourceToPlay.url);
       eagerLoadIdleSources({ preferredUrls: [audioSourceToPlay.url], skip: audioSourceToPlay.url });
+    },
+
+    setOnWebRTCSignal: (callback) => {
+      set({ onWebRTCSignal: callback });
     },
   };
 });
