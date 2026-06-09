@@ -1166,8 +1166,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         console.error(
           `Sync offset ${data.offset.toFixed(2)}s is beyond track duration ${audioBuffer.duration.toFixed(
             2
-          )}s. Aborting playback.`
+          )}s. Aborting playback and skipping to next track.`
         );
+        // Force the time to the end so it looks complete, then trigger an autoplay skip
+        set({ currentTime: audioBuffer.duration });
+        get().skipToNextTrack(true);
         return;
       }
 

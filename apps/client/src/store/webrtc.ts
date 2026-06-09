@@ -6,11 +6,13 @@ import { ClientActionEnum, WebRTCSignalUnicastType } from "@beatsync/shared";
 
 interface WebRTCState {
   isVoiceActive: boolean;
+  isDeafened: boolean;
   localStream: MediaStream | null;
   remoteStreams: Record<string, MediaStream>; // clientId -> MediaStream
   peerConnections: Record<string, RTCPeerConnection>;
 
   toggleVoice: () => Promise<void>;
+  toggleDeafen: () => void;
   handleSignalingMessage: (msg: WebRTCSignalUnicastType) => Promise<void>;
   handleClientJoined: (clientId: string) => void;
   handleClientLeft: (clientId: string) => void;
@@ -22,9 +24,14 @@ const configuration = {
 
 export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   isVoiceActive: false,
+  isDeafened: false,
   localStream: null,
   remoteStreams: {},
   peerConnections: {},
+
+  toggleDeafen: () => {
+    set((state) => ({ isDeafened: !state.isDeafened }));
+  },
 
   toggleVoice: async () => {
     const { isVoiceActive, localStream, peerConnections } = get();

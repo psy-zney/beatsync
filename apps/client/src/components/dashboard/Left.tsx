@@ -6,14 +6,13 @@ import { MAX_NTP_MEASUREMENTS, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { Hash } from "lucide-react";
 import { motion } from "motion/react";
-import { AudioUploaderMinimal } from "../AudioUploaderMinimal";
 import { Separator } from "../ui/separator";
 import { ConnectedUsersList } from "./ConnectedUsersList";
 import { RoomQRCode } from "./CopyRoom";
 import { GlobalVolumeControl } from "./GlobalVolumeControl";
 import { MobileNudgeControl } from "./MobileNudgeControl";
 import { PlaybackPermissions } from "./PlaybackPermissions";
-import { VoiceChatControls } from "./VoiceChatControls";
+import { UserVoicePanel } from "./UserVoicePanel";
 
 interface LeftProps {
   className?: string;
@@ -80,8 +79,7 @@ export const Left = ({ className }: LeftProps) => {
         <Separator className="bg-neutral-800/50" />
       </div>
 
-      <VoiceChatControls />
-      <Separator className="bg-neutral-800/50" />
+
 
       {/* Connected Users List */}
       <ConnectedUsersList />
@@ -99,9 +97,7 @@ export const Left = ({ className }: LeftProps) => {
           </ul>
         </div>
 
-        <div className="pl-1">
-          <AudioUploaderMinimal />
-        </div>
+        <UserVoicePanel />
       </motion.div>
     </motion.div>
   );

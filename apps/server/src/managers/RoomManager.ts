@@ -57,12 +57,6 @@ const RoomBackupSchema = z.object({
     .max(LOW_PASS_CONSTANTS.MAX_FREQ)
     .default(LOW_PASS_CONSTANTS.MAX_FREQ),
   playbackState: RoomPlaybackStateSchema,
-  chat: z
-    .object({
-      messages: z.array(ChatMessageSchema),
-      nextMessageId: z.number(),
-    })
-    .optional(),
 });
 export type RoomBackupType = z.infer<typeof RoomBackupSchema>;
 
@@ -333,8 +327,6 @@ export class RoomManager {
 
     // Restore some specific fields.
     if (cachedClient) {
-      // Don't overwrite creator's username — it was set by the server
-      if (!ws.data.isCreator) clientData.username = cachedClient.username;
       clientData.location = cachedClient.location;
       if (!IS_DEMO_MODE) clientData.isAdmin = cachedClient.isAdmin;
       clientData.joinedAt = cachedClient.joinedAt;
@@ -984,10 +976,6 @@ export class RoomManager {
       globalVolume: this.globalVolume,
       lowPassFreq: this.lowPassFreq,
       playbackState: this.playbackState,
-      chat: {
-        messages: this.chatManager.getFullHistory(),
-        nextMessageId: this.chatManager.getNextMessageId(),
-      },
     };
   }
 
