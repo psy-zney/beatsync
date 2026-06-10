@@ -248,6 +248,7 @@ interface GlobalState extends GlobalStateValues {
 
   // Audio source methods
   broadcastReorder: (urls: AudioSourceType[]) => void;
+  savePlaylist: () => void;
   setOnWebRTCSignal: (callback: ((msg: WebRTCSignalUnicastType) => void) | null) => void;
   handleLoadAudioSource: (event: LoadAudioSourceType) => void;
 }
@@ -1057,6 +1058,18 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         request: {
           type: ClientActionEnum.enum.REORDER_AUDIO_SOURCES,
           reorderedAudioSources: newOrder,
+        },
+      });
+    },
+
+    savePlaylist: () => {
+      const state = get();
+      const { socket } = getSocket(state);
+
+      sendWSRequest({
+        ws: socket,
+        request: {
+          type: ClientActionEnum.enum.SAVE_PLAYLIST,
         },
       });
     },

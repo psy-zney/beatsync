@@ -27,10 +27,19 @@ export const WebRTCSignalUnicastSchema = z.object({
 });
 export type WebRTCSignalUnicastType = z.infer<typeof WebRTCSignalUnicastSchema>;
 
+export const SavePlaylistResponseSchema = z.object({
+  type: z.literal("SAVE_PLAYLIST_RESPONSE"),
+  success: z.boolean(),
+  message: z.string(),
+  deletedCount: z.number(),
+});
+export type SavePlaylistResponseType = z.infer<typeof SavePlaylistResponseSchema>;
+
 export const WSUnicastSchema = z.discriminatedUnion("type", [
   NTPResponseMessageSchema,
   ScheduledActionSchema,
   MusicSearchResponseSchema,
   WebRTCSignalUnicastSchema,
+  SavePlaylistResponseSchema,
 ]);
 export type WSUnicastType = z.infer<typeof WSUnicastSchema>;

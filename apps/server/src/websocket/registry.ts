@@ -22,6 +22,7 @@ import { handleSetMetronome } from "@/websocket/handlers/setMetronome";
 import { handleSetLowPassFreq } from "@/websocket/handlers/setLowPassFreq";
 import { handleWebRTCSignal } from "@/websocket/handlers/handleWebRTCSignal";
 import { handleSync } from "@/websocket/handlers/sync";
+import { handleSavePlaylist } from "@/websocket/handlers/handleSavePlaylist";
 import type { WebsocketRegistry } from "@/websocket/types";
 
 export const WS_REGISTRY: WebsocketRegistry = {
@@ -132,5 +133,9 @@ export const WS_REGISTRY: WebsocketRegistry = {
   [ClientActionEnum.enum.WEBRTC_SIGNAL]: {
     handle: handleWebRTCSignal,
     description: "Handle WebRTC signaling (Offer, Answer, ICE candidates) via unicast",
+  },
+  [ClientActionEnum.enum.SAVE_PLAYLIST]: {
+    handle: handleSavePlaylist,
+    description: "Save room playlist to bucket and clean up unused files",
   },
 };

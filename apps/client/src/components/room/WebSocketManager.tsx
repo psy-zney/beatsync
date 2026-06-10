@@ -7,6 +7,7 @@ import { getUserLocation } from "@/lib/ip";
 import { getWsUrl } from "@/lib/urls";
 import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
+import { toast } from "sonner";
 import { useRoomStore } from "@/store/room";
 import { validateProbePair, getProbeStats, NTPMeasurement } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
@@ -260,6 +261,12 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         const onWebRTCSignal = useGlobalStore.getState().onWebRTCSignal;
         if (onWebRTCSignal) {
           onWebRTCSignal(response);
+        }
+      } else if (response.type === "SAVE_PLAYLIST_RESPONSE") {
+        if (response.success) {
+          toast.success(response.message);
+        } else {
+          toast.error(response.message);
         }
       } else {
         console.log("Unknown response type:", response);

@@ -1,6 +1,12 @@
 import { calculateScheduleTimeMs, DEFAULT_CLIENT_RTT_MS } from "@/config";
 import { IS_DEMO_MODE } from "@/demo";
-import { deleteObjectsWithPrefix } from "@/lib/r2";
+import {
+  uploadJSON,
+  downloadJSON,
+  listObjectsWithPrefix,
+  deleteObject,
+  getPublicUrlForKey,
+} from "@/lib/r2";
 import { ChatManager } from "@/managers/ChatManager";
 import { debounce } from "@/utils/debounce";
 import { sendBroadcast, sendUnicast } from "@/utils/responses";
@@ -117,6 +123,10 @@ export class RoomManager {
   private chatManager: ChatManager;
   private serverRef?: BunServer;
 
+  private isPlaylistDirty = false;
+  private isPlaylistLoaded = false;
+  private autoSaveInterval?: NodeJS.Timeout;
+
   // Audio loading state for synchronized playback
   private pendingPlay?: PendingPlayState;
   private demoAudioReadyClients = new Set<string>();
@@ -130,6 +140,18 @@ export class RoomManager {
     this.chatManager = new ChatManager({ roomId });
     if (IS_DEMO_MODE) {
       this.globalVolume = 0.8;
+    } else {
+      this.autoSaveInterval = setInterval(
+        () => {
+          if (this.isPlaylistDirty) {
+            console.log(`[AutoSave] Playlist changed in room ${this.roomId}, saving...`);
+            this.savePlaylist()
+              .then(() => this.cleanupUnusedFiles())
+              .catch((err) => console.error(`[AutoSave] Error auto-saving/cleaning room ${this.roomId}:`, err));
+          }
+        },
+        5 * 60 * 1000
+      ); // Check every 5 minutes
     }
   }
 
@@ -433,6 +455,7 @@ export class RoomManager {
    */
   addAudioSource(source: AudioSourceType): AudioSourceType[] {
     this.audioSources.push(source);
+    this.isPlaylistDirty = true;
     return this.audioSources;
   }
 
@@ -443,6 +466,7 @@ export class RoomManager {
     }
 
     this.audioSources[index] = newSource;
+    this.isPlaylistDirty = true;
 
     if (this.playbackState.audioSource === oldUrl) {
       this.playbackState = {
@@ -491,6 +515,7 @@ export class RoomManager {
     const after = this.audioSources.length;
     if (before !== after) {
       console.log(`Removed ${before - after} sources from room ${this.roomId}: `);
+      this.isPlaylistDirty = true;
     }
     return {
       updated: this.audioSources,
@@ -1040,6 +1065,85 @@ export class RoomManager {
   }
 
   /**
+   * Save playlist to R2 bucket
+   */
+  async savePlaylist(): Promise<void> {
+    if (IS_DEMO_MODE) return;
+    const key = `room-${this.roomId}/playlist.json`;
+    await uploadJSON(key, this.audioSources);
+    this.isPlaylistDirty = false;
+    console.log(`Saved playlist to R2 for room ${this.roomId}: ${this.audioSources.length} tracks`);
+  }
+
+  /**
+   * Load saved playlist from R2 if it exists
+   */
+  async loadPlaylistFromR2(server?: BunServer): Promise<void> {
+    if (IS_DEMO_MODE || this.isPlaylistLoaded) return;
+    this.isPlaylistLoaded = true; // Mark loaded early to prevent multiple calls
+
+    const key = `room-${this.roomId}/playlist.json`;
+    try {
+      const savedSources = await downloadJSON<AudioSourceType[]>(key);
+      if (savedSources && Array.isArray(savedSources) && savedSources.length > 0) {
+        console.log(`Loaded ${savedSources.length} saved audio sources for room ${this.roomId} from R2`);
+        this.audioSources = savedSources;
+        this.isPlaylistDirty = false;
+
+        // If clients exist, broadcast the restored playlist
+        if (server && this.getClients().length > 0) {
+          sendBroadcast({
+            server,
+            roomId: this.roomId,
+            message: {
+              type: "ROOM_EVENT",
+              event: { type: "SET_AUDIO_SOURCES", sources: this.audioSources },
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to load saved playlist for room ${this.roomId}:`, error);
+    }
+  }
+
+  /**
+   * Clean up unused files from the room's R2 directory
+   */
+  async cleanupUnusedFiles(): Promise<{ deletedCount: number }> {
+    if (IS_DEMO_MODE) return { deletedCount: 0 };
+    try {
+      const prefix = `room-${this.roomId}/`;
+      const objects = await listObjectsWithPrefix(prefix, { includeFolders: false });
+      if (!objects || objects.length === 0) {
+        return { deletedCount: 0 };
+      }
+
+      // Collect URLs of all tracks currently in the playlist
+      const playlistUrls = new Set(this.audioSources.map((source) => source.url));
+      const playlistKey = `${prefix}playlist.json`;
+
+      let deletedCount = 0;
+      for (const obj of objects) {
+        if (!obj.Key) continue;
+        if (obj.Key === playlistKey) continue;
+
+        const publicUrl = getPublicUrlForKey(obj.Key);
+        if (!playlistUrls.has(publicUrl)) {
+          console.log(`[Cleanup] Deleting unused room file: ${obj.Key}`);
+          await deleteObject(obj.Key);
+          deletedCount++;
+        }
+      }
+
+      return { deletedCount };
+    } catch (error) {
+      console.error(`Failed to cleanup unused files for room ${this.roomId}:`, error);
+      return { deletedCount: 0 };
+    }
+  }
+
+  /**
    * Clean up room resources (e.g., R2 storage)
    */
   async cleanup(): Promise<void> {
@@ -1048,11 +1152,18 @@ export class RoomManager {
     // Stop any running intervals
     this.stopSpatialAudio();
     this.stopHeartbeatChecking();
+    if (this.autoSaveInterval) {
+      clearInterval(this.autoSaveInterval);
+      this.autoSaveInterval = undefined;
+    }
 
     if (!IS_DEMO_MODE) {
       try {
-        const result = await deleteObjectsWithPrefix(`room-${this.roomId}`);
-        console.log(`✅ Room ${this.roomId} objects deleted: ${result.deletedCount}`);
+        if (this.isPlaylistDirty) {
+          await this.savePlaylist();
+        }
+        const result = await this.cleanupUnusedFiles();
+        console.log(`✅ Room ${this.roomId} cleanup finished: cleaned up ${result.deletedCount} unused files`);
       } catch (error) {
         console.error(`❌ Room ${this.roomId} cleanup failed:`, error);
       }
@@ -1154,5 +1265,6 @@ export class RoomManager {
     }
 
     this.audioSources = newOrder;
+    this.isPlaylistDirty = true;
   }
 }

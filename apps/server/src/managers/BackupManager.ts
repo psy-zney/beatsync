@@ -7,10 +7,13 @@ import {
   getSortedFilesWithPrefix,
   uploadJSON,
   validateAudioFileExists,
+  listObjectsWithPrefix,
+  getPublicUrlForKey,
 } from "@/lib/r2";
 import { globalManager } from "@/managers/GlobalManager";
 import type { RoomBackupType, ServerBackupType } from "@/managers/RoomManager";
 import { ServerBackupSchema } from "@/managers/RoomManager";
+import type { AudioSourceType } from "@beatsync/shared";
 
 interface RoomRestoreResult {
   room: {
@@ -26,6 +29,8 @@ interface RoomRestoreResult {
 export class BackupManager {
   private static readonly BACKUP_PREFIX = "state-backup/";
   private static readonly DEFAULT_RESTORE_CONCURRENCY = 1000;
+  private static lastYoutubeCleanupTime = 0;
+  private static readonly YOUTUBE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
   /**
    * Restore a single room from backup data
@@ -279,9 +284,89 @@ export class BackupManager {
       }
 
       console.log(`✅ Cleanup completed. Kept ${keepCount} most recent backups.`);
+
+      // Periodic unused YouTube cache cleanup (once per hour)
+      const now = Date.now();
+      if (now - this.lastYoutubeCleanupTime >= this.YOUTUBE_CLEANUP_INTERVAL_MS) {
+        this.lastYoutubeCleanupTime = now;
+        this.cleanupUnusedYoutubeCache().catch((err) =>
+          console.error("⚠️ Background YouTube cache cleanup failed:", err)
+        );
+      }
     } catch (error) {
       // Don't throw - cleanup failures shouldn't break the backup process
       console.error("⚠️ Backup cleanup failed (non-critical):", error);
+    }
+  }
+
+  /**
+   * Clean up YouTube cached files that are not referenced in any active or saved playlist
+   */
+  static async cleanupUnusedYoutubeCache(): Promise<void> {
+    try {
+      console.log("🧹 Cleaning up unused YouTube cache files...");
+
+      const referencedUrls = new Set<string>();
+
+      // 1. Collect URLs from all active in-memory room playlists
+      globalManager.forEachRoom((room) => {
+        room.getAudioSources().forEach((source) => {
+          referencedUrls.add(source.url);
+        });
+      });
+
+      // 2. Collect URLs from all saved playlists in R2
+      const roomObjects = await listObjectsWithPrefix("room-", { includeFolders: false });
+      if (roomObjects && roomObjects.length > 0) {
+        const playlistKeys = roomObjects
+          .filter((obj) => obj.Key?.endsWith("/playlist.json"))
+          .map((obj) => obj.Key!);
+
+        // Load saved playlists concurrently
+        const loadPromises = playlistKeys.map(async (key) => {
+          try {
+            const savedSources = await downloadJSON<AudioSourceType[]>(key);
+            if (savedSources && Array.isArray(savedSources)) {
+              savedSources.forEach((source) => {
+                referencedUrls.add(source.url);
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to load saved playlist ${key} for cache checking:`, err);
+          }
+        });
+        await Promise.all(loadPromises);
+      }
+
+      // 3. List all files under "youtube-cache/" in R2
+      const youtubeCacheObjects = await listObjectsWithPrefix("youtube-cache/", { includeFolders: false });
+      if (!youtubeCacheObjects || youtubeCacheObjects.length === 0) {
+        console.log("  ✅ No YouTube cache files found in R2.");
+        return;
+      }
+
+      console.log(`  Found ${youtubeCacheObjects.length} YouTube cache files in R2`);
+      let deletedCount = 0;
+
+      // 4. Delete files not referenced in any playlist
+      for (const obj of youtubeCacheObjects) {
+        if (!obj.Key) continue;
+        const publicUrl = getPublicUrlForKey(obj.Key);
+
+        if (!referencedUrls.has(publicUrl)) {
+          console.log(`  🗑️ Deleting unused YouTube cache file: ${obj.Key}`);
+          try {
+            await deleteObject(obj.Key);
+            deletedCount++;
+          } catch (err) {
+            console.error(`Failed to delete unused YouTube cache file ${obj.Key}:`, err);
+          }
+        }
+      }
+
+      console.log(`✨ YouTube cache cleanup complete! Deleted ${deletedCount} unused files.`);
+    } catch (error) {
+      console.error("⚠️ Failed to cleanup unused YouTube cache:", error);
     }
   }
 

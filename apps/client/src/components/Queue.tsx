@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { useCanMutate, useGlobalStore } from "@/store/global";
 import { AnimatePresence, motion } from "motion/react";
 import LoadDefaultTracksButton from "./LoadDefaultTracksButton";
+import SavePlaylistButton from "./SavePlaylistButton";
+import { IS_DEMO_MODE } from "@/lib/demo";
 import {
   closestCenter,
   DndContext,
@@ -49,7 +51,14 @@ export const Queue = ({ className, ...rest }: React.ComponentProps<"div">) => {
 
   return (
     <div className={cn("", className)} {...rest}>
-      {/* <h2 className="text-xl font-bold mb-2 select-none">Beatsync</h2> */}
+      {audioSources.length > 0 && (
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider select-none">
+            Queue ({audioSources.length})
+          </h3>
+          {canMutate && !IS_DEMO_MODE && <SavePlaylistButton />}
+        </div>
+      )}
       <div className="space-y-1">
         {audioSources.length > 0 ? (
           canMutate ? (

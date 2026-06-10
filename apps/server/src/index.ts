@@ -115,7 +115,7 @@ const server = Bun.serve<WSData>({
 
   websocket: {
     open(ws) {
-      handleOpen(ws, server);
+      void handleOpen(ws, server);
     },
 
     message(ws, message) {

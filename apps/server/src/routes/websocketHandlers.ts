@@ -39,13 +39,19 @@ function debouncedDemoUserCountBroadcast(server: BunServer, roomId: string): voi
   });
 }
 
-export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
+export const handleOpen = async (ws: ServerWebSocket<WSData>, server: BunServer) => {
   console.log(`WebSocket connection opened for user ${ws.data.username} in room ${ws.data.roomId}`);
 
   const { roomId } = ws.data;
   ws.subscribe(roomId);
 
   const room = globalManager.getOrCreateRoom(roomId);
+
+  // Restore playlist from R2 if room is empty
+  if (!IS_DEMO_MODE && room.getAudioSources().length === 0) {
+    await room.loadPlaylistFromR2(server);
+  }
+
   room.addClient(ws);
 
   const { audioSources, globalVolume, lowPassFreq } = room.getState();
@@ -55,7 +61,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
   if (audioSources.length > 0) {
     console.log(`Sending ${audioSources.length} audio source(s) to newly joined client ${ws.data.username}`);
 
-    sendToClient({
+    void sendToClient({
       ws,
       message: {
         type: "ROOM_EVENT",
@@ -68,7 +74,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     });
   }
 
-  sendToClient({
+  void sendToClient({
     ws,
     message: {
       type: "ROOM_EVENT",
@@ -79,7 +85,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     },
   });
 
-  sendUnicast({
+  void sendUnicast({
     ws,
     message: {
       type: "SCHEDULED_ACTION",
@@ -92,7 +98,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     },
   });
 
-  sendUnicast({
+  void sendUnicast({
     ws,
     message: {
       type: "SCHEDULED_ACTION",
@@ -104,7 +110,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     },
   });
 
-  sendUnicast({
+  void sendUnicast({
     ws,
     message: {
       type: "SCHEDULED_ACTION",
@@ -118,7 +124,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
   });
 
   if (room.getIsSpatialAudioRunning()) {
-    sendUnicast({
+    void sendUnicast({
       ws,
       message: {
         type: "SCHEDULED_ACTION",
@@ -137,7 +143,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
 
   const messages = room.getFullChatHistory();
   if (messages.length > 0) {
-    sendToClient({
+    void sendToClient({
       ws,
       message: {
         type: "ROOM_EVENT",
@@ -154,7 +160,7 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
   if (IS_DEMO_MODE) {
     // In demo mode, only send this client's own entry (no point sending thousands of stale entries)
     const self = globalManager.getRoom(roomId)?.getClient(ws.data.clientId);
-    sendToClient({
+    void sendToClient({
       ws,
       message: {
         type: "ROOM_EVENT",
@@ -167,13 +173,13 @@ export const handleOpen = (ws: ServerWebSocket<WSData>, server: BunServer) => {
     // Broadcast updated user count to all clients
     debouncedDemoUserCountBroadcast(server, roomId);
     // Send current audio ready count to the newly joined client
-    sendToClient({
+    void sendToClient({
       ws,
       message: { type: "DEMO_AUDIO_READY_COUNT", count: room.getDemoAudioReadyCount() },
     });
   } else {
     // Unicast full client list to the joining client immediately
-    sendToClient({ ws, message: createClientUpdate(roomId) });
+    void sendToClient({ ws, message: createClientUpdate(roomId) });
     // Broadcast to others: debounced
     debouncedClientChangeBroadcast(server, roomId);
   }
