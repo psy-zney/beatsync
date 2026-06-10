@@ -106,6 +106,7 @@ export class RoomManager {
   private readonly debouncedAudioReady = debounce(() => this.flushAudioReadyBroadcast(), 200);
   private heartbeatCheckInterval?: NodeJS.Timeout;
   private onClientCountChange?: () => void;
+  private onBecameEmpty?: () => void;
   private playbackState: RoomPlaybackState = INITIAL_PLAYBACK_STATE;
   private playbackControlsPermissions: PlaybackControlsPermissionsType = "ADMIN_ONLY";
   private globalVolume = 1.0;
@@ -121,9 +122,11 @@ export class RoomManager {
   private demoAudioReadyClients = new Set<string>();
   constructor(
     private readonly roomId: string,
-    onClientCountChange?: () => void // To update the global # of clients active
+    onClientCountChange?: () => void, // To update the global # of clients active
+    onBecameEmpty?: () => void // To schedule room cleanup when the reaper removes the last client
   ) {
     this.onClientCountChange = onClientCountChange;
+    this.onBecameEmpty = onBecameEmpty;
     this.chatManager = new ChatManager({ roomId });
     if (IS_DEMO_MODE) {
       this.globalVolume = 0.8;
@@ -1073,55 +1076,34 @@ export class RoomManager {
 
     console.log(`💓 Starting heartbeat for room ${this.roomId}`);
 
-    // Check heartbeats every second
     this.heartbeatCheckInterval = setInterval(() => {
       const now = Date.now();
-      const staleClients: string[] = [];
 
-      // Check each client's last heartbeat
-      const activeClients = this.getClients();
-      activeClients.forEach((client) => {
+      this.getClients().forEach((client) => {
         const timeSinceLastResponse = now - client.lastNtpResponse;
+        if (timeSinceLastResponse <= NTP_CONSTANTS.RESPONSE_TIMEOUT_MS) return;
 
-        if (timeSinceLastResponse > NTP_CONSTANTS.RESPONSE_TIMEOUT_MS) {
-          console.warn(
-            `⚠️ Client ${client.clientId} in room ${this.roomId} has not responded for ${timeSinceLastResponse}ms`
-          );
-          staleClients.push(client.clientId);
+        console.warn(
+          `⚠️ Client ${client.clientId} in room ${this.roomId} has not responded for ${timeSinceLastResponse}ms, disconnecting`
+        );
+
+        // terminate() hard-closes the socket without waiting for the peer. A graceful
+        // close() never completes against a dead TCP peer (the close frame is never
+        // acknowledged), which used to leak connections — and rooms — indefinitely.
+        try {
+          this.wsConnections.get(client.clientId)?.terminate();
+        } catch (error) {
+          console.error(`Error terminating WebSocket for client ${client.clientId}:`, error);
         }
+        // Remove immediately rather than relying on the close handler to fire;
+        // removeClient is idempotent if the close handler also runs.
+        this.removeClient(client.clientId);
       });
-
-      // Close stale client connections
-      staleClients.forEach((clientId) => {
-        const client = this.clientData.get(clientId);
-        if (client) {
-          console.log(`🔌 Disconnecting stale client ${clientId} from room ${this.roomId}`);
-          // Close the WebSocket connection
-          // The onClose handler will call removeClient() when the connection actually closes
-          try {
-            const ws = this.wsConnections.get(clientId);
-            if (!ws) {
-              console.error(`❌ No WebSocket connection found for client ${clientId} in room ${this.roomId}`);
-              // If there's no WebSocket, we should clean up the orphaned client data
-              // Note: we don't have server reference here, so loading state won't be checked
-              this.removeClient(clientId);
-              return;
-            }
-            // Close the WebSocket - this will trigger the onClose handler
-            // which will properly remove the client from the room
-            ws.close(1000, "Connection timeout - no heartbeat response");
-
-            // Proactively remove from wsConnections immediately so the next heartbeat
-            // doesn't see it again if the close event is delayed.
-            this.removeClient(clientId);
-          } catch (error) {
-            console.error(`Error closing WebSocket for client ${clientId}:`, error);
-            // If closing failed, still try to clean up
-            // Note: we don't have server reference here, so loading state won't be checked
-            this.removeClient(clientId);
-          }
-        }
-      });
+      // Reaping bypasses handleClose's cleanup scheduling — make sure an empty room
+      // still gets cleaned up.
+      if (this.wsConnections.size === 0) {
+        this.onBecameEmpty?.();
+      }
     }, NTP_CONSTANTS.STEADY_STATE_INTERVAL_MS);
   }
 
