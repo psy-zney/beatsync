@@ -7,7 +7,7 @@ import type { DiscoverRoomsType } from "@beatsync/shared";
  * It handles room creation, deletion, and provides access to individual room managers.
  */
 
-const CLEANUP_DELAY_MS = 1000 * 60; // 60 seconds
+export const CLEANUP_DELAY_MS = 1000 * 60; // 60 seconds
 export class GlobalManager {
   private rooms = new Map<string, RoomManager>();
 
@@ -29,7 +29,11 @@ export class GlobalManager {
   getOrCreateRoom(roomId: string): RoomManager {
     let room = this.rooms.get(roomId);
     if (!room) {
-      room = new RoomManager(roomId, () => this.markActiveUserCountDirty());
+      room = new RoomManager(
+        roomId,
+        () => this.markActiveUserCountDirty(),
+        () => this.scheduleRoomCleanup(roomId)
+      );
       if (IS_DEMO_MODE) {
         for (const filename of AUDIO_FILENAMES) {
           room.addAudioSource({ url: `/audio/${encodeURIComponent(filename)}` });
