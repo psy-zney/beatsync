@@ -4,6 +4,7 @@ import { getActiveRooms } from "@/routes/active";
 import { handleGetDefaultAudio } from "@/routes/default";
 import { handleServeAudio } from "@/routes/demoAudio";
 import { handleDiscover } from "@/routes/discover";
+import { handleHealth } from "@/routes/health";
 import { handleRoot } from "@/routes/root";
 import { handleStats } from "@/routes/stats";
 import { handleGetPresignedURL, handleUploadComplete } from "@/routes/upload";
@@ -17,6 +18,7 @@ const server = Bun.serve<WSData>({
   hostname: "0.0.0.0",
   port: 8080,
   async fetch(req, server) {
+    const start = performance.now();
     const url = new URL(req.url);
 
     // Handle CORS preflight requests
@@ -24,45 +26,75 @@ const server = Bun.serve<WSData>({
       return new Response(null, { headers: corsHeaders });
     }
 
+    let response: Response;
+
     try {
       // Demo mode: serve local audio files
       if (IS_DEMO_MODE && url.pathname.startsWith("/audio/")) {
-        return handleServeAudio(url.pathname);
+        response = handleServeAudio(url.pathname);
+      } else {
+        switch (url.pathname) {
+          case "/":
+            response = handleRoot(req);
+            break;
+
+          case "/ws":
+            return handleWebSocketUpgrade(req, server);
+
+          case "/upload/get-presigned-url":
+            if (IS_DEMO_MODE) {
+              response = errorResponse("Uploads disabled in demo mode", 403);
+            } else {
+              response = await handleGetPresignedURL(req);
+            }
+            break;
+
+          case "/upload/complete":
+            if (IS_DEMO_MODE) {
+              response = errorResponse("Uploads disabled in demo mode", 403);
+            } else {
+              response = await handleUploadComplete(req, server);
+            }
+            break;
+
+          case "/stats":
+            response = await handleStats();
+            break;
+
+          case "/default":
+            response = await handleGetDefaultAudio(req);
+            break;
+
+          case "/active-rooms":
+            response = getActiveRooms(req);
+            break;
+
+          case "/discover":
+            response = handleDiscover(req);
+            break;
+
+          case "/health":
+            response = handleHealth();
+            break;
+
+          default:
+            response = errorResponse("Not found", 404);
+            break;
+        }
       }
-
-      switch (url.pathname) {
-        case "/":
-          return handleRoot(req);
-
-        case "/ws":
-          return handleWebSocketUpgrade(req, server);
-
-        case "/upload/get-presigned-url":
-          if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
-          return handleGetPresignedURL(req);
-
-        case "/upload/complete":
-          if (IS_DEMO_MODE) return errorResponse("Uploads disabled in demo mode", 403);
-          return handleUploadComplete(req, server);
-
-        case "/stats":
-          return handleStats();
-
-        case "/default":
-          return handleGetDefaultAudio(req);
-
-        case "/active-rooms":
-          return getActiveRooms(req);
-
-        case "/discover":
-          return handleDiscover(req);
-
-        default:
-          return errorResponse("Not found", 404);
-      }
-    } catch {
+    } catch (error) {
+      const durationMs = (performance.now() - start).toFixed(1);
+      console.error(
+        `[${new Date().toISOString()}] ${req.method} ${url.pathname} 500 ${durationMs}ms - Unhandled error:`,
+        error
+      );
       return errorResponse("Internal server error", 500);
     }
+
+    const durationMs = (performance.now() - start).toFixed(1);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${url.pathname} ${response.status} ${durationMs}ms`);
+
+    return response;
   },
 
   websocket: {
@@ -117,3 +149,13 @@ const shutdown = async () => {
 // Handle shutdown signals
 process.on("SIGTERM", () => void shutdown());
 process.on("SIGINT", () => void shutdown());
+
+// Crash handlers — log the error before PM2 restarts the process
+process.on("uncaughtException", (error) => {
+  console.error(`[${new Date().toISOString()}] UNCAUGHT EXCEPTION — process will exit:`, error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error(`[${new Date().toISOString()}] UNHANDLED REJECTION:`, reason);
+});
