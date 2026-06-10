@@ -1,0 +1,8 @@
+# Ghi chú quan trọng
+Luôn nhớ rằng chúng ta đang làm việc trên nhánh `main` của repo fork (`my-fork` tương đương với `psy-zney/beatsync`).
+Không checkout qua nhánh feature khác trừ khi được yêu cầu rõ ràng.
+Các tính năng đã hoàn thành:
+- Auto join voice khi vào phòng
+- Xóa nút "Join Voice" và "paste link ytb"
+- Chuyển cài đặt voice qua thanh bên phải (icon `>`)
+- Fix lỗi mic trên iOS Safari
