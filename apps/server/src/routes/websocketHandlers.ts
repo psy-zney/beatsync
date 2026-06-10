@@ -183,6 +183,34 @@ export const handleOpen = async (ws: ServerWebSocket<WSData>, server: BunServer)
     // Broadcast to others: debounced
     debouncedClientChangeBroadcast(server, roomId);
   }
+
+  // Auto-play when the first person joins the room if there is music and it's paused
+  if (room.getNumClients() === 1 && audioSources.length > 0) {
+    const playbackState = room.getPlaybackState();
+    if (playbackState.type === "paused") {
+      const audioSourceToPlay = playbackState.audioSource || audioSources[0].url;
+      const playAction = {
+        type: "PLAY" as const,
+        audioSource: audioSourceToPlay,
+        trackTimeSeconds: playbackState.trackPositionSeconds || 0,
+      };
+
+      const serverTimeToExecute = now + 100; // Small delay for client readiness
+      const success = room.updatePlaybackSchedulePlay(playAction, serverTimeToExecute);
+
+      if (success) {
+        void sendBroadcast({
+          server,
+          roomId,
+          message: {
+            type: "SCHEDULED_ACTION",
+            serverTimeToExecute,
+            scheduledAction: playAction,
+          },
+        });
+      }
+    }
+  }
 };
 
 export const handleMessage = async (ws: ServerWebSocket<WSData>, message: string | Buffer, server: BunServer) => {
