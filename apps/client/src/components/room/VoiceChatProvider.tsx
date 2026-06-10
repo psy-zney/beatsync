@@ -68,6 +68,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
+  const [remoteStreamsState, setRemoteStreamsState] = useState<Record<string, MediaStream>>({});
 
   const socket = useGlobalStore((state) => state.socket);
   const setOnWebRTCSignal = useGlobalStore((state) => state.setOnWebRTCSignal);
@@ -76,7 +77,6 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const connectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const audioContextRef = useRef<AudioContext | null>(null);
   const analysersRef = useRef<Map<string, AnalyserNode>>(new Map());
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -162,12 +162,11 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       pc.close();
       connectionsRef.current.delete(peerId);
     }
-    const audio = audioElementsRef.current.get(peerId);
-    if (audio) {
-      audio.pause();
-      audio.srcObject = null;
-      audioElementsRef.current.delete(peerId);
-    }
+    setRemoteStreamsState((prev) => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
     analysersRef.current.delete(peerId);
   }, []);
 
@@ -212,17 +211,11 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         const stream = event.streams[0];
         if (!stream) return;
 
-        // Play audio
-        let audio = audioElementsRef.current.get(peerId);
-        if (!audio) {
-          audio = new Audio();
-          audio.autoplay = true;
-          audioElementsRef.current.set(peerId, audio);
-        }
-        if (audio.srcObject !== stream) {
-          audio.srcObject = stream;
-          setupAnalyser(stream, peerId);
-        }
+        setRemoteStreamsState((prev) => ({
+          ...prev,
+          [peerId]: stream,
+        }));
+        setupAnalyser(stream, peerId);
       };
 
       pc.oniceconnectionstatechange = () => {
@@ -319,6 +312,21 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     setIsConnecting(true);
 
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          "Access to microphone is blocked. Please ensure you are using a secure connection (HTTPS) and have granted permission."
+        );
+      }
+
+      // Resume or create AudioContext during user interaction
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -413,6 +421,24 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
+      {/* Hidden audio element in DOM for iOS Safari compatibility */}
+      <div style={{ display: "none" }} aria-hidden="true">
+        {Object.entries(remoteStreamsState).map(([peerId, stream]) => (
+          <audio
+            key={peerId}
+            ref={(el) => {
+              if (el) {
+                el.srcObject = stream;
+                // @ts-ignore
+                el.playsInline = true;
+                el.play().catch((err) => console.warn(`Failed to play remote audio for ${peerId}`, err));
+              }
+            }}
+            autoPlay
+            controls={false}
+          />
+        ))}
+      </div>
     </VoiceChatContext.Provider>
   );
 };
