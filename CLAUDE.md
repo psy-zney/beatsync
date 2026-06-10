@@ -125,3 +125,10 @@ S3_SECRET_ACCESS_KEY=
 - Room IDs are 6-digit codes
 - Room cleanup: 60s after last client disconnects, room is deleted
 - Admin auto-promotion: if last admin leaves, a random client is promoted
+
+## Git Workflow
+
+- **Fork Repository**: We are working on a fork (`my-fork` remote: `https://github.com/psy-zney/beatsync.git`) rather than the upstream repository (`origin` remote: `https://github.com/freeman-jiang/beatsync.git`).
+- **Pushing Changes**: Always push commits to the fork's remote using `git push my-fork <branch-name>` (the sandbox write access is granted to the fork, whereas upstream `origin` will return a 403 error).
+- **Synchronizing**: Keep the local `main` branch updated with `my-fork/main` and merge it into active feature branches when updates are pulled.
+
