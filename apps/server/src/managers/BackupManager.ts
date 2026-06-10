@@ -318,9 +318,7 @@ export class BackupManager {
       // 2. Collect URLs from all saved playlists in R2
       const roomObjects = await listObjectsWithPrefix("room-", { includeFolders: false });
       if (roomObjects && roomObjects.length > 0) {
-        const playlistKeys = roomObjects
-          .filter((obj) => obj.Key?.endsWith("/playlist.json"))
-          .map((obj) => obj.Key!);
+        const playlistKeys = roomObjects.filter((obj) => obj.Key?.endsWith("/playlist.json")).map((obj) => obj.Key!);
 
         // Load saved playlists concurrently
         const loadPromises = playlistKeys.map(async (key) => {
