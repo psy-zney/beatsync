@@ -5,20 +5,9 @@ import { useVoiceChat } from "./VoiceChatProvider";
 export const VoiceControls = () => {
   const { isConnected, isConnecting, isMuted, connect, disconnect, toggleMute } = useVoiceChat();
 
-  // If not connected, show join button
+  // If not connected, don't render anything (user automatically joins on enter)
   if (!isConnected) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 px-2 text-xs bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-400"
-        onClick={() => connect()}
-        disabled={isConnecting}
-      >
-        <Phone className="w-3 h-3 mr-1" />
-        {isConnecting ? "Connecting..." : "Join Voice"}
-      </Button>
-    );
+    return null;
   }
 
   return (

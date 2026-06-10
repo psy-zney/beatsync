@@ -2,11 +2,105 @@
 
 import { cn } from "@/lib/utils";
 import { useCanMutate, useGlobalStore } from "@/store/global";
-import { Volume1, Volume2, VolumeX } from "lucide-react";
+import { Volume1, Volume2, VolumeX, ChevronDown, Music } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "throttle-debounce";
 import { Slider } from "../ui/slider";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { useClientId } from "@/hooks/useClientId";
+import { useVoiceChat } from "../room/VoiceChatProvider";
+
+interface VolumeControlProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number; // 0 to 1
+  onChange: (val: number) => void;
+  disabled?: boolean;
+}
+
+const VolumeControl = ({
+  icon,
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: VolumeControlProps) => {
+  const percent = Math.round(value * 100);
+  const [inputValue, setInputValue] = useState(percent.toString());
+
+  useEffect(() => {
+    setInputValue(percent.toString());
+  }, [percent]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputBlur = () => {
+    let parsed = parseInt(inputValue, 10);
+    if (isNaN(parsed)) parsed = percent;
+    parsed = Math.max(0, Math.min(100, parsed));
+    setInputValue(parsed.toString());
+    onChange(parsed / 100);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleInputBlur();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      let parsed = parseInt(inputValue, 10) || 0;
+      parsed = Math.min(100, parsed + 1);
+      setInputValue(parsed.toString());
+      onChange(parsed / 100);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      let parsed = parseInt(inputValue, 10) || 0;
+      parsed = Math.max(0, parsed - 1);
+      setInputValue(parsed.toString());
+      onChange(parsed / 100);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 w-full">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs text-neutral-300">
+          {icon}
+          <span className="truncate max-w-[120px]" title={label}>
+            {label}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Input
+            value={inputValue}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            className="h-6 w-12 text-right px-1 py-0 text-xs bg-neutral-900 border-neutral-700 font-mono text-neutral-300"
+            type="text"
+          />
+          <span className="text-xs text-neutral-500 font-mono">%</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Slider
+          value={[percent]}
+          min={0}
+          max={100}
+          step={1}
+          onValueChange={(val) => onChange(val[0] / 100)}
+          disabled={disabled}
+          className={cn("flex-1", disabled && "opacity-50")}
+        />
+      </div>
+    </div>
+  );
+};
 
 interface GlobalVolumeControlProps {
   className?: string;
@@ -17,6 +111,17 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
   const canMutate = useCanMutate();
   const globalVolume = useGlobalStore((state) => state.globalVolume);
   const sendGlobalVolumeUpdate = useGlobalStore((state) => state.sendGlobalVolumeUpdate);
+
+  const { clientId } = useClientId();
+  const connectedClients = useGlobalStore((state) => state.connectedClients);
+  const personalVolume = useGlobalStore((state) => state.personalVolume);
+  const setPersonalVolume = useGlobalStore((state) => state.setPersonalVolume);
+  const micVolumes = useGlobalStore((state) => state.micVolumes);
+  const setMicVolume = useGlobalStore((state) => state.setMicVolume);
+
+  const { remoteStreams, isConnected: isVoiceActive } = useVoiceChat();
+
+  const otherClients = connectedClients.filter((c) => c.clientId !== clientId);
 
   // Local state for optimistic UI updates
   const [displayVolume, setDisplayVolume] = useState(globalVolume);
@@ -48,7 +153,7 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
         return;
       }
 
-      // Move 30% of the way to target each frame (exponential ease-out)
+      // Move 20% of the way to target each frame (exponential ease-out)
       currentVolumeRef.current += diff * 0.25;
       setDisplayVolume(currentVolumeRef.current);
 
@@ -196,9 +301,77 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
           className={cn("w-full", !canMutate && "opacity-50")}
         />
       </div>
-      {/* <div className="text-xs text-neutral-400 min-w-[2.5rem]">
-        {Math.round(isDragging ? localVolume : globalVolume * 100)}%
-      </div> */}
+
+      {/* Voice & Audio Settings Popover with ChevronDown icon */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-md hover:bg-white/10 text-neutral-400 hover:text-neutral-200 transition-colors"
+            title="Voice & Audio Settings"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align="end"
+          className="w-72 bg-[#2b2d31] border-neutral-800 p-0 shadow-xl overflow-hidden z-50"
+        >
+          <div className="p-3 bg-black/20 border-b border-neutral-800/50">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Voice & Audio Settings</h3>
+          </div>
+
+          <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
+            {/* Personal Music Volume */}
+            <div className="bg-black/10 p-2.5 rounded-md border border-white/5">
+              <VolumeControl
+                icon={<Music className="h-3.5 w-3.5" />}
+                label="Your Music Volume"
+                value={personalVolume}
+                onChange={setPersonalVolume}
+              />
+              <p className="text-[10px] text-neutral-500 mt-2 leading-tight">
+                This controls the music volume only for you, independent of the room&apos;s master volume.
+              </p>
+            </div>
+
+            {/* Other Users Mic Volumes */}
+            {otherClients.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                  User Mic Volumes
+                </div>
+                <div className="space-y-1 bg-black/10 p-2 rounded-md border border-white/5">
+                  {otherClients.map((client) => {
+                    const vol = micVolumes[client.clientId] ?? 1.0;
+                    const hasStream = isVoiceActive && !!remoteStreams[client.clientId];
+
+                    return (
+                      <div key={client.clientId} className="p-1.5 hover:bg-white/5 rounded-md transition-colors">
+                        <VolumeControl
+                          icon={
+                            vol === 0 ? (
+                              <VolumeX className="h-3.5 w-3.5 text-neutral-500" />
+                            ) : (
+                              <Volume2 className="h-3.5 w-3.5" />
+                            )
+                          }
+                          label={client.username}
+                          value={vol}
+                          onChange={(val) => setMicVolume(client.clientId, val)}
+                          disabled={!hasStream}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
     </motion.div>
   );
 };

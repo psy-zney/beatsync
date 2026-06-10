@@ -2,6 +2,7 @@
 
 import { useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
+import { useWebRTCStore } from "@/store/webrtc";
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { sendWSRequest } from "@/utils/ws";
@@ -12,6 +13,8 @@ interface VoiceChatContextType {
   isConnecting: boolean;
   isMuted: boolean;
   activeSpeakers: Set<string>; // Set of clientIds who are speaking
+  remoteStreams: Record<string, MediaStream>; // clientId -> MediaStream
+  localStream: MediaStream | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   toggleMute: () => void;
@@ -63,6 +66,43 @@ const optimizeOpusSdp = (sdp: string) => {
   return sdp;
 };
 
+const RemoteAudio = ({
+  peerId,
+  stream,
+  isDeafened,
+  volume,
+}: {
+  peerId: string;
+  stream: MediaStream;
+  isDeafened: boolean;
+  volume: number;
+}) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (audioRef.current && stream) {
+      audioRef.current.srcObject = stream;
+      audioRef.current.play().catch((err) => console.warn(`Failed to play remote audio for ${peerId}`, err));
+    }
+  }, [stream, peerId]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isDeafened ? 0 : volume;
+    }
+  }, [isDeafened, volume]);
+
+  return (
+    <audio
+      ref={audioRef}
+      autoPlay
+      // @ts-ignore
+      playsInline
+      controls={false}
+    />
+  );
+};
+
 export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -76,6 +116,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const { clientId } = useClientId();
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(null);
   const connectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioContextRef = useRef<AudioContext | null>(null);
   const analysersRef = useRef<Map<string, AnalyserNode>>(new Map());
@@ -338,6 +379,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       });
 
       localStreamRef.current = stream;
+      setLocalStreamState(stream);
       isConnectedRef.current = true;
       setIsConnected(true);
       setIsMuted(false);
@@ -379,6 +421,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+      setLocalStreamState(null);
     }
 
     connectionsRef.current.forEach((pc, peerId) => cleanupPeer(peerId));
@@ -397,6 +440,17 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [disconnect]);
 
+  // Auto-connect to voice chat when entering room and clientId is available
+  useEffect(() => {
+    if (clientId) {
+      // Small timeout to ensure WebSocket setup completes
+      const timer = setTimeout(() => {
+        connect().catch((err) => console.error("Auto-connect voice chat failed:", err));
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [clientId, connect]);
+
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks();
@@ -408,6 +462,9 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isMuted]);
 
+  const isDeafened = useWebRTCStore((state) => state.isDeafened);
+  const micVolumes = useGlobalStore((state) => state.micVolumes);
+
   return (
     <VoiceChatContext.Provider
       value={{
@@ -415,6 +472,8 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         isConnecting,
         isMuted,
         activeSpeakers,
+        remoteStreams: remoteStreamsState,
+        localStream: localStreamState,
         connect,
         disconnect,
         toggleMute,
@@ -424,18 +483,12 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       {/* Hidden audio element in DOM for iOS Safari compatibility */}
       <div style={{ display: "none" }} aria-hidden="true">
         {Object.entries(remoteStreamsState).map(([peerId, stream]) => (
-          <audio
+          <RemoteAudio
             key={peerId}
-            ref={(el) => {
-              if (el) {
-                el.srcObject = stream;
-                // @ts-ignore
-                el.playsInline = true;
-                el.play().catch((err) => console.warn(`Failed to play remote audio for ${peerId}`, err));
-              }
-            }}
-            autoPlay
-            controls={false}
+            peerId={peerId}
+            stream={stream}
+            isDeafened={isDeafened}
+            volume={micVolumes[peerId] ?? 1.0}
           />
         ))}
       </div>
