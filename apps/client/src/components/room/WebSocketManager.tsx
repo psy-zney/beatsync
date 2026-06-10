@@ -256,6 +256,11 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         if (useGlobalStore.getState().demoAudioReadyCount !== response.count) {
           useGlobalStore.setState({ demoAudioReadyCount: response.count });
         }
+      } else if (response.type === "WEBRTC_SIGNAL") {
+        const onWebRTCSignal = useGlobalStore.getState().onWebRTCSignal;
+        if (onWebRTCSignal) {
+          onWebRTCSignal(response);
+        }
       } else {
         console.log("Unknown response type:", response);
       }

@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { FaDiscord, FaGithub } from "react-icons/fa";
 import { SyncProgress } from "../ui/SyncProgress";
+import { VoiceControls } from "./VoiceControls";
 
 interface TopBarProps {
   roomId: string;
@@ -95,6 +96,7 @@ export const TopBar = ({ roomId }: TopBarProps) => {
         </div>
 
         <div className="flex items-center justify-center gap-2.5">
+          <VoiceControls />
           {/* Discord icon */}
           <a
             href={SOCIAL_LINKS.discord}

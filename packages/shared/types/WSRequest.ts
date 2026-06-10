@@ -35,6 +35,7 @@ export const ClientActionEnum = z.enum([
   "REORDER_AUDIO_SOURCES", // Reorder audio sources in the room queue
   "SET_METRONOME", // Toggle metronome on/off for all clients
   "SET_LOW_PASS_FREQ", // Set low-pass filter cutoff frequency
+  "WEBRTC_SIGNAL", // WebRTC signaling message (Offer, Answer, ICE Candidate)
 ]);
 
 export const NTPRequestPacketSchema = z.object({
@@ -161,6 +162,12 @@ export const SetLowPassFreqSchema = z.object({
   freq: z.number().min(LOW_PASS_CONSTANTS.MIN_FREQ).max(LOW_PASS_CONSTANTS.MAX_FREQ),
 });
 
+export const WebRTCSignalSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.WEBRTC_SIGNAL),
+  targetClientId: z.string(), // The client to send this signal to
+  signal: z.any(), // The RTCSessionDescriptionInit or RTCIceCandidateInit object
+});
+
 export const WSRequestSchema = z.discriminatedUnion("type", [
   PlayActionSchema,
   PauseActionSchema,
@@ -184,6 +191,7 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   ReorderAudioSourcesSchema,
   SetMetronomeSchema,
   SetLowPassFreqSchema,
+  WebRTCSignalSchema,
 ]);
 export type WSRequestType = z.infer<typeof WSRequestSchema>;
 export type PlayActionType = z.infer<typeof PlayActionSchema>;

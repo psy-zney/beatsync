@@ -55,12 +55,17 @@ const LocationContent = ({ client }: { client: ClientDataType }) => (
   </div>
 );
 
+import { useVoiceChat } from "../room/VoiceChatProvider";
+import { ActiveSpeakerIndicator, MicMutedIndicator } from "../room/ActiveSpeakerIndicator";
+
 export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser, isAdmin, onSetAdmin }) => {
   const isMobile = useIsMobile();
   const [showLocation, setShowLocation] = useState(false);
+  const { isConnected } = useVoiceChat();
 
   const avatarContent = (
     <div className="relative">
+      {isConnected && <ActiveSpeakerIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
       <Avatar className="h-8 w-8">
         <AvatarImage src={client.location?.flagSvgURL} className="object-cover w-full h-full" />
         <AvatarFallback className={isCurrentUser ? "bg-primary-600" : "bg-neutral-600"}>
@@ -72,6 +77,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
             .toUpperCase()}{" "}
         </AvatarFallback>
       </Avatar>
+      {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
       {/* Admin crown indicator */}
       {client.isAdmin && (
         <div className="absolute -top-1 -right-0.5 bg-yellow-500 rounded-full p-0.5">

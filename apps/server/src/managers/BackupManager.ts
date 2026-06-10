@@ -45,7 +45,7 @@ export class BackupManager {
       for (const source of validAudioSources) {
         if (!source.title && source.url.includes("/youtube-cache/")) {
           const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
-          if (match && match[1]) {
+          if (match?.[1]) {
             try {
               console.log(`[Heal] Fetching missing title for YouTube track ${match[1]}...`);
               const { getYoutubeMetadata } = await import("@/lib/youtube");
@@ -76,12 +76,6 @@ export class BackupManager {
         console.log(`Room ${roomId}: Playing track no longer exists, resetting playback to paused`);
 
         // Don't restore any playback state
-      }
-
-      // Restore chat history if it exists (for backward compatibility with old backups)
-      if (roomData.chat) {
-        room.restoreChatHistory(roomData.chat);
-        console.log(`Room ${roomId}: Restored ${roomData.chat.messages.length} chat messages`);
       }
 
       // Always schedule cleanup on restoration because we don't know if any clients will reconnect.

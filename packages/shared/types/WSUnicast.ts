@@ -20,9 +20,17 @@ export const MusicSearchResponseSchema = z.object({
 });
 export type MusicSearchResponseType = z.infer<typeof MusicSearchResponseSchema>;
 
+export const WebRTCSignalUnicastSchema = z.object({
+  type: z.literal("WEBRTC_SIGNAL"),
+  sourceClientId: z.string(), // The client who sent this signal
+  signal: z.any(), // The RTCSessionDescriptionInit or RTCIceCandidateInit object
+});
+export type WebRTCSignalUnicastType = z.infer<typeof WebRTCSignalUnicastSchema>;
+
 export const WSUnicastSchema = z.discriminatedUnion("type", [
   NTPResponseMessageSchema,
   ScheduledActionSchema,
   MusicSearchResponseSchema,
+  WebRTCSignalUnicastSchema,
 ]);
 export type WSUnicastType = z.infer<typeof WSUnicastSchema>;

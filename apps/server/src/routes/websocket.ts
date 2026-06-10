@@ -30,6 +30,12 @@ export const handleWebSocketUpgrade = (req: Request, server: BunServer) => {
     return errorResponse(`Only room ${DEMO_ROOM_ID} is available in demo mode`);
   }
 
+  // Lock to room 090624 for production stability
+  if (!IS_DEMO_MODE && roomId !== "090624") {
+    console.log(`Rejected room ${roomId} (only 090624 allowed)`);
+    return errorResponse(`Only room 090624 is available`);
+  }
+
   // Check if client provided valid admin secret
   const isAdmin = IS_DEMO_MODE && isValidAdminSecret(adminSecret);
 

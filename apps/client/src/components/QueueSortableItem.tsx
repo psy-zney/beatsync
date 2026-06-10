@@ -74,7 +74,6 @@ export const QueueSortableItem = ({
     <div ref={setNodeRef} style={style} {...attributes}>
       <motion.div
         key={sourceState.source.url}
-        layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{
@@ -88,11 +87,6 @@ export const QueueSortableItem = ({
         transition={
           isDragging
             ? {
-                // Fast animation while dragging
-                layout: {
-                  duration: 0.15,
-                  ease: "backOut",
-                },
                 opacity: {
                   duration: 0.3,
                   delay: Math.min(0.05 * index, 0.3),
@@ -105,13 +99,6 @@ export const QueueSortableItem = ({
                 },
               }
             : {
-                // Smooth spring for non-dragged items
-                layout: {
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 45,
-                  mass: 1,
-                },
                 opacity: {
                   duration: 0.3,
                   delay: Math.min(0.05 * index, 0.3),

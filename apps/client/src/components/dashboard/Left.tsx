@@ -13,6 +13,7 @@ import { RoomQRCode } from "./CopyRoom";
 import { GlobalVolumeControl } from "./GlobalVolumeControl";
 import { MobileNudgeControl } from "./MobileNudgeControl";
 import { PlaybackPermissions } from "./PlaybackPermissions";
+import { UserVoicePanel } from "./UserVoicePanel";
 
 interface LeftProps {
   className?: string;
@@ -98,6 +99,7 @@ export const Left = ({ className }: LeftProps) => {
         <div className="pl-1">
           <YoutubeInput />
         </div>
+        <UserVoicePanel />
       </motion.div>
     </motion.div>
   );

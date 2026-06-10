@@ -4,6 +4,7 @@ import { sendBroadcast } from "@/utils/responses";
 import { requireCanMutate } from "@/websocket/middlewares";
 import type { HandlerFunction } from "@/websocket/types";
 import type { ExtractWSRequestFrom } from "@beatsync/shared";
+import { globalManager } from "@/managers";
 
 export const handleDeleteAudioSources: HandlerFunction<ExtractWSRequestFrom["DELETE_AUDIO_SOURCES"]> = async ({
   ws,
@@ -43,10 +44,25 @@ export const handleDeleteAudioSources: HandlerFunction<ExtractWSRequestFrom["DEL
 
   // Process R2 deletions and track successes
   const r2DeletionPromises = urlsToDelete.map(async (url) => {
+    const isRoomUpload = url.includes(roomPrefix);
+    const isYoutubeCache = url.includes("/youtube-cache/");
+
     // Always add non-R2 URLs (like default tracks) to successful list
-    if (!url.includes(roomPrefix)) {
+    if (!isRoomUpload && !isYoutubeCache) {
       successfullyDeletedUrls.add(url); // Just say we've processed it
       return;
+    }
+
+    if (isYoutubeCache) {
+      // Check if any other room is using this URL
+      const isUsedElsewhere = globalManager
+        .getRooms()
+        .some(([_, r]) => r.getRoomId() !== ws.data.roomId && r.getAudioSources().some((s) => s.url === url));
+      if (isUsedElsewhere) {
+        console.log(`URL ${url} is used by another room, skipping R2 deletion.`);
+        successfullyDeletedUrls.add(url);
+        return;
+      }
     }
 
     // Otherwise we need to actually delete the file from R2
