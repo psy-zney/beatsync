@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, WebRTCSignalUnicastType } from "@beatsync/shared";
 import { useClientId } from "@/hooks/useClientId";
-import { loadRnnoise, RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
+import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 
 interface VoiceChatContextType {
   isConnected: boolean;
@@ -516,6 +516,8 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             audioContextRef.current = new window.AudioContext();
           }
           const audioCtx = audioContextRef.current;
+
+          const { loadRnnoise, RnnoiseWorkletNode } = await import("@sapphi-red/web-noise-suppressor");
 
           const wasmBinary = await loadRnnoise({
             url: "/noise-suppressor/rnnoise.wasm",
