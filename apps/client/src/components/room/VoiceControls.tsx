@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
+import { Mic, MicOff, PhoneOff } from "lucide-react";
 import { useVoiceChat } from "./VoiceChatProvider";
 
 export const VoiceControls = () => {
-  const { isConnected, isConnecting, isMuted, connect, disconnect, toggleMute } = useVoiceChat();
+  const { isConnected, isMuted, disconnect, toggleMute } = useVoiceChat();
 
   // If not connected, don't render anything (user automatically joins on enter)
   if (!isConnected) {

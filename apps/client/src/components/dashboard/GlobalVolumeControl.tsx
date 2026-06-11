@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "throttle-debounce";
 import { Slider } from "../ui/slider";
-import { Input } from "../ui/input";
+
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useClientId } from "@/hooks/useClientId";
@@ -21,49 +21,8 @@ interface VolumeControlProps {
   disabled?: boolean;
 }
 
-const VolumeControl = ({
-  icon,
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: VolumeControlProps) => {
+const VolumeControl = ({ icon, label, value, onChange, disabled = false }: VolumeControlProps) => {
   const percent = Math.round(value * 100);
-  const [inputValue, setInputValue] = useState(percent.toString());
-
-  useEffect(() => {
-    setInputValue(percent.toString());
-  }, [percent]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-  };
-
-  const handleInputBlur = () => {
-    let parsed = parseInt(inputValue, 10);
-    if (isNaN(parsed)) parsed = percent;
-    parsed = Math.max(0, Math.min(100, parsed));
-    setInputValue(parsed.toString());
-    onChange(parsed / 100);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      handleInputBlur();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      let parsed = parseInt(inputValue, 10) || 0;
-      parsed = Math.min(100, parsed + 1);
-      setInputValue(parsed.toString());
-      onChange(parsed / 100);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      let parsed = parseInt(inputValue, 10) || 0;
-      parsed = Math.max(0, parsed - 1);
-      setInputValue(parsed.toString());
-      onChange(parsed / 100);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-1.5 w-full">
@@ -73,18 +32,6 @@ const VolumeControl = ({
           <span className="truncate max-w-[120px]" title={label}>
             {label}
           </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Input
-            value={inputValue}
-            onChange={handleInputChange}
-            onBlur={handleInputBlur}
-            onKeyDown={handleKeyDown}
-            disabled={disabled}
-            className="h-6 w-12 text-right px-1 py-0 text-xs bg-neutral-900 border-neutral-700 font-mono text-neutral-300"
-            type="text"
-          />
-          <span className="text-xs text-neutral-500 font-mono">%</span>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -259,7 +206,6 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
               disabled={!canMutate}
               className={cn("flex-1", !canMutate && "opacity-50")}
             />
-            <div className="text-xs text-neutral-400 min-w-[3rem] text-right">{Math.round(displayVolume * 100)}%</div>
           </div>
         </div>
       </div>
@@ -332,17 +278,12 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
                 value={personalVolume}
                 onChange={setPersonalVolume}
               />
-              <p className="text-[10px] text-neutral-500 mt-2 leading-tight">
-                This controls the music volume only for you, independent of the room&apos;s master volume.
-              </p>
             </div>
 
             {/* Other Users Mic Volumes */}
             {otherClients.length > 0 && (
               <div className="space-y-2">
-                <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
-                  User Mic Volumes
-                </div>
+                <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">User Mic Volumes</div>
                 <div className="space-y-1 bg-black/10 p-2 rounded-md border border-white/5">
                   {otherClients.map((client) => {
                     const vol = micVolumes[client.clientId] ?? 1.0;

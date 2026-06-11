@@ -1,12 +1,12 @@
 "use client";
 
 import { useGlobalStore } from "@/store/global";
-import { useRoomStore } from "@/store/room";
 import { useWebRTCStore } from "@/store/webrtc";
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, WebRTCSignalUnicastType } from "@beatsync/shared";
+import { useClientId } from "@/hooks/useClientId";
 
 interface VoiceChatContextType {
   isConnected: boolean;
@@ -29,8 +29,6 @@ export const useVoiceChat = () => {
   }
   return context;
 };
-
-import { useClientId } from "@/hooks/useClientId";
 
 // Configuration for WebRTC
 const rtcConfig: RTCConfiguration = {
@@ -92,21 +90,12 @@ const RemoteAudio = ({
     }
   }, [isDeafened, volume]);
 
-  return (
-    <audio
-      ref={audioRef}
-      autoPlay
-      // @ts-ignore
-      playsInline
-      controls={false}
-    />
-  );
+  return <audio ref={audioRef} autoPlay playsInline controls={false} />;
 };
 
 export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
   const [remoteStreamsState, setRemoteStreamsState] = useState<Record<string, MediaStream>>({});
 
@@ -122,13 +111,23 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const analysersRef = useRef<Map<string, AnalyserNode>>(new Map());
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
+  // Ref to avoid stale closure in pollActiveSpeakers
+  const activeSpeakersRef = useRef<Set<string>>(new Set());
+  // ICE candidate buffer for candidates arriving before setRemoteDescription
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
-  // Poll for active speakers
+  // Keep activeSpeakersRef in sync with state
+  useEffect(() => {
+    activeSpeakersRef.current = activeSpeakers;
+  }, [activeSpeakers]);
+
+  // Poll for active speakers – uses ref to avoid stale closure (Bug #1 fix)
   const pollActiveSpeakers = useCallback(() => {
     if (!isConnectedRef.current) return;
 
     let changed = false;
-    const newActiveSpeakers = new Set(activeSpeakers);
+    const current = activeSpeakersRef.current;
+    const newActiveSpeakers = new Set(current);
 
     // Check local stream
     if (localStreamRef.current && analysersRef.current.has("local")) {
@@ -172,7 +171,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     }
 
     pollTimerRef.current = setTimeout(pollActiveSpeakers, ACTIVE_SPEAKER_POLL_INTERVAL_MS);
-  }, [activeSpeakers]);
+  }, []); // No dependencies – uses refs only
 
   // Setup Analyser for a stream
   const setupAnalyser = useCallback((stream: MediaStream, id: string) => {
@@ -209,13 +208,21 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       return next;
     });
     analysersRef.current.delete(peerId);
+    pendingCandidatesRef.current.delete(peerId);
   }, []);
+
+  // Use ref for sendSignal to avoid stale socket closure
+  const socketRef = useRef(socket);
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
 
   const sendSignal = useCallback(
     (targetClientId: string, signal: unknown) => {
-      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      const ws = socketRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
       sendWSRequest({
-        ws: socket,
+        ws,
         request: {
           type: ClientActionEnum.enum.WEBRTC_SIGNAL,
           targetClientId,
@@ -223,7 +230,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         },
       });
     },
-    [socket]
+    [] // Stable – uses socketRef
   );
 
   const createPeerConnection = useCallback(
@@ -235,12 +242,32 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       const pc = new RTCPeerConnection(rtcConfig);
       connectionsRef.current.set(peerId, pc);
 
-      // Add local tracks
+      // Add local tracks if available
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
           pc.addTrack(track, localStreamRef.current!);
         });
       }
+
+      // If initiator, add a recvonly audio transceiver to trigger negotiation
+      // and signal willingness to receive audio (instead of a dummy data channel)
+      if (isInitiator) {
+        pc.addTransceiver("audio", { direction: localStreamRef.current ? "sendrecv" : "recvonly" });
+      }
+
+      pc.onnegotiationneeded = async () => {
+        try {
+          if (pc.signalingState !== "stable") return;
+          const offer = await pc.createOffer();
+          if (offer.sdp) {
+            offer.sdp = optimizeOpusSdp(offer.sdp);
+          }
+          await pc.setLocalDescription(offer);
+          sendSignal(peerId, { description: pc.localDescription });
+        } catch (e) {
+          console.error("Error during negotiation", e);
+        }
+      };
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -249,8 +276,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       };
 
       pc.ontrack = (event) => {
-        const stream = event.streams[0];
-        if (!stream) return;
+        const stream = event.streams[0] || new MediaStream([event.track]);
 
         setRemoteStreamsState((prev) => ({
           ...prev,
@@ -265,24 +291,25 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         }
       };
 
-      if (isInitiator) {
-        pc.createOffer()
-          .then((offer) => {
-            if (offer.sdp) {
-              offer.sdp = optimizeOpusSdp(offer.sdp);
-            }
-            return pc.setLocalDescription(offer);
-          })
-          .then(() => {
-            sendSignal(peerId, { description: pc.localDescription });
-          })
-          .catch((e) => console.error("Error creating offer", e));
-      }
-
       return pc;
     },
     [sendSignal, setupAnalyser, cleanupPeer]
   );
+
+  // Flush buffered ICE candidates after setRemoteDescription succeeds
+  const flushPendingCandidates = useCallback(async (pc: RTCPeerConnection, peerId: string) => {
+    const pending = pendingCandidatesRef.current.get(peerId);
+    if (pending && pending.length > 0) {
+      for (const candidate of pending) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.warn("Error adding buffered candidate", e);
+        }
+      }
+      pendingCandidatesRef.current.delete(peerId);
+    }
+  }, []);
 
   // Handle incoming signals
   const handleSignal = useCallback(
@@ -298,25 +325,39 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           pc = createPeerConnection(sourceClientId, false);
         }
 
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.description));
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.description));
 
-        if (signal.description.type === "offer") {
-          const answer = await pc.createAnswer();
-          if (answer.sdp) {
-            answer.sdp = optimizeOpusSdp(answer.sdp);
+          // Flush any ICE candidates that arrived before the description (Bug #7 fix)
+          await flushPendingCandidates(pc, sourceClientId);
+
+          if (signal.description.type === "offer") {
+            const answer = await pc.createAnswer();
+            if (answer.sdp) {
+              answer.sdp = optimizeOpusSdp(answer.sdp);
+            }
+            await pc.setLocalDescription(answer);
+            sendSignal(sourceClientId, { description: pc.localDescription });
           }
-          await pc.setLocalDescription(answer);
-          sendSignal(sourceClientId, { description: pc.localDescription });
+        } catch (e) {
+          console.error("Error setting remote description", e);
         }
       } else if (signal.candidate) {
-        if (pc) {
+        if (pc && pc.remoteDescription) {
+          // Remote description already set – add candidate directly
           await pc
             .addIceCandidate(new RTCIceCandidate(signal.candidate))
             .catch((e) => console.warn("Error adding candidate", e));
+        } else {
+          // Buffer candidate until setRemoteDescription completes (Bug #7 fix)
+          if (!pendingCandidatesRef.current.has(sourceClientId)) {
+            pendingCandidatesRef.current.set(sourceClientId, []);
+          }
+          pendingCandidatesRef.current.get(sourceClientId)!.push(signal.candidate);
         }
       }
     },
-    [createPeerConnection, sendSignal]
+    [createPeerConnection, sendSignal, flushPendingCandidates]
   );
 
   // Register signal handler
@@ -348,43 +389,32 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [connectedClients, clientId, createPeerConnection, cleanupPeer]);
 
+  // Stabilize connect/disconnect with refs to break dependency cycle (Bug #3 fix)
+  const createPeerConnectionRef = useRef(createPeerConnection);
+  useEffect(() => {
+    createPeerConnectionRef.current = createPeerConnection;
+  }, [createPeerConnection]);
+
   const connect = useCallback(async () => {
-    if (isConnectedRef.current || isConnecting) return;
-    setIsConnecting(true);
+    if (isConnectedRef.current) return;
 
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error(
-          "Access to microphone is blocked. Please ensure you are using a secure connection (HTTPS) and have granted permission."
-        );
-      }
-
       // Resume or create AudioContext during user interaction
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = new (
+          window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        )();
       }
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === "suspended") {
         await audioCtx.resume();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-        video: false,
-      });
-
-      localStreamRef.current = stream;
-      setLocalStreamState(stream);
+      // Default to muted, no local stream on initial connect
       isConnectedRef.current = true;
       setIsConnected(true);
-      setIsMuted(false);
+      setIsMuted(true);
 
-      setupAnalyser(stream, "local");
       pollTimerRef.current = setTimeout(pollActiveSpeakers, ACTIVE_SPEAKER_POLL_INTERVAL_MS);
 
       // Connect to all existing remote clients
@@ -395,18 +425,15 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       remoteClientIds.forEach((peerId) => {
         // Only initiate if our ID is smaller
         if (clientId && clientId < peerId) {
-          createPeerConnection(peerId, true);
+          createPeerConnectionRef.current(peerId, true);
         }
       });
-
-      toast.success("Joined Voice Chat");
     } catch (e) {
-      console.error("Failed to get user media", e);
-      toast.error("Microphone access denied or unavailable.");
-    } finally {
-      setIsConnecting(false);
+      console.error("Failed to connect WebRTC", e);
+      isConnectedRef.current = false;
+      setIsConnected(false);
     }
-  }, [clientId, createPeerConnection, pollActiveSpeakers, setupAnalyser, isConnecting]);
+  }, [clientId, pollActiveSpeakers]); // Stable deps only
 
   const disconnect = useCallback(() => {
     isConnectedRef.current = false;
@@ -427,6 +454,13 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     connectionsRef.current.forEach((pc, peerId) => cleanupPeer(peerId));
     connectionsRef.current.clear();
 
+    // Clean up local analyser (Bug #9 fix)
+    analysersRef.current.delete("local");
+    analysersRef.current.clear();
+
+    // Clean up pending candidates
+    pendingCandidatesRef.current.clear();
+
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close().catch(console.error);
       audioContextRef.current = null;
@@ -440,36 +474,80 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [disconnect]);
 
-  // Auto-connect to voice chat when entering room and clientId is available
+  // Auto-connect to voice chat (receive only) when entering room (Bug #3 fix)
+  const hasAutoConnected = useRef(false);
   useEffect(() => {
-    if (clientId) {
+    if (clientId && !hasAutoConnected.current) {
+      hasAutoConnected.current = true;
       // Small timeout to ensure WebSocket setup completes
       const timer = setTimeout(() => {
         connect().catch((err) => console.error("Auto-connect voice chat failed:", err));
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [clientId, connect]);
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps -- connect is stable via refs
+
+  const enableMic = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Microphone access blocked or unavailable.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+        video: false,
+      });
+
+      localStreamRef.current = stream;
+      setLocalStreamState(stream);
+      setIsMuted(false);
+      setupAnalyser(stream, "local");
+
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        connectionsRef.current.forEach((pc) => {
+          // Check if there's an existing sender we can replace the track on
+          const audioSender = pc.getSenders().find((s) => s.track === null || s.track?.kind === "audio");
+          if (audioSender) {
+            // Replace track on existing sender (no renegotiation needed)
+            audioSender.replaceTrack(audioTrack).catch((e) => console.warn("replaceTrack failed", e));
+          } else {
+            // No sender exists, add new track (will trigger negotiation)
+            pc.addTrack(audioTrack, stream);
+          }
+        });
+      }
+      toast.success("Microphone Connected");
+    } catch (e) {
+      console.error("Failed to get user media", e);
+      toast.error("Microphone access denied or unavailable.");
+    }
+  }, [setupAnalyser]);
 
   const toggleMute = useCallback(() => {
-    if (localStreamRef.current) {
-      const audioTracks = localStreamRef.current.getAudioTracks();
-      const newMutedState = !isMuted;
-      audioTracks.forEach((track) => {
-        track.enabled = !newMutedState;
-      });
-      setIsMuted(newMutedState);
+    if (!localStreamRef.current) {
+      enableMic();
+      return;
     }
-  }, [isMuted]);
+    const audioTracks = localStreamRef.current.getAudioTracks();
+    const newMutedState = !isMuted;
+    audioTracks.forEach((track) => {
+      track.enabled = !newMutedState;
+    });
+    setIsMuted(newMutedState);
+  }, [isMuted, enableMic]);
 
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
   const micVolumes = useGlobalStore((state) => state.micVolumes);
-
   return (
     <VoiceChatContext.Provider
       value={{
         isConnected,
-        isConnecting,
+        isConnecting: false,
         isMuted,
         activeSpeakers,
         remoteStreams: remoteStreamsState,
