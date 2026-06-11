@@ -111,6 +111,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const { clientId } = useClientId();
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
   const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(null);
   const connectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -441,6 +442,31 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [clientId, pollActiveSpeakers]); // Stable deps only
 
+  const disableMic = useCallback(() => {
+    // 1. Stop sending track to peers
+    connectionsRef.current.forEach((pc) => {
+      const audioSender = pc.getSenders().find((s) => s.track?.kind === "audio" || s.track === null);
+      if (audioSender) {
+        audioSender.replaceTrack(null).catch((e) => console.warn("replaceTrack(null) failed", e));
+      }
+    });
+
+    // 2. Stop clean stream
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+      setLocalStreamState(null);
+    }
+
+    // 3. Stop raw mic stream (this fully releases the mic to the OS)
+    if (rawStreamRef.current) {
+      rawStreamRef.current.getTracks().forEach((t) => t.stop());
+      rawStreamRef.current = null;
+    }
+
+    setIsMuted(true);
+  }, []);
+
   const disconnect = useCallback(() => {
     isConnectedRef.current = false;
     setIsConnected(false);
@@ -451,11 +477,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       pollTimerRef.current = null;
     }
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-      setLocalStreamState(null);
-    }
+    disableMic();
 
     connectionsRef.current.forEach((pc, peerId) => cleanupPeer(peerId));
     connectionsRef.current.clear();
@@ -508,6 +530,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         video: false,
       });
 
+      rawStreamRef.current = stream;
       let cleanStream = stream;
 
       if (isAINoiseSuppressionEnabled) {
@@ -575,17 +598,12 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   }, [setupAnalyser]);
 
   const toggleMute = useCallback(() => {
-    if (!localStreamRef.current) {
+    if (isMuted) {
       enableMic();
-      return;
+    } else {
+      disableMic();
     }
-    const audioTracks = localStreamRef.current.getAudioTracks();
-    const newMutedState = !isMuted;
-    audioTracks.forEach((track) => {
-      track.enabled = !newMutedState;
-    });
-    setIsMuted(newMutedState);
-  }, [isMuted, enableMic]);
+  }, [isMuted, enableMic, disableMic]);
 
   const toggleAINoiseSuppression = useCallback(() => {
     setIsAINoiseSuppressionEnabled((prev) => {
