@@ -516,6 +516,9 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             audioContextRef.current = new window.AudioContext();
           }
           const audioCtx = audioContextRef.current;
+          if (audioCtx.state === "suspended") {
+            await audioCtx.resume();
+          }
 
           const { loadRnnoise, RnnoiseWorkletNode } = await import("@sapphi-red/web-noise-suppressor");
 
@@ -550,17 +553,17 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       setIsMuted(false);
       setupAnalyser(cleanStream, "local");
 
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
+      const cleanAudioTrack = cleanStream.getAudioTracks()[0];
+      if (cleanAudioTrack) {
         connectionsRef.current.forEach((pc) => {
           // Check if there's an existing sender we can replace the track on
           const audioSender = pc.getSenders().find((s) => s.track === null || s.track?.kind === "audio");
           if (audioSender) {
             // Replace track on existing sender (no renegotiation needed)
-            audioSender.replaceTrack(audioTrack).catch((e) => console.warn("replaceTrack failed", e));
+            audioSender.replaceTrack(cleanAudioTrack).catch((e) => console.warn("replaceTrack failed", e));
           } else {
             // No sender exists, add new track (will trigger negotiation)
-            pc.addTrack(audioTrack, stream);
+            pc.addTrack(cleanAudioTrack, cleanStream);
           }
         });
       }
