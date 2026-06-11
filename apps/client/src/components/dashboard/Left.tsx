@@ -11,7 +11,6 @@ import { ConnectedUsersList } from "./ConnectedUsersList";
 import { RoomQRCode } from "./CopyRoom";
 import { GlobalVolumeControl } from "./GlobalVolumeControl";
 import { MobileNudgeControl } from "./MobileNudgeControl";
-import { PlaybackPermissions } from "./PlaybackPermissions";
 import { UserVoicePanel } from "./UserVoicePanel";
 
 interface LeftProps {
@@ -65,10 +64,6 @@ export const Left = ({ className }: LeftProps) => {
           NTP: {syncMeasurementCount}/{MAX_NTP_MEASUREMENTS}
         </span>
       </div>
-
-      <Separator className="bg-neutral-800/50" />
-
-      <PlaybackPermissions />
 
       <Separator className="bg-neutral-800/50" />
 
