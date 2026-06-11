@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, WebRTCSignalUnicastType } from "@beatsync/shared";
 import { useClientId } from "@/hooks/useClientId";
+import { loadRnnoise, RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 
 interface VoiceChatContextType {
   isConnected: boolean;
@@ -15,9 +16,11 @@ interface VoiceChatContextType {
   activeSpeakers: Set<string>; // Set of clientIds who are speaking
   remoteStreams: Record<string, MediaStream>; // clientId -> MediaStream
   localStream: MediaStream | null;
+  isAINoiseSuppressionEnabled: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
   toggleMute: () => void;
+  toggleAINoiseSuppression: () => void;
 }
 
 const VoiceChatContext = createContext<VoiceChatContextType | null>(null);
@@ -96,8 +99,11 @@ const RemoteAudio = ({
 export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [isAINoiseSuppressionEnabled, setIsAINoiseSuppressionEnabled] = useState(true);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
   const [remoteStreamsState, setRemoteStreamsState] = useState<Record<string, MediaStream>>({});
+
+  const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
 
   const socket = useGlobalStore((state) => state.socket);
   const setOnWebRTCSignal = useGlobalStore((state) => state.setOnWebRTCSignal);
@@ -495,17 +501,52 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: !isAINoiseSuppressionEnabled,
           autoGainControl: true,
           channelCount: 1,
         },
         video: false,
       });
 
-      localStreamRef.current = stream;
-      setLocalStreamState(stream);
+      let cleanStream = stream;
+
+      if (isAINoiseSuppressionEnabled) {
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new window.AudioContext();
+          }
+          const audioCtx = audioContextRef.current;
+
+          const wasmBinary = await loadRnnoise({
+            url: "/noise-suppressor/rnnoise.wasm",
+            simdUrl: "/noise-suppressor/rnnoise_simd.wasm",
+          });
+
+          await audioCtx.audioWorklet.addModule("/noise-suppressor/rnnoise-processor.js");
+
+          const rnnoiseNode = new RnnoiseWorkletNode(audioCtx, {
+            maxChannels: 1,
+            wasmBinary,
+          });
+
+          rnnoiseNodeRef.current = rnnoiseNode;
+
+          const source = audioCtx.createMediaStreamSource(stream);
+          const destination = audioCtx.createMediaStreamDestination();
+
+          source.connect(rnnoiseNode);
+          rnnoiseNode.connect(destination);
+
+          cleanStream = destination.stream;
+        } catch (e) {
+          console.warn("Failed to initialize RNNoise AI Suppression, falling back to raw mic", e);
+        }
+      }
+
+      localStreamRef.current = cleanStream;
+      setLocalStreamState(cleanStream);
       setIsMuted(false);
-      setupAnalyser(stream, "local");
+      setupAnalyser(cleanStream, "local");
 
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
@@ -541,6 +582,15 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     setIsMuted(newMutedState);
   }, [isMuted, enableMic]);
 
+  const toggleAINoiseSuppression = useCallback(() => {
+    setIsAINoiseSuppressionEnabled((prev) => {
+      const nextState = !prev;
+      // Note: Re-enabling mic is required to apply the new state since stream pipeline changes
+      // This will be handled by the user re-toggling mute, or we could automatically reconnect here
+      return nextState;
+    });
+  }, []);
+
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
   const micVolumes = useGlobalStore((state) => state.micVolumes);
   return (
@@ -549,12 +599,14 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         isConnected,
         isConnecting: false,
         isMuted,
+        isAINoiseSuppressionEnabled,
         activeSpeakers,
         remoteStreams: remoteStreamsState,
         localStream: localStreamState,
         connect,
         disconnect,
         toggleMute,
+        toggleAINoiseSuppression,
       }}
     >
       {children}
