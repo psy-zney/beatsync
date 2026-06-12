@@ -4,7 +4,6 @@ export interface WSData {
   roomId: string;
   clientId: string;
   username: string;
-  isAdmin: boolean;
   isCreator: boolean;
 }
 

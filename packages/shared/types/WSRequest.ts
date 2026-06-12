@@ -22,8 +22,6 @@ export const ClientActionEnum = z.enum([
   "SET_LISTENING_SOURCE",
   "MOVE_CLIENT",
   "SYNC", // Client joins late, requests sync
-  "SET_ADMIN", // Set admin status
-  "SET_PLAYBACK_CONTROLS", // Set playback controls
   "SEND_IP", // Send IP to server
   "LOAD_DEFAULT_TRACKS", // Load default tracks into empty queue
   "DELETE_AUDIO_SOURCES", // Delete audio sources from the room queue (non-default only)
@@ -102,20 +100,6 @@ const DeleteAudioSourcesSchema = z.object({
   urls: z.array(z.string()).min(1),
 });
 
-const SetAdminSchema = z.object({
-  type: z.literal(ClientActionEnum.enum.SET_ADMIN),
-  clientId: z.string(), // The client to set admin status for
-  isAdmin: z.boolean(), // The new admin status
-});
-
-export const PlaybackControlsPermissionsEnum = z.enum(["ADMIN_ONLY", "EVERYONE"]);
-export type PlaybackControlsPermissionsType = z.infer<typeof PlaybackControlsPermissionsEnum>;
-
-export const SetPlaybackControlsSchema = z.object({
-  type: z.literal(ClientActionEnum.enum.SET_PLAYBACK_CONTROLS),
-  permissions: PlaybackControlsPermissionsEnum,
-});
-
 export const SendLocationSchema = z.object({
   type: z.literal(ClientActionEnum.enum.SEND_IP),
   location: LocationSchema,
@@ -183,8 +167,6 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   SetListeningSourceSchema,
   MoveClientSchema,
   ClientRequestSyncSchema,
-  SetAdminSchema,
-  SetPlaybackControlsSchema,
   SendLocationSchema,
   LoadDefaultTracksSchema,
   DeleteAudioSourcesSchema,

@@ -59,7 +59,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const processLowPassConfig = useGlobalStore((state) => state.processLowPassConfig);
   const processMetronomeConfig = useGlobalStore((state) => state.processMetronomeConfig);
   const handleSetAudioSources = useGlobalStore((state) => state.handleSetAudioSources);
-  const setPlaybackControlsPermissions = useGlobalStore((state) => state.setPlaybackControlsPermissions);
+  const applyFinalGain = useGlobalStore((state) => state.applyFinalGain);
   const setActiveStreamJobs = useGlobalStore((state) => state.setActiveStreamJobs);
   const setMessages = useChatStore((state) => state.setMessages);
   const handleLoadAudioSource = useGlobalStore((state) => state.handleLoadAudioSource);
@@ -186,8 +186,6 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
         if (event.type === "SET_AUDIO_SOURCES") {
           handleSetAudioSources(event);
-        } else if (event.type === "SET_PLAYBACK_CONTROLS") {
-          setPlaybackControlsPermissions(event.permissions);
         } else if (event.type === "CHAT_UPDATE") {
           // Handle chat messages
           setMessages(event.messages, event.isFullSync, event.newestId);

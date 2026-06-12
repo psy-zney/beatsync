@@ -11,12 +11,8 @@ import { ConnectedUserItem } from "./ConnectedUserItem";
 export const ConnectedUsersList = () => {
   const { clientId } = useClientId();
   const clients = useGlobalStore((state) => state.connectedClients);
-  // const reorderClient = useGlobalStore((state) => state.reorderClient);
-  const setAdminStatus = useGlobalStore((state) => state.setAdminStatus);
-
   // Get current user from global store
   const currentUser = useGlobalStore((state) => state.currentUser);
-  const isCurrentUserAdmin = currentUser?.isAdmin || false;
 
   // Memoize client data to avoid unnecessary recalculations
   const clientsWithData = useMemo(() => {
@@ -64,9 +60,7 @@ export const ConnectedUsersList = () => {
                     <ConnectedUserItem
                       key={client.clientId}
                       client={client}
-                      isCurrentUser={isCurrentUser}
-                      isAdmin={isCurrentUserAdmin}
-                      onSetAdmin={setAdminStatus}
+                      isCurrentUser={client.clientId === currentUser?.clientId}
                     />
                   ))}
                 </div>

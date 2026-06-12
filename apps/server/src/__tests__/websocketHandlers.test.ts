@@ -44,7 +44,7 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
   });
 
   describe("Audio Source Restoration", () => {
-    it("should send existing audio sources to newly joined client", () => {
+    it("should send existing audio sources to newly joined client", async () => {
       // Create a room with audio sources (simulating restored state)
       const roomId = "restored-room";
       const room = globalManager.getOrCreateRoom(roomId);
@@ -54,7 +54,7 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
       const mockServer = createMockServer();
       const ws = createMockWs({ clientId: "client-123", username: "returningUser", roomId });
 
-      void handleOpen(ws, mockServer);
+      await handleOpen(ws, mockServer);
 
       // Audio sources are now sent directly to the joining client via ws.send (not broadcast)
       const sentMessages = getWsSentMessages(ws);
@@ -75,7 +75,7 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
       ]);
     });
 
-    it("should not send audio sources for empty rooms", () => {
+    it("should not send audio sources for empty rooms", async () => {
       // Create an empty room
       const roomId = "new-room";
       globalManager.getOrCreateRoom(roomId);
@@ -84,7 +84,7 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
       const ws = createMockWs({ clientId: "client-456", username: "newUser", roomId });
       broadcastMessages = [];
 
-      void handleOpen(ws, mockServer);
+      await handleOpen(ws, mockServer);
 
       // Verify no SET_AUDIO_SOURCES was sent via ws.send
       const sentMessages = getWsSentMessages(ws);
@@ -95,7 +95,7 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
       expect(audioSourcesMessage).toBeUndefined();
     });
 
-    it("should handle multiple clients joining the same room", () => {
+    it("should handle multiple clients joining the same room", async () => {
       // Create a room with audio sources
       const roomId = "multi-client-room";
       const room = globalManager.getOrCreateRoom(roomId);
@@ -105,8 +105,8 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
       const ws1 = createMockWs({ clientId: "client-001", username: "user1", roomId });
       const ws2 = createMockWs({ clientId: "client-002", username: "user2", roomId });
 
-      void handleOpen(ws1, mockServer);
-      void handleOpen(ws2, mockServer);
+      await handleOpen(ws1, mockServer);
+      await handleOpen(ws2, mockServer);
 
       // Each client should receive audio sources via their own ws.send (not broadcast)
       for (const ws of [ws1, ws2]) {
@@ -132,13 +132,13 @@ describe("WebSocket Handlers (Simplified Tests)", () => {
   });
 
   describe("Client State Management", () => {
-    it("should add client to room on connection", () => {
+    it("should add client to room on connection", async () => {
       const roomId = "client-test-room";
       const mockServer = createMockServer();
 
       expect(globalManager.hasRoom(roomId)).toBe(false);
 
-      void handleOpen(createMockWs({ clientId: "client-789", username: "testUser", roomId }), mockServer);
+      await handleOpen(createMockWs({ clientId: "client-789", username: "testUser", roomId }), mockServer);
 
       // Verify room was created and client was added
       expect(globalManager.hasRoom(roomId)).toBe(true);

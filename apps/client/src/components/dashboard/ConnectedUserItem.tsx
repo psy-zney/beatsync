@@ -16,8 +16,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 export interface ConnectedUserItemProps {
   client: ClientDataType;
   isCurrentUser: boolean;
-  isAdmin: boolean;
-  onSetAdmin: (clientId: string, isAdmin: boolean) => void;
 }
 
 // Location content shared between Tooltip and Popover - extracted outside render
@@ -25,11 +23,7 @@ const LocationContent = ({ client }: { client: ClientDataType }) => (
   <div className="space-y-1.5">
     <div className="flex items-center gap-2">
       <div className="w-3 flex justify-center">
-        {client.isAdmin ? (
-          <Crown className="h-2.5 w-2.5 text-yellow-500" fill="currentColor" />
-        ) : (
-          <User className="h-3 w-3 text-muted-foreground" />
-        )}
+        <User className="h-3 w-3 text-muted-foreground" />
       </div>
       <p className="font-medium text-xs text-foreground">{client.username}</p>
     </div>
@@ -58,7 +52,7 @@ const LocationContent = ({ client }: { client: ClientDataType }) => (
 import { useVoiceChat } from "../room/VoiceChatProvider";
 import { ActiveSpeakerIndicator, MicMutedIndicator } from "../room/ActiveSpeakerIndicator";
 
-export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser, isAdmin, onSetAdmin }) => {
+export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser }) => {
   const isMobile = useIsMobile();
   const [showLocation, setShowLocation] = useState(false);
   const { isConnected } = useVoiceChat();
@@ -78,12 +72,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
         </AvatarFallback>
       </Avatar>
       {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
-      {/* Admin crown indicator */}
-      {client.isAdmin && (
-        <div className="absolute -top-1 -right-0.5 bg-yellow-500 rounded-full p-0.5">
-          <Crown className="h-2.5 w-2.5 text-yellow-900" fill="currentColor" />
-        </div>
-      )}
+      {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
     </div>
   );
 
@@ -145,29 +134,6 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
       >
         {client.isCreator ? "Creator" : isCurrentUser ? "You" : "Connected"}
       </Badge>
-      {/* Admin controls dropdown - only show if current user is admin and not targeting self */}
-      {isAdmin && !isCurrentUser && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-neutral-700/50">
-              <MoreVertical className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            {client.isAdmin ? (
-              <DropdownMenuItem onClick={() => onSetAdmin(client.clientId, false)} className="text-xs">
-                <Crown className="h-3 w-3 mr-2 text-red-500" />
-                Remove Admin
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={() => onSetAdmin(client.clientId, true)} className="text-xs">
-                <Crown className="h-3 w-3 mr-2 text-green-500" />
-                Make Admin
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
     </motion.div>
   );
 });

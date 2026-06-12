@@ -13,8 +13,6 @@ import type {
   DiscoveryRoomType,
   PauseActionType,
   PlayActionType,
-  PlaybackControlsPermissionsEnum,
-  PlaybackControlsPermissionsType,
   PositionType,
   RoomType,
   WSBroadcastType,
@@ -30,12 +28,9 @@ interface RoomData {
   clients: ClientDataType[];
   roomId: string;
   listeningSource: PositionType;
-  playbackControlsPermissions: PlaybackControlsPermissionsType;
-  globalVolume: number; // Master volume multiplier (0-1)
+  globalVolume: number;
   lowPassFreq: number; // Low-pass filter cutoff frequency (20-20000 Hz)
 }
-
-export const ClientCacheBackupSchema = z.record(z.string(), z.object({ isAdmin: z.boolean() }));
 
 const RoomPlaybackStateSchema = z.object({
   type: z.enum(["playing", "paused"]),
@@ -108,7 +103,6 @@ export class RoomManager {
   private onClientCountChange?: () => void;
   private onBecameEmpty?: () => void;
   private playbackState: RoomPlaybackState = INITIAL_PLAYBACK_STATE;
-  private playbackControlsPermissions: PlaybackControlsPermissionsType = "ADMIN_ONLY";
   private globalVolume = 1.0;
   private lowPassFreq: number = LOW_PASS_CONSTANTS.MAX_FREQ; // Default bypassed (full spectrum)
   private isMetronomeEnabled = false;
@@ -314,10 +308,6 @@ export class RoomManager {
     return this.audioSources;
   }
 
-  getPlaybackControlsPermissions(): PlaybackControlsPermissionsType {
-    return this.playbackControlsPermissions;
-  }
-
   getPlaybackState(): RoomPlaybackState {
     return this.playbackState;
   }
@@ -336,7 +326,6 @@ export class RoomManager {
       joinedAt: Date.now(),
       username,
       clientId,
-      isAdmin: false,
       isCreator: ws.data.isCreator,
       rtt: 0,
       compensationMs: 0,
@@ -350,19 +339,8 @@ export class RoomManager {
     // Restore some specific fields.
     if (cachedClient) {
       clientData.location = cachedClient.location;
-      if (!IS_DEMO_MODE) clientData.isAdmin = cachedClient.isAdmin;
       clientData.joinedAt = cachedClient.joinedAt;
       clientData.nudgeMs = cachedClient.nudgeMs;
-    }
-
-    // In demo mode, only the admin secret grants admin. Otherwise, first client gets admin.
-    if (!IS_DEMO_MODE && this.wsConnections.size === 0) {
-      clientData.isAdmin = true;
-    }
-
-    // If the client authenticated with the admin secret or is the creator, always grant admin
-    if (ws.data.isAdmin || ws.data.isCreator) {
-      clientData.isAdmin = true;
     }
 
     this.clientData.set(clientId, clientData);
@@ -390,27 +368,7 @@ export class RoomManager {
     const activeClients = this.getClients();
     // Reposition remaining clients if any
     if (activeClients.length > 0) {
-      // Always check to ensure there is at least one admin
       positionClientsInCircle(activeClients);
-
-      // Check if any admins remain after removing this client
-      // In demo mode, skip auto-promotion — only the admin secret grants admin
-      if (!IS_DEMO_MODE) {
-        const remainingAdmins = activeClients.filter((client) => client.isAdmin);
-
-        if (remainingAdmins.length === 0) {
-          const randomIndex = Math.floor(Math.random() * activeClients.length);
-          const newAdmin = activeClients[randomIndex];
-
-          if (newAdmin) {
-            newAdmin.isAdmin = true;
-            this.clientData.set(newAdmin.clientId, newAdmin);
-            console.log(
-              `✨ Automatically promoted ${newAdmin.username} (${newAdmin.clientId}) to admin in room ${this.roomId}`
-            );
-          }
-        }
-      }
     } else {
       // Stop heartbeat checking if no clients remain
       this.stopHeartbeatChecking();
@@ -431,17 +389,6 @@ export class RoomManager {
 
     // Notify that client count changed
     this.onClientCountChange?.();
-  }
-
-  setAdmin({ targetClientId, isAdmin }: { targetClientId: string; isAdmin: boolean }): void {
-    const client = this.clientData.get(targetClientId);
-    if (!client) return;
-    client.isAdmin = isAdmin;
-    this.clientData.set(targetClientId, client);
-  }
-
-  setPlaybackControls(permissions: z.infer<typeof PlaybackControlsPermissionsEnum>): void {
-    this.playbackControlsPermissions = permissions;
   }
 
   /**
@@ -561,7 +508,6 @@ export class RoomManager {
       clients: this.getClients(),
       roomId: this.roomId,
       listeningSource: this.listeningSource,
-      playbackControlsPermissions: this.playbackControlsPermissions,
       globalVolume: this.globalVolume,
       lowPassFreq: this.lowPassFreq,
     };

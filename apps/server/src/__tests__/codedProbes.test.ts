@@ -59,7 +59,7 @@ describe("coded probes", () => {
   describe("server echo", () => {
     it("should echo probeGroupId and probeGroupIndex in NTP_RESPONSE", async () => {
       const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
 
       await handleMessage(
         ws,
@@ -85,7 +85,7 @@ describe("coded probes", () => {
 
     it("should echo probeGroupIndex 1 for the second probe", async () => {
       const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
 
       await handleMessage(
         ws,
@@ -107,7 +107,7 @@ describe("coded probes", () => {
 
     it("should reject NTP requests without probe fields", async () => {
       const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
 
       await handleMessage(
         ws,

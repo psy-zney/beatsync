@@ -81,7 +81,6 @@ export const DemoDashboard = ({ roomId }: DemoDashboardProps) => {
   const hasUserStartedSystem = useGlobalStore((state) => state.hasUserStartedSystem);
   const demoUserCount = useGlobalStore((state) => state.demoUserCount);
   const demoAudioReadyCount = useGlobalStore((state) => state.demoAudioReadyCount);
-  const isAdmin = useGlobalStore((state) => state.currentUser?.isAdmin ?? false);
   const isPlaying = useGlobalStore((state) => state.isPlaying);
   const isAudioLoaded = useGlobalStore(
     (state) => state.audioSources.length > 0 && state.audioSources.every((s) => s.status === "loaded")
@@ -119,11 +118,9 @@ export const DemoDashboard = ({ roomId }: DemoDashboardProps) => {
                   >
                     {isAudioLoaded ? "Audio Loaded" : "Loading Audio"}
                   </span>
-                  {isAdmin && (
-                    <span className="text-sm font-mono text-neutral-300 tabular-nums">
-                      {demoAudioReadyCount}/{demoUserCount}
-                    </span>
-                  )}
+                  <span className="text-sm font-mono text-neutral-300 tabular-nums">
+                    {demoAudioReadyCount}/{demoUserCount}
+                  </span>
                 </div>
                 <AnimatePresence mode="popLayout">
                   <motion.span
@@ -143,18 +140,16 @@ export const DemoDashboard = ({ roomId }: DemoDashboardProps) => {
             )}
           </div>
 
-          {isAdmin && (
-            <div className="shrink-0 px-6 pb-4 flex flex-col gap-3">
-              <DemoTrackSelector />
-              <div className="flex flex-col lg:flex-row gap-3 [&_[data-slot=slider-track]]:before:inset-y-[-16px] [&_[data-slot=slider-track]]:h-2 [&_[data-slot=slider-thumb]]:size-5 [&_[data-slot=slider-thumb]]:opacity-100">
-                <LowPassControl className="flex-1" isMobile />
-                <GlobalVolumeControl className="flex-1" isMobile />
-              </div>
-              <div className="[&_button]:px-4 [&_button]:py-2 [&_button]:text-sm">
-                <MetronomeButton />
-              </div>
+          <div className="shrink-0 px-6 pb-4 flex flex-col gap-3">
+            <DemoTrackSelector />
+            <div className="flex flex-col lg:flex-row gap-3 [&_[data-slot=slider-track]]:before:inset-y-[-16px] [&_[data-slot=slider-track]]:h-2 [&_[data-slot=slider-thumb]]:size-5 [&_[data-slot=slider-thumb]]:opacity-100">
+              <LowPassControl className="flex-1" isMobile />
+              <GlobalVolumeControl className="flex-1" isMobile />
             </div>
-          )}
+            <div className="[&_button]:px-4 [&_button]:py-2 [&_button]:text-sm">
+              <MetronomeButton />
+            </div>
+          </div>
 
           <Bottom />
         </motion.div>

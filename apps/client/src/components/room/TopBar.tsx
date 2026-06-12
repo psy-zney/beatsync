@@ -20,20 +20,13 @@ export const TopBar = ({ roomId }: TopBarProps) => {
   const clockOffset = useGlobalStore((state) => state.offsetEstimate);
   const syncMeasurementCount = useGlobalStore((state) => state.syncMeasurements.length);
 
-  // Get current user from global store to check admin status
-  const currentUser = useGlobalStore((state) => state.currentUser);
-  const isAdmin = currentUser?.isAdmin || false;
+  // Get current user from global store
 
   // Show minimal nav bar when synced and not loading
   if (!isLoadingAudio && isSynced) {
     return (
       <div className="h-8 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-4 border-b border-zinc-800">
         <div className="flex items-center space-x-4 text-xs text-neutral-400 py-2 md:py-0">
-          {isAdmin && (
-            <div className="flex items-center">
-              <Crown className="h-3 w-3 text-green-500" fill="currentColor" />
-            </div>
-          )}
           <Link href="/" className="font-medium hover:text-white transition-colors">
             Beatsync
           </Link>

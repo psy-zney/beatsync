@@ -63,21 +63,12 @@ const ClientAvatar = memo<ClientAvatarProps>(({ client, isCurrentUser, animation
                 )}
               ></span>
             )}
-            {/* Admin crown indicator */}
-            {client.isAdmin && (
-              <div className="absolute -top-0 -right-0 bg-yellow-500 rounded-full p-0.5">
-                <Crown className="h-2.5 w-2.5 text-yellow-900" fill="currentColor" />
-              </div>
-            )}
           </div>
         </motion.div>
       </TooltipTrigger>
       <TooltipContent side="top">
         <div className="text-xs font-medium">{client.username}</div>
-        <div className="text-xs text-muted-foreground">
-          {isCurrentUser ? "You" : "Connected"}
-          {client.isAdmin && " • Admin"}
-        </div>
+        <div className="text-xs text-muted-foreground">{isCurrentUser ? "You" : "Connected"}</div>
       </TooltipContent>
     </Tooltip>
   );

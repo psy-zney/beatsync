@@ -1,4 +1,3 @@
-import { PlaybackControlsPermissionsEnum } from "@beatsync/shared";
 import type { ServerWebSocket } from "bun";
 import type { RoomManager } from "@/managers";
 import { globalManager } from "@/managers";
@@ -20,28 +19,11 @@ export const requireRoom = (ws: ServerWebSocket<WSData>): { room: RoomManager } 
   return { room };
 };
 
-export const requireRoomAdmin = (ws: ServerWebSocket<WSData>): { room: RoomManager } => {
-  const { room } = requireRoom(ws);
-  const client = room.getClient(ws.data.clientId);
-  if (!client) throw new Error(`Client ${ws.data.clientId} does not exist in room ${ws.data.roomId}`);
-
-  if (!client.isAdmin) {
-    throw new Error(`Client ${ws.data.clientId} is not an admin in room ${ws.data.roomId}`);
-  }
-  return { room };
-};
-
-export const requireCanMutate = (ws: ServerWebSocket<WSData>): { room: RoomManager } => {
-  const { room } = requireRoom(ws);
-  const client = room.getClient(ws.data.clientId);
-  if (!client) throw new Error(`Client ${ws.data.clientId} does not exist in room ${ws.data.roomId}`);
-
-  const canMutate =
-    room.getPlaybackControlsPermissions() === PlaybackControlsPermissionsEnum.enum.EVERYONE || client.isAdmin;
-
-  if (!canMutate) {
-    throw new Error(`Client ${ws.data.clientId} does not have permission to mutate in room ${ws.data.roomId}`);
-  }
-
-  return { room };
-};
+/**
+ * All authenticated users in a room have full mutation rights.
+ * Permission model: open — anyone who has joined a room can control playback,
+ * queue, volume, and all other room actions.
+ *
+ * requireCanMutate is intentionally an alias for requireRoom.
+ */
+export const requireCanMutate = requireRoom;

@@ -55,7 +55,10 @@ describe("demo mode", () => {
   let clock: sinon.SinonFakeTimers;
 
   beforeEach(() => {
-    clock = sinon.useFakeTimers();
+    clock = sinon.useFakeTimers({
+      shouldClearNativeTimers: true,
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
     broadcastMessages = [];
     unicastMessages = [];
     server = createMockServer();
@@ -68,12 +71,12 @@ describe("demo mode", () => {
     clock.restore();
   });
 
-  it("should only unicast self in CLIENT_CHANGE, never broadcast full client list", () => {
+  it("should only unicast self in CLIENT_CHANGE, never broadcast full client list", async () => {
     const ws1 = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
     const ws2 = createMockWs({ clientId: "client-2", roomId: ROOM_ID });
 
-    handleOpen(ws1, server);
-    handleOpen(ws2, server);
+    await handleOpen(ws1, server);
+    await handleOpen(ws2, server);
 
     // Flush debounce
     clock.tick(501);
@@ -101,11 +104,11 @@ describe("demo mode", () => {
     }
   });
 
-  it("should broadcast DEMO_USER_COUNT that increments as clients join", () => {
+  it("should broadcast DEMO_USER_COUNT that increments as clients join", async () => {
     const clients = Array.from({ length: 5 }, (_, i) => createMockWs({ clientId: `client-${i}`, roomId: ROOM_ID }));
 
     for (const ws of clients) {
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
     }
 
     // Flush debounce
@@ -120,11 +123,11 @@ describe("demo mode", () => {
     expect(lastCount.message.count).toBe(5);
   });
 
-  it("should broadcast DEMO_USER_COUNT that decrements as clients leave", () => {
+  it("should broadcast DEMO_USER_COUNT that decrements as clients leave", async () => {
     const clients = Array.from({ length: 5 }, (_, i) => createMockWs({ clientId: `client-${i}`, roomId: ROOM_ID }));
 
     for (const ws of clients) {
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
     }
     clock.tick(501);
     broadcastMessages = [];
@@ -142,11 +145,10 @@ describe("demo mode", () => {
     expect(lastCount.message.count).toBe(3);
   });
 
-  it("should allow admin to play and broadcast SCHEDULED_ACTION immediately", async () => {
+  it("should allow any client to play and broadcast SCHEDULED_ACTION immediately", async () => {
     const adminWs = createMockWs({ clientId: "admin-1", roomId: ROOM_ID });
-    (adminWs.data as { isAdmin: boolean }).isAdmin = true;
 
-    handleOpen(adminWs, server);
+    await handleOpen(adminWs, server);
 
     const room = globalManager.getRoom(ROOM_ID)!;
     room.addAudioSource({ url: AUDIO_URL });
@@ -162,11 +164,10 @@ describe("demo mode", () => {
     expect(playBroadcast).toBeDefined();
   });
 
-  it("should allow admin to pause and broadcast SCHEDULED_ACTION", async () => {
+  it("should allow any client to pause and broadcast SCHEDULED_ACTION", async () => {
     const adminWs = createMockWs({ clientId: "admin-1", roomId: ROOM_ID });
-    (adminWs.data as { isAdmin: boolean }).isAdmin = true;
 
-    handleOpen(adminWs, server);
+    await handleOpen(adminWs, server);
 
     const room = globalManager.getRoom(ROOM_ID)!;
     room.addAudioSource({ url: AUDIO_URL });
@@ -187,11 +188,11 @@ describe("demo mode", () => {
     expect(room.getPlaybackState().type).toBe("paused");
   });
 
-  it("should coalesce rapid joins into a single DEMO_USER_COUNT broadcast", () => {
+  it("should coalesce rapid joins into a single DEMO_USER_COUNT broadcast", async () => {
     const clients = Array.from({ length: 5 }, (_, i) => createMockWs({ clientId: `client-${i}`, roomId: ROOM_ID }));
 
     for (const ws of clients) {
-      handleOpen(ws, server);
+      await handleOpen(ws, server);
     }
 
     // Before debounce fires

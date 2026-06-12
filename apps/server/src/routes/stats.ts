@@ -36,7 +36,7 @@ export async function handleStats(): Promise<Response> {
     const clients = room.getClients().map((client) => ({
       clientId: client.clientId,
       username: client.username,
-      isAdmin: client.isAdmin,
+      isCreator: client.isCreator,
       rtt: client.rtt,
       location: client.location ?? null,
     }));

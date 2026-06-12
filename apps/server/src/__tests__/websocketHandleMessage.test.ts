@@ -43,7 +43,7 @@ describe("handleMessage", () => {
 
   it("should send error for invalid JSON", async () => {
     const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-    handleOpen(ws, server);
+    await handleOpen(ws, server);
 
     await handleMessage(ws, "not json at all{{{", server);
 
@@ -55,7 +55,7 @@ describe("handleMessage", () => {
 
   it("should send error for valid JSON that fails Zod validation", async () => {
     const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-    handleOpen(ws, server);
+    await handleOpen(ws, server);
 
     await handleMessage(ws, JSON.stringify({ type: "NONEXISTENT_ACTION" }), server);
 
@@ -66,7 +66,7 @@ describe("handleMessage", () => {
 
   it("should process a valid PAUSE message and update playback state", async () => {
     const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
-    handleOpen(ws, server);
+    await handleOpen(ws, server);
 
     // Add audio and set to playing first
     const room = globalManager.getRoom(ROOM_ID)!;

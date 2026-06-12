@@ -50,12 +50,12 @@ describe("handleClose", () => {
     clock.restore();
   });
 
-  it("should remove client from room and broadcast CLIENT_CHANGE after debounce", () => {
+  it("should remove client from room and broadcast CLIENT_CHANGE after debounce", async () => {
     const ws1 = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
     const ws2 = createMockWs({ clientId: "client-2", roomId: ROOM_ID });
 
-    handleOpen(ws1, server);
-    handleOpen(ws2, server);
+    await handleOpen(ws1, server);
+    await handleOpen(ws2, server);
     broadcastMessages = [];
 
     handleClose(ws1, server);
@@ -76,10 +76,10 @@ describe("handleClose", () => {
     expect(clientChangeMsg).toBeDefined();
   });
 
-  it("should skip broadcast when last client disconnects", () => {
+  it("should skip broadcast when last client disconnects", async () => {
     const ws = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
 
-    handleOpen(ws, server);
+    await handleOpen(ws, server);
     broadcastMessages = [];
 
     handleClose(ws, server);
@@ -94,14 +94,14 @@ describe("handleClose", () => {
     expect(clientChangeMsg).toBeUndefined();
   });
 
-  it("should coalesce rapid joins/leaves into a single broadcast", () => {
+  it("should coalesce rapid joins/leaves into a single broadcast", async () => {
     const ws1 = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
     const ws2 = createMockWs({ clientId: "client-2", roomId: ROOM_ID });
     const ws3 = createMockWs({ clientId: "client-3", roomId: ROOM_ID });
 
-    handleOpen(ws1, server);
-    handleOpen(ws2, server);
-    handleOpen(ws3, server);
+    await handleOpen(ws1, server);
+    await handleOpen(ws2, server);
+    await handleOpen(ws3, server);
     broadcastMessages = [];
 
     // Rapid-fire: close two clients within the debounce window
@@ -127,12 +127,12 @@ describe("handleClose", () => {
     expect(event.event.clients[0].clientId).toBe("client-3");
   });
 
-  it("should not schedule cleanup when other clients remain", () => {
+  it("should not schedule cleanup when other clients remain", async () => {
     const ws1 = createMockWs({ clientId: "client-1", roomId: ROOM_ID });
     const ws2 = createMockWs({ clientId: "client-2", roomId: ROOM_ID });
 
-    handleOpen(ws1, server);
-    handleOpen(ws2, server);
+    await handleOpen(ws1, server);
+    await handleOpen(ws2, server);
 
     // Keep client-2's NTP fresh
     globalManager.getRoom(ROOM_ID)!.processNTPRequestFrom({ clientId: "client-2" });

@@ -4,7 +4,6 @@ import {
   LocationSchema,
   PauseActionSchema,
   PlayActionSchema,
-  SetPlaybackControlsSchema,
 } from "./WSRequest";
 import { AudioSourceSchema, ChatMessageSchema, PositionSchema } from "./basic";
 
@@ -17,7 +16,6 @@ export const ClientDataSchema = z.object({
   nudgeMs: z.number().default(0), // Manual timing nudge set by the user
   position: PositionSchema,
   lastNtpResponse: z.number().default(0), // Last NTP response timestamp
-  isAdmin: z.boolean().default(false), // Admin status
   isCreator: z.boolean().default(false), // Site creator badge
   location: LocationSchema.optional(),
   joinedAt: z.number(), // Timestamp when the client joined the room
@@ -64,7 +62,6 @@ const RoomEventSchema = z.object({
     ClientChangeMessageSchema,
     ClientMovedSchema,
     SetAudioSourcesSchema,
-    SetPlaybackControlsSchema,
     ChatUpdateSchema,
     LoadAudioSourceSchema,
   ]),

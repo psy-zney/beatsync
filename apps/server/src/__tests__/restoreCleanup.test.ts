@@ -15,7 +15,6 @@ mockR2({
             {
               clientId: "ghost-1",
               username: "user1",
-              isAdmin: false,
               joinedAt: Date.now(),
               rtt: 0,
               position: { x: 0, y: 0 },
@@ -52,7 +51,10 @@ describe("Restore Cleanup", () => {
   let clock: sinon.SinonFakeTimers;
 
   beforeEach(() => {
-    clock = sinon.useFakeTimers();
+    clock = sinon.useFakeTimers({
+      shouldClearNativeTimers: true,
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
     const roomIds = globalManager.getRoomIds();
     for (const roomId of roomIds) {
       globalManager.deleteRoom(roomId);

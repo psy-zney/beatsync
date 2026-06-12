@@ -1,4 +1,4 @@
-import { DEMO_ROOM_ID, IS_DEMO_MODE, isValidAdminSecret } from "@/demo";
+import { DEMO_ROOM_ID, IS_DEMO_MODE } from "@/demo";
 import { errorResponse } from "@/utils/responses";
 import type { BunServer, WSData } from "@/utils/websocket";
 
@@ -9,7 +9,6 @@ export const handleWebSocketUpgrade = (req: Request, server: BunServer) => {
   const roomId = url.searchParams.get("roomId");
   const username = url.searchParams.get("username");
   const clientId = url.searchParams.get("clientId");
-  const adminSecret = url.searchParams.get("admin");
   const creatorSecret = url.searchParams.get("creator");
 
   if (!roomId || !username || !clientId) {
@@ -36,19 +35,15 @@ export const handleWebSocketUpgrade = (req: Request, server: BunServer) => {
     return errorResponse(`Only room 090624 is available`);
   }
 
-  // Check if client provided valid admin secret
-  const isAdmin = IS_DEMO_MODE && isValidAdminSecret(adminSecret);
-
   const isCreator = !IS_DEMO_MODE && !!CREATOR_SECRET && creatorSecret === CREATOR_SECRET;
 
-  const tags = [isAdmin && "admin", isCreator && "creator"].filter(Boolean).join(", ");
+  const tags = [isCreator && "creator"].filter(Boolean).join(", ");
   console.log(`User ${username} joined room ${roomId} with clientId ${clientId}${tags ? ` (${tags})` : ""}`);
 
   const data: WSData = {
     roomId,
-    username: isCreator ? "freemanjiang" : username,
+    username,
     clientId,
-    isAdmin,
     isCreator,
   };
 

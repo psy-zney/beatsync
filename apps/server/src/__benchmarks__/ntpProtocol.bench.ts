@@ -59,7 +59,7 @@ function startServer(): { server: ReturnType<typeof Bun.serve>; port: number } {
     },
     websocket: {
       open(ws) {
-        handleOpen(ws, server);
+        void handleOpen(ws, server);
       },
       message(ws, message) {
         void handleMessage(ws, message, server);

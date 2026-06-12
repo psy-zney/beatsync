@@ -5,8 +5,6 @@ import { handleLoadDefaultTracks } from "@/websocket/handlers/handleLoadDefaultT
 import { handleSearchMusic } from "@/websocket/handlers/handleSearchMusic";
 import { handleSendChatMessage } from "@/websocket/handlers/handleSendChatMessage";
 import { handleSendIp } from "@/websocket/handlers/handleSendIp";
-import { handleSetAdmin } from "@/websocket/handlers/handleSetAdmin";
-import { handleSetPlaybackControls } from "@/websocket/handlers/handleSetPlaybackControls";
 import { handleStreamMusic } from "@/websocket/handlers/handleStreamMusic";
 import { handleMoveClient } from "@/websocket/handlers/moveClient";
 import { handleNTPRequest } from "@/websocket/handlers/ntpRequest";
@@ -82,16 +80,6 @@ export const WS_REGISTRY: WebsocketRegistry = {
   [ClientActionEnum.enum.DELETE_AUDIO_SOURCES]: {
     handle: handleDeleteAudioSources,
     description: "Delete audio sources with room prefix (non-default only)",
-  },
-
-  [ClientActionEnum.enum.SET_ADMIN]: {
-    handle: handleSetAdmin,
-    description: "Set admin status for a client",
-  },
-
-  [ClientActionEnum.enum.SET_PLAYBACK_CONTROLS]: {
-    handle: handleSetPlaybackControls,
-    description: "Set playback controls for a room",
   },
 
   [ClientActionEnum.enum.SEND_IP]: {

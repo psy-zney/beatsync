@@ -74,17 +74,6 @@ export const handleOpen = async (ws: ServerWebSocket<WSData>, server: BunServer)
     });
   }
 
-  void sendToClient({
-    ws,
-    message: {
-      type: "ROOM_EVENT",
-      event: {
-        type: "SET_PLAYBACK_CONTROLS",
-        permissions: room.getPlaybackControlsPermissions(),
-      },
-    },
-  });
-
   void sendUnicast({
     ws,
     message: {
