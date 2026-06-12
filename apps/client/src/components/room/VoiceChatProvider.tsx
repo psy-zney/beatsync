@@ -46,6 +46,32 @@ const ACTIVE_SPEAKER_THRESHOLD = 15; // Volume threshold for speaking
 const ACTIVE_SPEAKER_SMOOTHING = 0.8;
 const ACTIVE_SPEAKER_POLL_INTERVAL_MS = 100; // 10fps polling instead of 60fps to save CPU
 
+const getAudioTrack = (stream: MediaStream | null) => stream?.getAudioTracks()[0] ?? null;
+
+const getAudioTransceiver = (pc: RTCPeerConnection) =>
+  pc.getTransceivers().find((transceiver) => {
+    return transceiver.receiver.track.kind === "audio" || transceiver.sender.track?.kind === "audio";
+  });
+
+const ensureSendrecvAudioTransceiver = (pc: RTCPeerConnection, stream: MediaStream | null) => {
+  const audioTrack = getAudioTrack(stream);
+  const existingTransceiver = getAudioTransceiver(pc);
+
+  if (existingTransceiver) {
+    existingTransceiver.direction = "sendrecv";
+    if (audioTrack && existingTransceiver.sender.track !== audioTrack) {
+      existingTransceiver.sender.replaceTrack(audioTrack).catch((e) => console.warn("replaceTrack failed", e));
+    }
+    return existingTransceiver;
+  }
+
+  if (audioTrack && stream) {
+    return pc.addTransceiver(audioTrack, { direction: "sendrecv", streams: [stream] });
+  }
+
+  return pc.addTransceiver("audio", { direction: "sendrecv" });
+};
+
 // Optimize Opus SDP for highest voice quality + network resilience
 const optimizeOpusSdp = (sdp: string) => {
   const rtpmapMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/);
@@ -79,13 +105,42 @@ const RemoteAudio = ({
   volume: number;
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const hasWarnedPlaybackBlockedRef = useRef(false);
+
+  const playRemoteAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const playPromise = audio.play();
+    if (!playPromise) return;
+
+    playPromise
+      .then(() => {
+        hasWarnedPlaybackBlockedRef.current = false;
+      })
+      .catch((err) => {
+        if (!hasWarnedPlaybackBlockedRef.current) {
+          console.warn(`Failed to play remote audio for ${peerId}`, err);
+          hasWarnedPlaybackBlockedRef.current = true;
+        }
+      });
+  }, [peerId]);
 
   useEffect(() => {
-    if (audioRef.current && stream) {
-      audioRef.current.srcObject = stream;
-      audioRef.current.play().catch((err) => console.warn(`Failed to play remote audio for ${peerId}`, err));
-    }
-  }, [stream, peerId]);
+    if (!audioRef.current) return;
+    audioRef.current.srcObject = stream;
+    playRemoteAudio();
+  }, [stream, playRemoteAudio]);
+
+  useEffect(() => {
+    document.addEventListener("pointerdown", playRemoteAudio);
+    document.addEventListener("keydown", playRemoteAudio);
+
+    return () => {
+      document.removeEventListener("pointerdown", playRemoteAudio);
+      document.removeEventListener("keydown", playRemoteAudio);
+    };
+  }, [playRemoteAudio]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -249,19 +304,6 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       const pc = new RTCPeerConnection(rtcConfig);
       connectionsRef.current.set(peerId, pc);
 
-      // Add local tracks if available
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
-        });
-      }
-
-      // If initiator, add a recvonly audio transceiver to trigger negotiation
-      // and signal willingness to receive audio (instead of a dummy data channel)
-      if (isInitiator) {
-        pc.addTransceiver("audio", { direction: localStreamRef.current ? "sendrecv" : "recvonly" });
-      }
-
       pc.onnegotiationneeded = async () => {
         try {
           if (pc.signalingState !== "stable") return;
@@ -297,6 +339,10 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           cleanupPeer(peerId);
         }
       };
+
+      if (isInitiator) {
+        ensureSendrecvAudioTransceiver(pc, localStreamRef.current);
+      }
 
       return pc;
     },
@@ -339,6 +385,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           await flushPendingCandidates(pc, sourceClientId);
 
           if (signal.description.type === "offer") {
+            ensureSendrecvAudioTransceiver(pc, localStreamRef.current);
             const answer = await pc.createAnswer();
             if (answer.sdp) {
               answer.sdp = optimizeOpusSdp(answer.sdp);
@@ -445,7 +492,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const disableMic = useCallback(() => {
     // 1. Stop sending track to peers
     connectionsRef.current.forEach((pc) => {
-      const audioSender = pc.getSenders().find((s) => s.track?.kind === "audio" || s.track === null);
+      const audioSender = getAudioTransceiver(pc)?.sender ?? pc.getSenders().find((s) => s.track?.kind === "audio");
       if (audioSender) {
         audioSender.replaceTrack(null).catch((e) => console.warn("replaceTrack(null) failed", e));
       }
@@ -464,6 +511,18 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       rawStreamRef.current = null;
     }
 
+    if (rnnoiseNodeRef.current) {
+      rnnoiseNodeRef.current.disconnect();
+      rnnoiseNodeRef.current = null;
+    }
+
+    analysersRef.current.delete("local");
+    setActiveSpeakers((current) => {
+      if (!current.has("local")) return current;
+      const next = new Set(current);
+      next.delete("local");
+      return next;
+    });
     setIsMuted(true);
   }, []);
 
@@ -493,7 +552,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       audioContextRef.current.close().catch(console.error);
       audioContextRef.current = null;
     }
-  }, [cleanupPeer]);
+  }, [cleanupPeer, disableMic]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -579,15 +638,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       const cleanAudioTrack = cleanStream.getAudioTracks()[0];
       if (cleanAudioTrack) {
         connectionsRef.current.forEach((pc) => {
-          // Check if there's an existing sender we can replace the track on
-          const audioSender = pc.getSenders().find((s) => s.track === null || s.track?.kind === "audio");
-          if (audioSender) {
-            // Replace track on existing sender (no renegotiation needed)
-            audioSender.replaceTrack(cleanAudioTrack).catch((e) => console.warn("replaceTrack failed", e));
-          } else {
-            // No sender exists, add new track (will trigger negotiation)
-            pc.addTrack(cleanAudioTrack, cleanStream);
-          }
+          ensureSendrecvAudioTransceiver(pc, cleanStream);
         });
       }
       toast.success("Microphone Connected");
@@ -595,7 +646,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       console.error("Failed to get user media", e);
       toast.error("Microphone access denied or unavailable.");
     }
-  }, [setupAnalyser]);
+  }, [isAINoiseSuppressionEnabled, setupAnalyser]);
 
   const toggleMute = useCallback(() => {
     if (isMuted) {
@@ -633,8 +684,20 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
-      {/* Hidden audio element in DOM for iOS Safari compatibility */}
-      <div style={{ display: "none" }} aria-hidden="true">
+      {/* Hidden audio elements kept renderable for mobile browser playback compatibility */}
+      <div
+        style={{
+          position: "fixed",
+          left: -1,
+          top: -1,
+          width: 1,
+          height: 1,
+          opacity: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+      >
         {Object.entries(remoteStreamsState).map(([peerId, stream]) => (
           <RemoteAudio
             key={peerId}
