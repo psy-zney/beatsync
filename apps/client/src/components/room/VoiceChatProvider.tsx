@@ -576,9 +576,31 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
   const enableMic = useCallback(async () => {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Microphone access blocked or unavailable.");
+      // Pre-check permission state to provide better guidance
+      if (navigator.permissions) {
+        try {
+          const permStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
+          if (permStatus.state === "denied") {
+            toast.error(
+              "Microphone is blocked. Click the 🔒 icon in the address bar → Site settings → Allow Microphone.",
+              {
+                duration: 8000,
+              }
+            );
+            return;
+          }
+        } catch {
+          // permissions.query for microphone not supported in this browser — continue
+        }
       }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error("Microphone is not available in this browser. Please ensure you are using HTTPS.", {
+          duration: 6000,
+        });
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -635,18 +657,56 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       setIsMuted(false);
       setupAnalyser(cleanStream, "local");
 
+      // Add track to all peer connections and force renegotiation.
+      // replaceTrack() alone does NOT trigger renegotiation, which means
+      // some browsers (especially Chromium-based like Brave) may not properly
+      // start sending audio to the remote peer without a new offer/answer.
       const cleanAudioTrack = cleanStream.getAudioTracks()[0];
       if (cleanAudioTrack) {
-        connectionsRef.current.forEach((pc) => {
-          ensureSendrecvAudioTransceiver(pc, cleanStream);
-        });
+        for (const [peerId, pc] of connectionsRef.current.entries()) {
+          const transceiver = ensureSendrecvAudioTransceiver(pc, cleanStream);
+
+          // Await the replaceTrack to ensure it completes before renegotiating
+          if (transceiver?.sender && transceiver.sender.track !== cleanAudioTrack) {
+            try {
+              await transceiver.sender.replaceTrack(cleanAudioTrack);
+            } catch (e) {
+              console.warn(`replaceTrack failed for peer ${peerId}`, e);
+            }
+          }
+
+          // Force renegotiation so the remote peer's ontrack fires / updates
+          try {
+            if (pc.signalingState === "stable") {
+              const offer = await pc.createOffer();
+              if (offer.sdp) {
+                offer.sdp = optimizeOpusSdp(offer.sdp);
+              }
+              await pc.setLocalDescription(offer);
+              sendSignal(peerId, { description: pc.localDescription });
+            }
+          } catch (e) {
+            console.warn(`Renegotiation after mic enable failed for peer ${peerId}`, e);
+          }
+        }
       }
       toast.success("Microphone Connected");
     } catch (e) {
       console.error("Failed to get user media", e);
-      toast.error("Microphone access denied or unavailable.");
+      const errorName = (e as Error)?.name;
+      if (errorName === "NotAllowedError") {
+        toast.error("Microphone access denied. Click the 🔒 icon in the address bar to allow microphone access.", {
+          duration: 8000,
+        });
+      } else if (errorName === "NotFoundError") {
+        toast.error("No microphone found. Please connect a microphone and try again.");
+      } else if (errorName === "NotReadableError") {
+        toast.error("Microphone is in use by another application. Please close other apps using the mic.");
+      } else {
+        toast.error("Microphone access failed. Check your browser settings and try again.");
+      }
     }
-  }, [isAINoiseSuppressionEnabled, setupAnalyser]);
+  }, [isAINoiseSuppressionEnabled, setupAnalyser, sendSignal]);
 
   const toggleMute = useCallback(() => {
     if (isMuted) {
