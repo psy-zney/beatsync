@@ -461,7 +461,11 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       }
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === "suspended") {
-        await audioCtx.resume();
+        try {
+          await audioCtx.resume();
+        } catch (err) {
+          console.warn("AudioContext resume failed on auto-connect (expected if no user gesture yet):", err);
+        }
       }
 
       // Default to muted, no local stream on initial connect
