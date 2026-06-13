@@ -565,18 +565,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [disconnect]);
 
-  // Auto-connect to voice chat (receive only) when entering room (Bug #3 fix)
-  const hasAutoConnected = useRef(false);
-  useEffect(() => {
-    if (clientId && !hasAutoConnected.current) {
-      hasAutoConnected.current = true;
-      // Small timeout to ensure WebSocket setup completes
-      const timer = setTimeout(() => {
-        connect().catch((err) => console.error("Auto-connect voice chat failed:", err));
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps -- connect is stable via refs
+  // Auto-connect removed. User must manually join voice chat.
 
   const enableMic = useCallback(async () => {
     try {

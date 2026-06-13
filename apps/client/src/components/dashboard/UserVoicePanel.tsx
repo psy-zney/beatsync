@@ -4,7 +4,7 @@ import { useClientId } from "@/hooks/useClientId";
 import { cn } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
 import { useWebRTCStore } from "@/store/webrtc";
-import { Headphones, Mic, MicOff } from "lucide-react";
+import { Headphones, Mic, MicOff, PhoneOff } from "lucide-react";
 import React from "react";
 import { Button } from "../ui/button";
 import { Avatar, AvatarFallback } from "../ui/avatar";
@@ -16,7 +16,15 @@ export const UserVoicePanel = () => {
   const { clientId } = useClientId();
   const connectedClients = useGlobalStore((state) => state.connectedClients);
 
-  const { isConnected: isVoiceActive, isMuted, toggleMute, localStream, activeSpeakers } = useVoiceChat();
+  const {
+    isConnected: isVoiceActive,
+    isMuted,
+    toggleMute,
+    localStream,
+    activeSpeakers,
+    connect,
+    disconnect,
+  } = useVoiceChat();
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
   const toggleDeafen = useWebRTCStore((state) => state.toggleDeafen);
 
@@ -55,46 +63,72 @@ export const UserVoicePanel = () => {
 
         {/* Controls */}
         <div className="flex items-center flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-8 w-8 rounded-md hover:bg-white/10 text-neutral-400 hover:text-neutral-200 transition-colors",
-              isMuted && "text-red-400 hover:text-red-300"
-            )}
-            onClick={toggleMute}
-            title={isMuted ? "Unmute Mic" : "Mute Mic"}
-            disabled={!isVoiceActive}
-          >
-            {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </Button>
+          {!isVoiceActive ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md hover:bg-white/10 transition-colors group"
+              onClick={connect}
+              title="Join Voice Chat"
+            >
+              <img
+                src="/account.png"
+                alt="Join"
+                className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100 transition-opacity invert"
+              />
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 rounded-md hover:bg-white/10 text-neutral-400 hover:text-neutral-200 transition-colors",
+                  isMuted && "text-red-400 hover:text-red-300"
+                )}
+                onClick={toggleMute}
+                title={isMuted ? "Unmute Mic" : "Mute Mic"}
+              >
+                {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-8 w-8 rounded-md hover:bg-white/10 transition-colors flex items-center justify-center",
-              isDeafened
-                ? "text-red-400 hover:text-red-300"
-                : isHearingRemote
-                  ? "text-emerald-400 animate-pulse"
-                  : "text-neutral-400 hover:text-neutral-200"
-            )}
-            onClick={toggleDeafen}
-            title={isDeafened ? "Undeafen" : "Deafen"}
-            disabled={!isVoiceActive}
-          >
-            <div className={cn("transition-transform duration-200", isHearingRemote && !isDeafened && "scale-110")}>
-              {isDeafened ? (
-                <div className="relative">
-                  <Headphones className="h-4 w-4" />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-0.5 bg-current rotate-45" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 rounded-md hover:bg-white/10 transition-colors flex items-center justify-center",
+                  isDeafened
+                    ? "text-red-400 hover:text-red-300"
+                    : isHearingRemote
+                      ? "text-emerald-400 animate-pulse"
+                      : "text-neutral-400 hover:text-neutral-200"
+                )}
+                onClick={toggleDeafen}
+                title={isDeafened ? "Undeafen" : "Deafen"}
+              >
+                <div className={cn("transition-transform duration-200", isHearingRemote && !isDeafened && "scale-110")}>
+                  {isDeafened ? (
+                    <div className="relative">
+                      <Headphones className="h-4 w-4" />
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-0.5 bg-current rotate-45" />
+                    </div>
+                  ) : (
+                    <Headphones className="h-4 w-4" />
+                  )}
                 </div>
-              ) : (
-                <Headphones className="h-4 w-4" />
-              )}
-            </div>
-          </Button>
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-md hover:bg-white/10 text-neutral-400 hover:text-red-400 transition-colors"
+                onClick={disconnect}
+                title="Disconnect Voice"
+              >
+                <PhoneOff className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
