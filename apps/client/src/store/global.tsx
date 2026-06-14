@@ -242,6 +242,7 @@ interface GlobalState extends GlobalStateValues {
   // Audio source methods
   broadcastReorder: (urls: AudioSourceType[]) => void;
   savePlaylist: () => void;
+  clearPlaylist: () => void;
   setOnWebRTCSignal: (callback: ((msg: WebRTCSignalUnicastType) => void) | null) => void;
   handleLoadAudioSource: (event: LoadAudioSourceType) => void;
 }
@@ -1049,6 +1050,22 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       });
     },
 
+    clearPlaylist: () => {
+      const state = get();
+      const { socket } = getSocket(state);
+      const urls = state.audioSources.map((as) => as.source.url);
+
+      if (urls.length === 0) return;
+
+      sendWSRequest({
+        ws: socket,
+        request: {
+          type: ClientActionEnum.enum.DELETE_AUDIO_SOURCES,
+          urls,
+        },
+      });
+    },
+
     startSpatialAudio: () => {
       const state = get();
       const { socket } = getSocket(state);
@@ -1474,7 +1491,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     setMicVolume: (clientId, volume) => {
       set((state) => ({
-        micVolumes: { ...state.micVolumes, [clientId]: Math.max(0, Math.min(1, volume)) },
+        micVolumes: { ...state.micVolumes, [clientId]: Math.max(0, Math.min(2, volume)) },
       }));
     },
 

@@ -16,12 +16,13 @@ import { useVoiceChat } from "../room/VoiceChatProvider";
 interface VolumeControlProps {
   icon: React.ReactNode;
   label: string;
-  value: number; // 0 to 1
+  value: number; // 0 to maxValue
   onChange: (val: number) => void;
   disabled?: boolean;
+  maxValue?: number;
 }
 
-const VolumeControl = ({ icon, label, value, onChange, disabled = false }: VolumeControlProps) => {
+const VolumeControl = ({ icon, label, value, onChange, disabled = false, maxValue = 1 }: VolumeControlProps) => {
   const percent = Math.round(value * 100);
 
   return (
@@ -38,7 +39,7 @@ const VolumeControl = ({ icon, label, value, onChange, disabled = false }: Volum
         <Slider
           value={[percent]}
           min={0}
-          max={100}
+          max={maxValue * 100}
           step={1}
           onValueChange={(val) => onChange(val[0] / 100)}
           disabled={disabled}
@@ -303,6 +304,7 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
                           value={vol}
                           onChange={(val) => setMicVolume(client.clientId, val)}
                           disabled={!hasStream}
+                          maxValue={2}
                         />
                       </div>
                     );

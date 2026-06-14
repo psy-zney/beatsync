@@ -4,6 +4,7 @@ import { useCanMutate, useGlobalStore } from "@/store/global";
 import { AnimatePresence, motion } from "motion/react";
 import LoadDefaultTracksButton from "./LoadDefaultTracksButton";
 import SavePlaylistButton from "./SavePlaylistButton";
+import ClearPlaylistButton from "./ClearPlaylistButton";
 import { IS_DEMO_MODE } from "@/lib/demo";
 import {
   closestCenter,
@@ -56,7 +57,12 @@ export const Queue = ({ className, ...rest }: React.ComponentProps<"div">) => {
           <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider select-none">
             Queue ({audioSources.length})
           </h3>
-          {canMutate && !IS_DEMO_MODE && <SavePlaylistButton />}
+          {canMutate && !IS_DEMO_MODE && (
+            <div className="flex items-center gap-2">
+              <ClearPlaylistButton />
+              <SavePlaylistButton />
+            </div>
+          )}
         </div>
       )}
       <div className="space-y-1">
