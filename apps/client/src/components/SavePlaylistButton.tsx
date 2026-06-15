@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
-import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Save } from "lucide-react";
 
@@ -51,22 +50,17 @@ export const SavePlaylistButton = ({ className }: SavePlaylistButtonProps) => {
   }, []);
 
   return (
-    <motion.button
+    <button
       className={cn(
-        "relative inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-neutral-800/80 hover:bg-neutral-700/95 text-neutral-200 rounded-full",
-        "font-medium text-xs tracking-wide cursor-pointer border border-neutral-700/80 hover:border-neutral-600 transition-all duration-300",
-        "shadow-md hover:shadow-zinc-900/50",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
+        "text-gray-400 hover:text-white transition-colors cursor-pointer hover:scale-105 duration-200 disabled:opacity-50 disabled:cursor-not-allowed",
         className
       )}
-      whileHover={{ scale: 1.02, translateY: -0.5 }}
-      whileTap={{ scale: 0.98, translateY: 0 }}
       onClick={handleClick}
       disabled={isSaving || !socket}
+      title="Save Playlist"
     >
-      <Save className={cn("size-3.5", isSaving && "animate-bounce text-primary-400")} />
-      <span>{isSaving ? "Saving..." : "Save Playlist"}</span>
-    </motion.button>
+      <Save className={cn("size-4", isSaving && "animate-bounce text-primary-400")} />
+    </button>
   );
 };
 

@@ -364,13 +364,26 @@ const getWaitTimeSeconds = (state: GlobalState, targetServerTime: number) => {
 const resolveAudioUrl = (url: string): string => (url.startsWith("/") ? `${getApiUrl()}${url}` : url);
 
 const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: number, total: number) => void }) => {
-  const response = await fetch(resolveAudioUrl(data.url), {
-    headers: {
-      "ngrok-skip-browser-warning": "69420",
-      "bypass-tunnel-reminder": "true",
-      Range: "bytes=0-", // Forces YouTube to bypass 1x streaming throttle
-    },
-  });
+  const fetchAudio = async (urlToFetch: string) => {
+    return await fetch(resolveAudioUrl(urlToFetch), {
+      headers: {
+        "ngrok-skip-browser-warning": "69420",
+        "bypass-tunnel-reminder": "true",
+        Range: "bytes=0-", // Forces YouTube to bypass 1x streaming throttle
+      },
+    });
+  };
+
+  let response = await fetchAudio(data.url);
+
+  // Fallback for expired or deleted YouTube cache files
+  if (!response.ok && response.status === 404 && data.url.includes("/youtube-cache/")) {
+    const match = data.url.match(/\/youtube-cache\/([^.]+)\./);
+    if (match && match[1]) {
+      console.warn(`YouTube cache file missing for ${match[1]}, falling back to proxy...`);
+      response = await fetchAudio(`/youtube/proxy?videoId=${match[1]}`);
+    }
+  }
 
   if (!response.ok) {
     const errText = await response.text().catch(() => "");

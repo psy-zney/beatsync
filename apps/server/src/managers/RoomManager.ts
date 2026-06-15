@@ -1,6 +1,13 @@
 import { calculateScheduleTimeMs, DEFAULT_CLIENT_RTT_MS } from "@/config";
 import { IS_DEMO_MODE } from "@/demo";
-import { uploadJSON, downloadJSON, listObjectsWithPrefix, deleteObject, getPublicUrlForKey } from "@/lib/r2";
+import {
+  uploadJSON,
+  downloadJSON,
+  listObjectsWithPrefix,
+  deleteObject,
+  getPublicUrlForKey,
+  validateAudioFileExists,
+} from "@/lib/r2";
 import { ChatManager } from "@/managers/ChatManager";
 import { debounce } from "@/utils/debounce";
 import { sendBroadcast, sendUnicast } from "@/utils/responses";
@@ -1026,9 +1033,18 @@ export class RoomManager {
     try {
       const savedSources = await downloadJSON<AudioSourceType[]>(key);
       if (savedSources && Array.isArray(savedSources) && savedSources.length > 0) {
-        console.log(`Loaded ${savedSources.length} saved audio sources for room ${this.roomId} from R2`);
-        this.audioSources = savedSources;
-        this.isPlaylistDirty = false;
+        // Validate all audio sources concurrently
+        const validationPromises = savedSources.map((source) => validateAudioFileExists(source.url));
+        const validationResults = await Promise.all(validationPromises);
+
+        // Filter out audio sources that are not valid
+        const validSources = savedSources.filter((_, index) => validationResults[index]);
+
+        console.log(
+          `Loaded ${validSources.length} valid audio sources (out of ${savedSources.length} saved) for room ${this.roomId} from R2`
+        );
+        this.audioSources = validSources;
+        this.isPlaylistDirty = validSources.length !== savedSources.length;
 
         // If clients exist, broadcast the restored playlist
         if (server && this.getClients().length > 0) {

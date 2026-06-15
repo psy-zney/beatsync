@@ -139,7 +139,7 @@ function isManagedR2Url(audioUrl: string): boolean {
     return (
       publicUrl.origin === candidate.origin &&
       candidate.pathname.startsWith("/") &&
-      candidate.pathname.includes("/room-")
+      (candidate.pathname.includes("/room-") || candidate.pathname.includes("/youtube-cache/"))
     );
   } catch {
     return false;
