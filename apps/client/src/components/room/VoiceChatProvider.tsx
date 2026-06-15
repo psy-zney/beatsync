@@ -375,6 +375,15 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
       let pc = connectionsRef.current.get(sourceClientId);
 
+      if (signal.requestOffer) {
+        if (clientId && clientId < sourceClientId) {
+          // The other peer is asking us to initiate a fresh connection (they just joined voice chat)
+          cleanupPeer(sourceClientId);
+          createPeerConnection(sourceClientId, true);
+        }
+        return;
+      }
+
       if (signal.description) {
         if (!pc) {
           // We received an offer from someone else, create a responder PC
@@ -414,7 +423,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     },
-    [createPeerConnection, sendSignal, flushPendingCandidates]
+    [clientId, createPeerConnection, sendSignal, flushPendingCandidates, cleanupPeer]
   );
 
   // Register signal handler
@@ -487,6 +496,19 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         // Only initiate if our ID is smaller
         if (clientId && clientId < peerId) {
           createPeerConnectionRef.current(peerId, true);
+        } else if (clientId && clientId > peerId) {
+          // Tell the other peer to initiate a connection with us
+          const ws = useGlobalStore.getState().socket;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            sendWSRequest({
+              ws,
+              request: {
+                type: ClientActionEnum.enum.WEBRTC_SIGNAL,
+                targetClientId: peerId,
+                signal: { requestOffer: true },
+              },
+            });
+          }
         }
       });
     } catch (e) {
