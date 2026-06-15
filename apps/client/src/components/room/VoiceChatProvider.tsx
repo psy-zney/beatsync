@@ -144,7 +144,10 @@ const RemoteAudio = ({
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = isDeafened ? 0 : volume;
+      // HTMLAudioElement volume must be between 0.0 and 1.0
+      // Clamping prevents DOMException: IndexSizeError if volume > 1
+      const safeVolume = Math.min(1, Math.max(0, volume));
+      audioRef.current.volume = isDeafened ? 0 : safeVolume;
     }
   }, [isDeafened, volume]);
 
