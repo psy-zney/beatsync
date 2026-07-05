@@ -27,8 +27,8 @@ function resolve(): { apiUrl: string; wsUrl: string } {
 
     if (isLocalIP || isLocalHost(currentHostname)) {
       cached = {
-        apiUrl: `http://${currentHostname}:8080`,
-        wsUrl: `ws://${currentHostname}:8080/ws`,
+        apiUrl: `http://${currentHostname}:1001`,
+        wsUrl: `ws://${currentHostname}:1001/ws`,
       };
       return cached;
     }
