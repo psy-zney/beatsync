@@ -27,7 +27,7 @@ ok "PM2 restarted"
 sleep 2
 
 warn "Health check"
-if curl -sf --max-time 5 http://localhost:8080/ > /dev/null; then
+if curl -sf --max-time 5 http://localhost:1001/ > /dev/null; then
   ok "Server is responding"
 else
   fail "Server is not responding"

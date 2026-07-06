@@ -31,20 +31,20 @@ Run the following commands to start the server and client:
 
 ```sh
 bun install          # installs once for all workspaces
-bun dev              # starts both client (:3000) and server (:8080)
+bun dev              # starts both client (:3000) and server (:1001)
 ```
 
 Local env defaults:
 
 ```sh
 # apps/client/.env
-NEXT_PUBLIC_API_URL=http://localhost:8080
-NEXT_PUBLIC_WS_URL=ws://localhost:8080/ws
+NEXT_PUBLIC_API_URL=http://localhost:1001
+NEXT_PUBLIC_WS_URL=ws://localhost:1001/ws
 NEXT_PUBLIC_DEMO_MODE=0
 
 # apps/server/.env
 HOST=0.0.0.0
-PORT=8080
+PORT=1001
 PROVIDER_URL=
 CREATOR_SECRET=
 ```
@@ -105,7 +105,7 @@ bun run dev
 The backend listens on:
 
 - `HOST=0.0.0.0`
-- `PORT=8080` by default
+- `PORT=1001` by default
 
 ### 3. Temporary backend with ngrok
 
@@ -121,7 +121,7 @@ bun run dev
 Expose it:
 
 ```sh
-ngrok http 8080
+ngrok http 1001
 ```
 
 Then set Vercel env to the ngrok URL:
@@ -152,11 +152,11 @@ cd apps/client && bun run dev
 Open:
 
 - Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8080`
+- Backend: `http://localhost:1001`
 
 ### 5. Troubleshooting
 
-- `502 /ws` on ngrok usually means nothing is listening on port `8080`
+- `502 /ws` on ngrok usually means nothing is listening on port `1001`
 - `WebSocket upgrade failed` usually means the client is hitting the wrong backend URL
 - If frontend is on HTTPS, WebSocket must be `wss://`, not `ws://`
 - Vercel env changes require a redeploy

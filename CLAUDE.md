@@ -16,7 +16,7 @@ Beatsync is a high-precision web audio player for multi-device synchronized play
 bun install              # Install all dependencies (run from root)
 bun dev                  # Start both client and server (Turborepo)
 bun client               # Client only (port 3000)
-bun server               # Server only (port 8080)
+bun server               # Server only (port 1001)
 bun build                # Build all packages
 
 # Server-specific (run from apps/server/)
@@ -99,8 +99,8 @@ Grid-based positioning system where clients are placed on a grid. A "listening s
 
 `apps/client/.env`:
 ```
-NEXT_PUBLIC_API_URL=http://localhost:8080
-NEXT_PUBLIC_WS_URL=ws://localhost:8080/ws
+NEXT_PUBLIC_API_URL=http://localhost:1001
+NEXT_PUBLIC_WS_URL=ws://localhost:1001/ws
 ```
 
 `apps/server/.env`:
@@ -114,7 +114,7 @@ S3_SECRET_ACCESS_KEY=
 
 ## Deployment
 
-- **Docker**: Multi-stage build with `oven/bun:1`. Exposes port 8080. Entry: `bun start`.
+- **Docker**: Multi-stage build with `oven/bun:1`. Exposes port 1001. Entry: `bun start`.
 - **PM2**: Config in `pm2.config.js`. Process name: `beatsync-server`.
 - Server has graceful shutdown (SIGTERM/SIGINT) that backs up state to R2 before exit.
 
