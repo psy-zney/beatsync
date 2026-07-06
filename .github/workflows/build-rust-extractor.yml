@@ -1,0 +1,71 @@
+name: Build & Release Rust Extractor
+
+on:
+  release:
+    types: [created, published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional Tag to attach release binaries to (e.g. v1.0.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: yt-rust-extractor.exe
+            asset_name: yt-rust-extractor-windows-x86_64.exe
+          - os: ubuntu-latest
+            artifact_name: yt-rust-extractor
+            asset_name: yt-rust-extractor-linux-x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/server/yt-rust-extractor -> target
+
+      - name: Build Rust binary
+        run: cargo build --release --manifest-path apps/server/yt-rust-extractor/Cargo.toml
+
+      - name: Prepare binary for distribution
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp apps/server/yt-rust-extractor/target/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
+          cp apps/server/yt-rust-extractor/target/release/${{ matrix.artifact_name }} dist/${{ matrix.artifact_name }}
+
+      - name: Upload as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractor-${{ matrix.os }}
+          path: dist/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+      - name: Upload to GitHub Release (on Release Event)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset_name }}
+
+      - name: Upload to GitHub Release (on Manual Trigger with Tag)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: dist/${{ matrix.asset_name }}

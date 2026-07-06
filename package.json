@@ -22,7 +22,8 @@
     "demo:log": "turbo run demo:log",
     "dev:log": "turbo run dev:log",
     "start:log": "turbo run start:log",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "postinstall": "bun run --cwd apps/server scripts/fetch-extractor.ts"
   },
   "workspaces": [
     "apps/*",

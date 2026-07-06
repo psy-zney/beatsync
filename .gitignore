@@ -21,3 +21,12 @@ docs/
 # Dev Context & Scripts
 beatsync_dev_notes.md
 test-youtube-fetch.ts
+
+# Build artifacts & binaries
+dist/
+target/
+*.exe
+*.pdb
+*.dll
+*.rlib
+*.rmeta
