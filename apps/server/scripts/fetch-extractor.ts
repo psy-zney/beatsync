@@ -4,7 +4,36 @@ import { join } from "path";
 const REPO_OWNER = "psy-zney";
 const REPO_NAME = "beatsync";
 
+async function ensureYtDlpBinary() {
+  const isWindows = process.platform === "win32";
+  const ytdlpName = isWindows ? "yt-dlp.exe" : "yt-dlp";
+  const binDir = join(__dirname, "..", "node_modules", "youtube-dl-exec", "bin");
+  const ytdlpPath = join(binDir, ytdlpName);
+
+  if (existsSync(ytdlpPath)) {
+    console.log(`✅ [setup] yt-dlp binary already exists at:\n   ${ytdlpPath}`);
+    return;
+  }
+
+  console.log("🔍 [setup] yt-dlp binary not found in youtube-dl-exec. Attempting to install...");
+  const postinstallScript = join(__dirname, "..", "node_modules", "youtube-dl-exec", "scripts", "postinstall.js");
+  if (existsSync(postinstallScript)) {
+    const proc = Bun.spawnSync(["node", postinstallScript], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (proc.exitCode === 0 && existsSync(ytdlpPath)) {
+      console.log(`🎉 [setup] Successfully installed yt-dlp binary at:\n   ${ytdlpPath}`);
+      return;
+    }
+  }
+
+  console.log("⚠️ [setup] Failed to automatically install yt-dlp binary.");
+}
+
 async function run() {
+  await ensureYtDlpBinary();
+
   const isWindows = process.platform === "win32";
   const exeName = isWindows ? "yt-rust-extractor.exe" : "yt-rust-extractor";
   const assetName = isWindows

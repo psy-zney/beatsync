@@ -150,6 +150,23 @@ export class RoomManager {
     }
   }
 
+  private playlistSyncTimeout?: Timer;
+
+  private markPlaylistDirty(): void {
+    this.isPlaylistDirty = true;
+    if (IS_DEMO_MODE) return;
+    if (this.playlistSyncTimeout) {
+      clearTimeout(this.playlistSyncTimeout);
+    }
+    this.playlistSyncTimeout = setTimeout(() => {
+      if (this.isPlaylistDirty) {
+        this.savePlaylist()
+          .then(() => import("@/managers/BackupManager").then(({ BackupManager }) => BackupManager.backupState()))
+          .catch((err) => console.error(`[Sync] Error syncing state for room ${this.roomId}:`, err));
+      }
+    }, 1500);
+  }
+
   /**
    * Get the room ID
    */
@@ -403,7 +420,7 @@ export class RoomManager {
    */
   addAudioSource(source: AudioSourceType): AudioSourceType[] {
     this.audioSources.push(source);
-    this.isPlaylistDirty = true;
+    this.markPlaylistDirty();
     return this.audioSources;
   }
 
@@ -414,7 +431,7 @@ export class RoomManager {
     }
 
     this.audioSources[index] = newSource;
-    this.isPlaylistDirty = true;
+    this.markPlaylistDirty();
 
     if (this.playbackState.audioSource === oldUrl) {
       this.playbackState = {
@@ -463,7 +480,7 @@ export class RoomManager {
     const after = this.audioSources.length;
     if (before !== after) {
       console.log(`Removed ${before - after} sources from room ${this.roomId}: `);
-      this.isPlaylistDirty = true;
+      this.markPlaylistDirty();
     }
     return {
       updated: this.audioSources,
@@ -1026,7 +1043,7 @@ export class RoomManager {
    * Load saved playlist from R2 if it exists
    */
   async loadPlaylistFromR2(server?: BunServer): Promise<void> {
-    if (IS_DEMO_MODE || this.isPlaylistLoaded) return;
+    if (IS_DEMO_MODE || this.isPlaylistLoaded || this.audioSources.length > 0) return;
     this.isPlaylistLoaded = true; // Mark loaded early to prevent multiple calls
 
     const key = `room-${this.roomId}/playlist.json`;
@@ -1043,8 +1060,31 @@ export class RoomManager {
         console.log(
           `Loaded ${validSources.length} valid audio sources (out of ${savedSources.length} saved) for room ${this.roomId} from R2`
         );
+
+        const { needsYoutubeTitleHeal, getYoutubeMetadata } = await import("@/lib/youtube");
+        let healed = false;
+        await Promise.all(
+          validSources.map(async (source) => {
+            if (needsYoutubeTitleHeal(source)) {
+              const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
+              if (match?.[1]) {
+                try {
+                  const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
+                  source.title = title;
+                  healed = true;
+                } catch {
+                  /* ignore */
+                }
+              }
+            }
+          })
+        );
+
         this.audioSources = validSources;
-        this.isPlaylistDirty = validSources.length !== savedSources.length;
+        this.isPlaylistDirty = validSources.length !== savedSources.length || healed;
+        if (this.isPlaylistDirty) {
+          this.markPlaylistDirty();
+        }
 
         // If clients exist, broadcast the restored playlist
         if (server && this.getClients().length > 0) {
@@ -1221,6 +1261,6 @@ export class RoomManager {
     }
 
     this.audioSources = newOrder;
-    this.isPlaylistDirty = true;
+    this.markPlaylistDirty();
   }
 }

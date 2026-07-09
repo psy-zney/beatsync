@@ -14,6 +14,7 @@ import { globalManager } from "@/managers/GlobalManager";
 import type { RoomBackupType, ServerBackupType } from "@/managers/RoomManager";
 import { ServerBackupSchema } from "@/managers/RoomManager";
 import type { AudioSourceType } from "@beatsync/shared";
+import { needsYoutubeTitleHeal } from "@/lib/youtube";
 
 interface RoomRestoreResult {
   room: {
@@ -23,6 +24,7 @@ interface RoomRestoreResult {
     globalVolume: number;
   };
   success: boolean;
+  healedCount?: number;
   error?: string;
 }
 
@@ -46,22 +48,27 @@ export class BackupManager {
       // Filter out audio sources that are not valid
       const validAudioSources = roomData.audioSources.filter((_, index) => validationResults[index]);
 
-      // Heal missing titles for YouTube cached tracks
-      for (const source of validAudioSources) {
-        if (!source.title && source.url.includes("/youtube-cache/")) {
+      // Heal missing or invalid titles for YouTube cached tracks concurrently
+      let healedCount = 0;
+      const healPromises = validAudioSources.map(async (source) => {
+        if (needsYoutubeTitleHeal(source)) {
           const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
           if (match?.[1]) {
             try {
-              console.log(`[Heal] Fetching missing title for YouTube track ${match[1]}...`);
+              console.log(
+                `[Heal] Fetching missing/invalid title "${source.title ?? ""}" for YouTube track ${match[1]}...`
+              );
               const { getYoutubeMetadata } = await import("@/lib/youtube");
               const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
               source.title = title;
+              healedCount++;
             } catch (err) {
               console.error(`[Heal] Failed to fetch title for ${match[1]}:`, err);
             }
           }
         }
-      }
+      });
+      await Promise.all(healPromises);
 
       // Restore audio sources
       room.setAudioSources(validAudioSources);
@@ -93,6 +100,7 @@ export class BackupManager {
           globalVolume: roomData.globalVolume,
         },
         success: true,
+        healedCount,
       };
     } catch (error) {
       console.error(`❌ Failed to restore room ${roomId}:`, error);
@@ -245,6 +253,12 @@ export class BackupManager {
         failed.forEach((failure) => {
           console.log(`     ❌ ${failure.room.id}: ${failure.error}`);
         });
+      }
+
+      const totalHealed = successful.reduce((sum, res) => sum + (res.healedCount ?? 0), 0);
+      if (totalHealed > 0) {
+        console.log(`💾 Persisting ${totalHealed} healed track title(s) to state backup...`);
+        this.backupState().catch((err) => console.error("Failed to persist healed titles to backup:", err));
       }
 
       // Clean up orphaned rooms after state restore
