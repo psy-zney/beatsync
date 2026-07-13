@@ -105,6 +105,8 @@ const RemoteAudio = ({
   volume: number;
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const hasWarnedPlaybackBlockedRef = useRef(false);
 
   const playRemoteAudio = useCallback(() => {
@@ -117,6 +119,9 @@ const RemoteAudio = ({
     playPromise
       .then(() => {
         hasWarnedPlaybackBlockedRef.current = false;
+        if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+          audioContextRef.current.resume().catch(() => {});
+        }
       })
       .catch((err) => {
         if (!hasWarnedPlaybackBlockedRef.current) {
@@ -127,10 +132,56 @@ const RemoteAudio = ({
   }, [peerId]);
 
   useEffect(() => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !stream) return;
     audioRef.current.srcObject = stream;
     playRemoteAudio();
-  }, [stream, playRemoteAudio]);
+
+    // Use Web Audio API GainNode + DynamicsCompressorNode to boost call volume beyond 1.0
+    // Voice streams are naturally ~12-18dB quieter than normalized studio music.
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      audioContextRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      // Dynamic compression evens out speech levels and prevents distortion when boosted
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 4;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      const gainNode = audioCtx.createGain();
+      gainNodeRef.current = gainNode;
+
+      // Base boost of 2.5x (~+8dB) so voice is loud and clear over music
+      gainNode.gain.value = isDeafened ? 0 : Math.max(0, volume) * 2.5;
+
+      source.connect(compressor);
+      compressor.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      // Mute HTMLAudioElement so it doesn't echo while Web Audio plays,
+      // keeping it playing for browser session continuity
+      audioRef.current.muted = true;
+    } catch (e) {
+      console.warn(`Fallback to HTMLAudioElement for ${peerId}`, e);
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+      }
+    }
+
+    return () => {
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      gainNodeRef.current = null;
+    };
+  }, [stream, peerId, playRemoteAudio]);
 
   useEffect(() => {
     document.addEventListener("pointerdown", playRemoteAudio);
@@ -143,9 +194,10 @@ const RemoteAudio = ({
   }, [playRemoteAudio]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      // HTMLAudioElement volume must be between 0.0 and 1.0
-      // Clamping prevents DOMException: IndexSizeError if volume > 1
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = isDeafened ? 0 : Math.max(0, volume) * 2.5;
+    }
+    if (audioRef.current && !gainNodeRef.current) {
       const safeVolume = Math.min(1, Math.max(0, volume));
       audioRef.current.volume = isDeafened ? 0 : safeVolume;
     }
@@ -280,7 +332,28 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const socketRef = useRef(socket);
   useEffect(() => {
     socketRef.current = socket;
-  }, [socket]);
+    if (socket && isConnectedRef.current && clientId) {
+      const remoteClientIds = useGlobalStore
+        .getState()
+        .connectedClients.map((c) => c.clientId)
+        .filter((id) => id !== clientId);
+
+      remoteClientIds.forEach((peerId) => {
+        if (clientId < peerId && !connectionsRef.current.has(peerId)) {
+          createPeerConnectionRef.current(peerId, true);
+        } else if (socket.readyState === WebSocket.OPEN) {
+          sendWSRequest({
+            ws: socket,
+            request: {
+              type: ClientActionEnum.enum.WEBRTC_SIGNAL,
+              targetClientId: peerId,
+              signal: { requestOffer: true },
+            },
+          });
+        }
+      });
+    }
+  }, [socket, clientId]);
 
   const sendSignal = useCallback(
     (targetClientId: string, signal: unknown) => {
@@ -338,8 +411,18 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       };
 
       pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+        if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
           cleanupPeer(peerId);
+          // Automatically re-attempt connection if we are the initiator and voice chat is still active
+          if (isConnectedRef.current && clientId && clientId < peerId) {
+            setTimeout(() => {
+              if (isConnectedRef.current && !connectionsRef.current.has(peerId)) {
+                createPeerConnection(peerId, true);
+              }
+            }, 1500);
+          }
+        } else if (pc.iceConnectionState === "disconnected") {
+          console.warn(`ICE connection temporarily disconnected for ${peerId} (waiting for recovery)`);
         }
       };
 

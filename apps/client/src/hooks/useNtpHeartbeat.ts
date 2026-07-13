@@ -39,12 +39,9 @@ export const useNtpHeartbeat = ({ onConnectionStale }: UseNtpHeartbeatProps) => 
 
         if (!recentlyHeardFromServer) {
           consecutiveTimeoutsRef.current += 1;
-
-          if (consecutiveTimeoutsRef.current >= 2) {
-            console.error("NTP heartbeat timed out twice without any inbound server message");
-            onConnectionStale?.();
-            return;
-          }
+          console.warn(
+            `NTP heartbeat response delayed (${consecutiveTimeoutsRef.current} times), maintaining open connection...`
+          );
         } else {
           consecutiveTimeoutsRef.current = 0;
         }

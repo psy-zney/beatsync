@@ -22,6 +22,7 @@ export function mockR2(overrides: Record<string, ReturnType<typeof mock>> = {}):
       /* noop */
     }),
     validateAudioFileExists: mock(() => true),
+    listObjectsWithPrefix: mock(() => Promise.resolve([])),
     cleanupOrphanedRooms: mock(() => ({
       orphanedRooms: [],
       totalRooms: 0,

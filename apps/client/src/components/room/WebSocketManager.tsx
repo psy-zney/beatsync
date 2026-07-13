@@ -119,6 +119,11 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
       // Start NTP heartbeat
       startHeartbeat();
 
+      // Request notification permission for chat alerts outside browser
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+
       // Skip IP geolocation in demo mode (no internet)
       if (!IS_DEMO_MODE) {
         try {
@@ -189,6 +194,32 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         } else if (event.type === "CHAT_UPDATE") {
           // Handle chat messages
           setMessages(event.messages, event.isFullSync, event.newestId);
+          if (!event.isFullSync && event.messages && event.messages.length > 0) {
+            event.messages.forEach((msg) => {
+              if (msg.clientId !== clientId) {
+                // Play notification sound
+                new Audio("/anime-ahh.mp3").play().catch(() => {});
+
+                // Show desktop notification even when user is outside the browser window
+                if (typeof window !== "undefined" && "Notification" in window) {
+                  if (Notification.permission === "granted" && (document.hidden || !document.hasFocus())) {
+                    try {
+                      const notif = new Notification(`💬 ${msg.username}`, {
+                        body: msg.text,
+                        icon: "/account.png",
+                      });
+                      notif.onclick = () => {
+                        window.focus();
+                        notif.close();
+                      };
+                    } catch (e) {
+                      console.warn("Desktop notification error:", e);
+                    }
+                  }
+                }
+              }
+            });
+          }
         } else if (event.type === "LOAD_AUDIO_SOURCE") {
           handleLoadAudioSource(event);
         }

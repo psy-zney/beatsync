@@ -304,7 +304,7 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
                           value={vol}
                           onChange={(val) => setMicVolume(client.clientId, val)}
                           disabled={!hasStream}
-                          maxValue={1}
+                          maxValue={3}
                         />
                       </div>
                     );

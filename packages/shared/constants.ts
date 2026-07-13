@@ -8,8 +8,8 @@ export const NTP_CONSTANTS = {
   INITIAL_INTERVAL_MS: 50,
   // Steady state interval after initial measurements
   STEADY_STATE_INTERVAL_MS: STEADY_STATE_INTERVAL_MS,
-  // Timeout before considering connection stale
-  RESPONSE_TIMEOUT_MS: 1.5 * STEADY_STATE_INTERVAL_MS,
+  // Timeout before considering connection stale (60 seconds to prevent any timeout disconnects)
+  RESPONSE_TIMEOUT_MS: 24 * STEADY_STATE_INTERVAL_MS,
   // Maximum number of NTP measurements to collect initially
   MAX_MEASUREMENTS: 16,
   // Coded probes (Huygens) — inter-departure gap between probe pairs
