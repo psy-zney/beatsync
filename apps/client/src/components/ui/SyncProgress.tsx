@@ -128,17 +128,17 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            Backend bị giới hạn hoặc chưa được bật
+            Server Backend Chưa Được Bật
           </motion.h2>
 
           <motion.p
-            className="text-purple-200/70 mb-6 text-center text-xs sm:text-sm leading-relaxed max-w-sm"
+            className="text-purple-200/80 mb-6 text-center text-xs sm:text-sm leading-relaxed max-w-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.25 }}
           >
-            Không thể kết nối đến máy chủ Backend (Port 1001 / WebSocket). Server có thể đang dừng, giới hạn kết nối
-            hoặc chưa khởi chạy.
+            Đây là web nghe nhạc đồng bộ chạy Backend local trên máy cá nhân. Server chỉ được bật giới hạn khi nghe nhạc
+            cùng bạn bè — hãy liên hệ với Admin / Chủ phòng để bật Server nhé!
           </motion.p>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs z-10">
@@ -175,12 +175,12 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           </div>
 
           <motion.p
-            className="text-neutral-500 mt-5 text-center text-[11px]"
+            className="text-purple-300/60 mt-5 text-center text-[11px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
-            Server nghe nhạc trên máy cá nhân/Render có thể không hoạt động 24/7.
+            Liên hệ Host để mở Server local khi bạn sẵn sàng nghe nhạc cùng nhau!
           </motion.p>
         </motion.div>
       </OuterModal>
