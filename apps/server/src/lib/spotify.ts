@@ -102,7 +102,7 @@ async function getSpotifyApiToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-      console.warn(`Spotify Token API failed (HTTP ${res.status}). Will use public scraper.`);
+      console.warn(`[Tier 1] Spotify Token API returned HTTP ${res.status}. Falling back to Tier 2.`);
       return null;
     }
     const data = (await res.json()) as { access_token?: string; expires_in?: number };
@@ -115,14 +115,16 @@ async function getSpotifyApiToken(): Promise<string | null> {
     }
     return null;
   } catch (err) {
-    console.warn("Spotify token request failed:", err);
+    console.warn("[Tier 1] Spotify Token request failed:", err);
     return null;
   }
 }
 
 /**
- * Fetches Spotify metadata via official API if credentials exist.
- * If quota is hit, token fails, or HTTP error occurs, seamlessly falls back to public scraper.
+ * Fetches Spotify metadata using a 3-Tier Fallback System:
+ * - Tier 1: Official Spotify API (Client Credentials)
+ * - Tier 2: Public Embed Scraper (__NEXT_DATA__ JSON payload)
+ * - Tier 3: Public Spotify oEmbed API
  */
 export async function fetchSpotifyTracks(
   spotifyUrl: string
@@ -132,7 +134,9 @@ export async function fetchSpotifyTracks(
 
   const { type, id } = parsed;
 
-  // 1. Try Official Spotify API if env token is available
+  // ─────────────────────────────────────────────────────────
+  // TIER 1: Official Spotify Web API (Client Credentials)
+  // ─────────────────────────────────────────────────────────
   const token = await getSpotifyApiToken();
   if (token) {
     try {
@@ -156,7 +160,7 @@ export async function fetchSpotifyTracks(
             ],
           };
         }
-        console.warn(`Official Spotify API returned HTTP ${res.status}. Falling back to public non-key scraper.`);
+        console.warn(`[Tier 1] Spotify API returned HTTP ${res.status}. Falling back to Tier 2.`);
       } else if (type === "playlist") {
         const res = await fetch(
           `https://api.spotify.com/v1/playlists/${id}?fields=name,images,tracks.items(track(name,artists,album,duration_ms))`,
@@ -182,7 +186,7 @@ export async function fetchSpotifyTracks(
             tracks,
           };
         }
-        console.warn(`Official Spotify API returned HTTP ${res.status}. Falling back to public non-key scraper.`);
+        console.warn(`[Tier 1] Spotify API returned HTTP ${res.status}. Falling back to Tier 2.`);
       } else if (type === "album") {
         const res = await fetch(`https://api.spotify.com/v1/albums/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -206,80 +210,82 @@ export async function fetchSpotifyTracks(
             tracks,
           };
         }
-        console.warn(`Official Spotify API returned HTTP ${res.status}. Falling back to public non-key scraper.`);
+        console.warn(`[Tier 1] Spotify API returned HTTP ${res.status}. Falling back to Tier 2.`);
       }
     } catch (err) {
-      console.warn("Official Spotify API fetch error, seamlessly falling back to public scraper:", err);
+      console.warn("[Tier 1] Spotify API fetch error, falling back to Tier 2:", err);
     }
   }
 
-  // 2. Fallback: Public Embed Scraper (No API Key Required)
-  console.log(`Using Public Non-Key Scraper for Spotify URL (${type}:${id})...`);
-  const embedUrl = `https://open.spotify.com/embed/${type}/${id}`;
-  const response = await fetch(embedUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    },
-  });
+  // ─────────────────────────────────────────────────────────
+  // TIER 2: Public Embed Scraper (__NEXT_DATA__ JSON Payload)
+  // ─────────────────────────────────────────────────────────
+  try {
+    console.log(`[Tier 2] Trying Public Embed Scraper for Spotify URL (${type}:${id})...`);
+    const embedUrl = `https://open.spotify.com/embed/${type}/${id}`;
+    const response = await fetch(embedUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Spotify metadata (HTTP ${response.status})`);
-  }
+    if (response.ok) {
+      const html = await response.text();
+      const match = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s.exec(html);
+      if (match && match[1]) {
+        const nextData = JSON.parse(match[1]) as {
+          props?: { pageProps?: { state?: { data?: { entity?: Record<string, unknown> } } } };
+        };
+        const entity = nextData.props?.pageProps?.state?.data?.entity;
+        if (entity) {
+          const title = String(entity.name ?? entity.title ?? "Spotify Import");
+          const coverUrl =
+            (entity.images as SpotifyApiImage[])?.[0]?.url ??
+            (entity.coverArt as { sources?: SpotifyApiImage[] })?.sources?.[0]?.url;
 
-  const html = await response.text();
+          let rawTracks: Record<string, unknown>[] = [];
+          if (type === "track") {
+            rawTracks = [entity];
+          } else if (Array.isArray(entity.trackList)) {
+            rawTracks = entity.trackList as Record<string, unknown>[];
+          } else if ((entity.tracks as { items?: Record<string, unknown>[] })?.items) {
+            rawTracks = (entity.tracks as { items: Record<string, unknown>[] }).items.map(
+              (i) => (i.track as Record<string, unknown>) ?? i
+            );
+          }
 
-  // Try extracting __NEXT_DATA__ script payload
-  const match = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s.exec(html);
-  if (match && match[1]) {
-    try {
-      const nextData = JSON.parse(match[1]) as {
-        props?: { pageProps?: { state?: { data?: { entity?: Record<string, unknown> } } } };
-      };
-      const entity = nextData.props?.pageProps?.state?.data?.entity;
-      if (entity) {
-        const title = String(entity.name ?? entity.title ?? "Spotify Import");
-        const coverUrl =
-          (entity.images as SpotifyApiImage[])?.[0]?.url ??
-          (entity.coverArt as { sources?: SpotifyApiImage[] })?.sources?.[0]?.url;
+          const tracks: SpotifyTrackInfo[] = rawTracks.map((t) => {
+            const tName = String(t.name ?? t.title ?? "Unknown Track");
+            const artistsArr =
+              (t.artists as unknown[]) ?? (typeof t.subtitle === "string" ? t.subtitle.split(",") : []);
+            const artistName = Array.isArray(artistsArr)
+              ? artistsArr.map((a) => (typeof a === "string" ? a : (a as SpotifyApiArtist).name)).join(", ")
+              : String(artistsArr);
 
-        let rawTracks: Record<string, unknown>[] = [];
-        if (type === "track") {
-          rawTracks = [entity];
-        } else if (Array.isArray(entity.trackList)) {
-          rawTracks = entity.trackList as Record<string, unknown>[];
-        } else if ((entity.tracks as { items?: Record<string, unknown>[] })?.items) {
-          rawTracks = (entity.tracks as { items: Record<string, unknown>[] }).items.map(
-            (i) => (i.track as Record<string, unknown>) ?? i
-          );
-        }
+            return {
+              title: tName,
+              artist: artistName || "Unknown Artist",
+              album: (t.album as SpotifyApiAlbum)?.name,
+              coverUrl: (t.album as SpotifyApiAlbum)?.images?.[0]?.url ?? coverUrl,
+              durationMs: Number(t.durationMs ?? t.duration_ms ?? 0),
+            };
+          });
 
-        const tracks: SpotifyTrackInfo[] = rawTracks.map((t) => {
-          const tName = String(t.name ?? t.title ?? "Unknown Track");
-          const artistsArr = (t.artists as unknown[]) ?? (typeof t.subtitle === "string" ? t.subtitle.split(",") : []);
-          const artistName = Array.isArray(artistsArr)
-            ? artistsArr.map((a) => (typeof a === "string" ? a : (a as SpotifyApiArtist).name)).join(", ")
-            : String(artistsArr);
-
-          return {
-            title: tName,
-            artist: artistName || "Unknown Artist",
-            album: (t.album as SpotifyApiAlbum)?.name,
-            coverUrl: (t.album as SpotifyApiAlbum)?.images?.[0]?.url ?? coverUrl,
-            durationMs: Number(t.durationMs ?? t.duration_ms ?? 0),
-          };
-        });
-
-        if (tracks.length > 0) {
-          return { title, coverUrl, tracks };
+          if (tracks.length > 0) {
+            return { title, coverUrl, tracks };
+          }
         }
       }
-    } catch (e) {
-      console.warn("Failed to parse Spotify __NEXT_DATA__:", e);
     }
+  } catch (err) {
+    console.warn("[Tier 2] Public embed scraper failed, falling back to Tier 3:", err);
   }
 
-  // Fallback 3: Parse oEmbed API
+  // ─────────────────────────────────────────────────────────
+  // TIER 3: Spotify Public oEmbed API Fallback
+  // ─────────────────────────────────────────────────────────
+  console.log(`[Tier 3] Trying Spotify oEmbed API Fallback for URL: ${spotifyUrl}...`);
   const oembedRes = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`);
   if (oembedRes.ok) {
     const oembedData = (await oembedRes.json()) as { title?: string; thumbnail_url?: string };
@@ -301,7 +307,7 @@ export async function fetchSpotifyTracks(
     };
   }
 
-  throw new Error("Could not parse Spotify playlist tracks.");
+  throw new Error("Could not parse Spotify playlist tracks with any of the 3 fallback tiers.");
 }
 
 /**
