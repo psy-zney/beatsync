@@ -51,27 +51,44 @@ const LocationContent = ({ client }: { client: ClientDataType }) => (
 
 import { useVoiceChat } from "../room/VoiceChatProvider";
 import { ActiveSpeakerIndicator, MicMutedIndicator } from "../room/ActiveSpeakerIndicator";
+import { useRoomStore } from "@/store/room";
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/[\s-_]+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+};
 
 export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser }) => {
   const isMobile = useIsMobile();
   const [showLocation, setShowLocation] = useState(false);
   const { isConnected } = useVoiceChat();
+  const roomAvatar = useRoomStore((state) => state.avatar);
+
+  const isDataAvatar = isCurrentUser && roomAvatar?.startsWith("data:");
+  const isEmojiAvatar = isCurrentUser && roomAvatar && !isDataAvatar && roomAvatar.length <= 4;
+  const initials = getInitials(client.username);
 
   const avatarContent = (
     <div className="relative">
       {isConnected && <ActiveSpeakerIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
       <Avatar className="h-8 w-8">
-        <AvatarImage src={client.location?.flagSvgURL} className="object-cover w-full h-full" />
-        <AvatarFallback className={isCurrentUser ? "bg-primary-600" : "bg-neutral-600"}>
-          {client.username
-            .split("-")
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase()}{" "}
-        </AvatarFallback>
+        {isDataAvatar ? (
+          <AvatarImage src={roomAvatar} className="object-cover w-full h-full" alt={client.username} />
+        ) : isEmojiAvatar ? (
+          <AvatarFallback className="bg-indigo-600/90 text-sm font-normal select-none">{roomAvatar}</AvatarFallback>
+        ) : (
+          <AvatarFallback
+            className={
+              isCurrentUser
+                ? "bg-indigo-600 text-white font-semibold text-xs"
+                : "bg-neutral-700 text-neutral-200 font-semibold text-xs"
+            }
+          >
+            {initials}
+          </AvatarFallback>
+        )}
       </Avatar>
-      {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
       {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
     </div>
   );
@@ -121,8 +138,15 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
         </Tooltip>
       )}
       <div className="flex flex-col min-w-0">
-        <div className="text-xs font-medium truncate">
+        <div className="text-xs font-medium truncate flex items-center gap-1.5">
           <span>{client.username}</span>
+          {client.location?.flagSvgURL && (
+            <img
+              src={client.location.flagSvgURL}
+              alt={client.location.country || "flag"}
+              className="w-3.5 h-2.5 object-cover rounded-xs opacity-90 inline-block shrink-0"
+            />
+          )}
         </div>
       </div>
       <Badge

@@ -108,9 +108,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           <div className="absolute -top-24 -left-24 size-64 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 size-64 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Lost in Space 404 Image */}
+          {/* Lost in Space 404 Image with seamless container */}
           <motion.div
-            className="w-full max-w-xs mb-3 flex justify-center"
+            className="w-full max-w-sm mb-4 rounded-xl overflow-hidden border border-purple-800/30 bg-[#06040a] p-1.5 shadow-lg shadow-purple-950/50 flex justify-center relative"
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1 }}
@@ -118,12 +118,12 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             <img
               src="/lost-in-space-404.png"
               alt="404 Lost in Space"
-              className="w-full h-auto max-h-48 object-contain drop-shadow-[0_0_25px_rgba(168,85,247,0.4)]"
+              className="w-full h-auto max-h-44 object-contain rounded-lg drop-shadow-[0_0_20px_rgba(168,85,247,0.35)]"
             />
           </motion.div>
 
           <motion.h2
-            className="text-lg sm:text-xl font-bold tracking-tight mb-2 text-white bg-gradient-to-r from-purple-200 via-white to-purple-300 bg-clip-text text-transparent"
+            className="text-xl sm:text-2xl font-extrabold tracking-tight mb-2 text-white bg-gradient-to-r from-purple-100 via-white to-indigo-200 bg-clip-text text-transparent"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
@@ -151,7 +151,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
                 });
                 window.location.reload();
               }}
-              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full font-medium text-xs tracking-wide cursor-pointer shadow-lg shadow-purple-600/30 transition-all duration-300 text-center"
+              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full font-semibold text-xs tracking-wide cursor-pointer shadow-lg shadow-purple-600/30 transition-all duration-300 text-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               whileHover={{ scale: 1.03 }}
@@ -163,7 +163,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
 
             <motion.a
               href="/"
-              className="flex-1 px-5 py-2.5 bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700/60 text-neutral-200 rounded-full font-medium text-xs tracking-wide cursor-pointer transition-all duration-300 text-center"
+              className="flex-1 px-5 py-2.5 bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700/60 text-neutral-200 rounded-full font-semibold text-xs tracking-wide cursor-pointer transition-all duration-300 text-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               whileHover={{ scale: 1.03 }}
