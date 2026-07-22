@@ -101,9 +101,9 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
         const spotInfo = item.spotify;
 
         if (ytTrack) {
-          const trackId = ytTrack.id;
-          const artistName = ytTrack.performer?.name || spotInfo.artist || "Spotify";
-          const title = ytTrack.title || spotInfo.title;
+          const trackId = ytTrack.id as string | number;
+          const artistName = String((ytTrack.performer as { name?: string })?.name || spotInfo.artist || "Spotify");
+          const title = String(ytTrack.title || spotInfo.title);
           const formattedTrackName = `${artistName} - ${title}`;
 
           sendWSRequest({
