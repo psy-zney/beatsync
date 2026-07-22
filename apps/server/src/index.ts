@@ -18,7 +18,7 @@ import type { WSData } from "@/utils/websocket";
 
 // Bun.serve with WebSocket support
 const SERVER_HOST = process.env.HOST ?? "127.0.0.1";
-const SERVER_PORT = Number(process.env.PORT ?? "1001");
+const SERVER_PORT = Number(process.env.PORT ?? "8990");
 
 const server = Bun.serve<WSData>({
   hostname: SERVER_HOST,

@@ -25,6 +25,6 @@ COPY packages/shared ./packages/shared
 # Set working directory to server app
 WORKDIR /app/apps/server
 
-EXPOSE 1001
+EXPOSE 8990
 ENV NODE_ENV=production
 CMD ["bun", "start"]
