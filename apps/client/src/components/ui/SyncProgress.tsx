@@ -94,83 +94,93 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
   const hasReconnectionFailed =
     reconnectionInfo.isReconnecting && reconnectionInfo.currentAttempt >= reconnectionInfo.maxAttempts;
 
-  // If reconnection failed after max attempts
+  // If reconnection failed after max attempts or backend unreachable
   if (hasReconnectionFailed) {
     return (
       <OuterModal>
         <motion.div
-          className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-md border border-neutral-800 shadow-lg"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="relative flex flex-col items-center justify-center p-6 sm:p-8 bg-neutral-950/90 rounded-2xl border border-purple-900/40 shadow-2xl backdrop-blur-xl overflow-hidden text-center max-w-lg w-full"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
         >
+          {/* Ambient space glow */}
+          <div className="absolute -top-24 -left-24 size-64 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 size-64 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Lost in Space 404 Image */}
           <motion.div
-            className="size-6 flex items-center justify-center mb-2"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+            className="w-full max-w-xs mb-3 flex justify-center"
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <svg
-              width="100%"
-              height="100%"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="text-white"
-            >
-              <motion.path
-                d="M6 6L18 18M18 6L6 18"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 1 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-              />
-            </svg>
+            <img
+              src="/lost-in-space-404.png"
+              alt="404 Lost in Space"
+              className="w-full h-auto max-h-48 object-contain drop-shadow-[0_0_25px_rgba(168,85,247,0.4)]"
+            />
           </motion.div>
 
           <motion.h2
-            className="text-base font-medium tracking-tight mb-1 text-white"
+            className="text-lg sm:text-xl font-bold tracking-tight mb-2 text-white bg-gradient-to-r from-purple-200 via-white to-purple-300 bg-clip-text text-transparent"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            Failed to reconnect
+            Backend bị giới hạn hoặc chưa được bật
           </motion.h2>
 
           <motion.p
-            className="text-neutral-400 mb-5 text-center text-sm"
+            className="text-purple-200/70 mb-6 text-center text-xs sm:text-sm leading-relaxed max-w-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.25 }}
           >
-            Unable to establish connection after {reconnectionInfo.maxAttempts} attempts
+            Không thể kết nối đến máy chủ Backend (Port 1001 / WebSocket). Server có thể đang dừng, giới hạn kết nối
+            hoặc chưa khởi chạy.
           </motion.p>
 
-          <motion.a
-            href="/"
-            className="mt-4 px-5 py-2 bg-primary text-primary-foreground rounded-full font-medium text-xs tracking-wide cursor-pointer w-full hover:shadow-lg hover:shadow-zinc-50/50 transition-shadow duration-500 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            whileHover={{
-              scale: 1.015,
-            }}
-            whileTap={{ scale: 0.985 }}
-            transition={{ duration: 0.3 }}
-          >
-            Go to home
-          </motion.a>
+          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs z-10">
+            <motion.button
+              onClick={() => {
+                useGlobalStore.getState().setReconnectionInfo({
+                  isReconnecting: false,
+                  currentAttempt: 0,
+                  maxAttempts: 5,
+                });
+                window.location.reload();
+              }}
+              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full font-medium text-xs tracking-wide cursor-pointer shadow-lg shadow-purple-600/30 transition-all duration-300 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ duration: 0.2 }}
+            >
+              Thử lại kết nối
+            </motion.button>
+
+            <motion.a
+              href="/"
+              className="flex-1 px-5 py-2.5 bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700/60 text-neutral-200 rounded-full font-medium text-xs tracking-wide cursor-pointer transition-all duration-300 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ duration: 0.2 }}
+            >
+              Về trang chủ
+            </motion.a>
+          </div>
 
           <motion.p
-            className="text-neutral-500 mt-4.5 text-center text-xs"
+            className="text-neutral-500 mt-5 text-center text-[11px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
-            Đây là sever nghe nhạc với bạn bè nên sever chạy máy cá nhân sẽ không hoạt động liên tục
-            <br />
-            (This is a music server to listen with friends, so the personal server will not be available continuously)
+            Server nghe nhạc trên máy cá nhân/Render có thể không hoạt động 24/7.
           </motion.p>
         </motion.div>
       </OuterModal>
@@ -182,13 +192,13 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
     return (
       <OuterModal>
         <motion.div
-          className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-md border border-neutral-800 shadow-lg"
+          className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-2xl border border-neutral-800 shadow-xl text-center max-w-sm w-full"
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
         >
           <motion.div
-            className="size-12 flex items-center justify-center mb-2"
+            className="size-12 flex items-center justify-center mb-2 text-purple-400"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.1 }}
@@ -199,7 +209,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
               viewBox="0 0 24 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              className="text-primary"
+              className="text-purple-500"
             >
               <motion.circle
                 cx="6"
@@ -229,32 +239,21 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           </motion.div>
 
           <motion.h2
-            className="text-base font-medium tracking-tight mb-1 text-white"
+            className="text-base font-semibold tracking-tight mb-1 text-white"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            {"Reconnecting..."}
+            Đang kết nối lại tới Backend...
           </motion.h2>
 
           <motion.p
-            className="text-neutral-400 mb-5 text-center text-sm"
+            className="text-neutral-400 mb-4 text-center text-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.25 }}
           >
-            Attempt {reconnectionInfo.currentAttempt} of {reconnectionInfo.maxAttempts}
-          </motion.p>
-
-          <motion.p
-            className="text-neutral-500 mt-4.5 text-center text-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-          >
-            Đây là sever nghe nhạc với bạn bè nên sever chạy máy cá nhân sẽ không hoạt động liên tục
-            <br />
-            (This is a music server to listen with friends, so the personal server will not be available continuously)
+            Thử lần {reconnectionInfo.currentAttempt} trên {reconnectionInfo.maxAttempts}
           </motion.p>
         </motion.div>
       </OuterModal>

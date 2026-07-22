@@ -78,6 +78,9 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     scheduleReconnection,
     cleanup: cleanupReconnection,
   } = useWebSocketReconnection({
+    maxAttempts: 5,
+    initialInterval: 1000,
+    maxInterval: 3000,
     createConnection: () => createConnection(),
   });
 
@@ -291,9 +294,23 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     // Only run this effect once after room is loaded and clientId is available
     if (isLoadingRoom || !roomId || !username || !clientId) return;
 
+    // Safety fallback timer: if initial connection does not open within 8s, trigger 404 error screen
+    const safetyTimer = setTimeout(() => {
+      const currentSocket = useGlobalStore.getState().socket;
+      const isSynced = useGlobalStore.getState().isSynced;
+      if (!isSynced && (!currentSocket || currentSocket.readyState !== WebSocket.OPEN)) {
+        console.warn("Backend connection timeout reached (8s), triggering 404 connection error.");
+        useGlobalStore.getState().setReconnectionInfo({
+          isReconnecting: true,
+          currentAttempt: 5,
+          maxAttempts: 5,
+        });
+      }
+    }, 8000);
+
     // Don't create a new connection if we already have one
     if (socket) {
-      return;
+      return () => clearTimeout(safetyTimer);
     }
 
     const ws = createConnection();
@@ -309,6 +326,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     window.addEventListener("pageshow", handlePageShow);
 
     return () => {
+      clearTimeout(safetyTimer);
       // Runs on unmount and dependency change
       console.log("Running cleanup for WebSocket connection");
 
