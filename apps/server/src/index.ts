@@ -9,6 +9,7 @@ import { handleRoot } from "@/routes/root";
 import { handleStats } from "@/routes/stats";
 import { handleGetPresignedURL, handleUploadComplete } from "@/routes/upload";
 import { handleYoutubeUpload, handleYoutubeProxy } from "@/routes/youtube";
+import { handleVoiceToken } from "@/routes/voice";
 import { handleWebSocketUpgrade } from "@/routes/websocket";
 import { handleClose, handleMessage, handleOpen } from "@/routes/websocketHandlers";
 import { corsHeaders, errorResponse } from "@/utils/responses";
@@ -44,6 +45,14 @@ const server = Bun.serve<WSData>({
 
           case "/ws":
             return handleWebSocketUpgrade(req, server);
+
+          case "/voice/token":
+            if (req.method !== "POST") {
+              response = errorResponse("Method not allowed", 405);
+            } else {
+              response = await handleVoiceToken(req);
+            }
+            break;
 
           case "/upload/get-presigned-url":
             if (IS_DEMO_MODE) {

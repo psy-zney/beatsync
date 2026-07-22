@@ -2,8 +2,6 @@
 import { useClientId } from "@/hooks/useClientId";
 import { useNtpHeartbeat } from "@/hooks/useNtpHeartbeat";
 import { useWebSocketReconnection } from "@/hooks/useWebSocketReconnection";
-import { IS_DEMO_MODE } from "@/lib/demo";
-import { getUserLocation } from "@/lib/ip";
 import { getWsUrl } from "@/lib/urls";
 import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
@@ -122,23 +120,6 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
       // Request notification permission for chat alerts outside browser
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().catch(() => {});
-      }
-
-      // Skip IP geolocation in demo mode (no internet)
-      if (!IS_DEMO_MODE) {
-        try {
-          const location = await getUserLocation();
-
-          sendWSRequest({
-            ws,
-            request: {
-              type: ClientActionEnum.enum.SEND_IP,
-              location,
-            },
-          });
-        } catch (e) {
-          console.error("Failed to geolocate IP", e);
-        }
       }
     };
 

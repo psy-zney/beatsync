@@ -576,13 +576,21 @@ export class RoomManager {
   /**
    * Add a chat message to the room
    */
-  addChatMessage({ clientId, text }: { clientId: string; text: string }): ChatMessageType {
+  addChatMessage({
+    clientId,
+    text,
+    replyToMessageId,
+  }: {
+    clientId: string;
+    text: string;
+    replyToMessageId?: number;
+  }): ChatMessageType {
     const client = this.clientData.get(clientId);
     if (!client) {
       throw new Error(`Client ${clientId} not found in room ${this.roomId}`);
     }
 
-    return this.chatManager.addMessage({ client, text });
+    return this.chatManager.addMessage({ client, text, replyToMessageId });
   }
 
   /**

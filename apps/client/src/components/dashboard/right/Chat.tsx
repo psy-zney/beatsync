@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
 import { formatChatTimestamp } from "@/utils/time";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ChatMessageType } from "@beatsync/shared";
+import { ChevronDown, MessageCircle, Reply, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -25,6 +26,7 @@ export const Chat = () => {
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const [messageCountSnapshot, setMessageCountSnapshot] = useState(0);
+  const [replyingTo, setReplyingTo] = useState<ChatMessageType | null>(null);
 
   const currentMessages = useChatStore((state) => state.messages);
   const sendChatMessage = useGlobalStore((state) => state.sendChatMessage);
@@ -118,8 +120,9 @@ export const Chat = () => {
 
   const handleSend = () => {
     if (message.trim() && !isComposing) {
-      sendChatMessage(message.trim());
+      sendChatMessage(message.trim(), replyingTo?.id);
       setMessage("");
+      setReplyingTo(null);
       scrollToBottom("auto");
     }
   };
@@ -275,7 +278,22 @@ export const Chat = () => {
                               }}
                               layout
                             >
+                              {msg.replyTo && (
+                                <div className="mb-1 border-l-2 border-white/40 pl-2 text-xs text-white/70">
+                                  <span className="font-medium">{msg.replyTo.username}</span>: {msg.replyTo.text}
+                                </div>
+                              )}
                               <p className="whitespace-pre-wrap wrap-anywhere">{msg.text}</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingTo(msg);
+                                  inputRef.current?.focus();
+                                }}
+                                className="mt-1 flex items-center gap-1 text-[10px] text-white/60 hover:text-white"
+                              >
+                                <Reply className="size-3" /> Reply
+                              </button>
                             </motion.div>
                           );
                         })}
@@ -336,6 +354,16 @@ export const Chat = () => {
               )}
               rows={1}
             />
+            {replyingTo && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-neutral-300">
+                <span className="truncate">
+                  Reply to <strong>{replyingTo.username}</strong>: {replyingTo.text}
+                </span>
+                <button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}>
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

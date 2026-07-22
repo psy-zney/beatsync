@@ -140,3 +140,17 @@ export async function fetchDiscoverRooms() {
   const data: DiscoverRoomsType = await response.json();
   return data;
 }
+
+export interface VoiceTokenResponse {
+  serverUrl: string;
+  participantToken: string;
+}
+
+export async function fetchVoiceToken(data: {
+  roomId: string;
+  clientId: string;
+  username: string;
+}): Promise<VoiceTokenResponse> {
+  const response = await baseAxios.post<VoiceTokenResponse>("/voice/token", data);
+  return response.data;
+}

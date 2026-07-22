@@ -144,15 +144,10 @@ export class GlobalManager {
         // Room must have active connections
         if (!room.hasActiveConnections()) return false;
 
-        const playbackState = room.getPlaybackState();
-        // Room must be playing
-        if (playbackState.type !== "playing") return false;
-
-        // Validate that the playing track actually exists in the room's audio sources
-        const audioSources = room.getAudioSources();
-        const hasPlayingTrack = audioSources.some((source) => source.url === playbackState.audioSource);
-
-        return hasPlayingTrack;
+        // A room with connected users is discoverable whether music is playing,
+        // paused, or still loading. Filtering by playback state made active
+        // participants disappear from the lobby during normal use.
+        return true;
       })
       .map((room) => room.serialize())
       .sort((a, b) => b.clients.length - a.clients.length) // Sort by client count desc

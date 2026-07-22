@@ -2,7 +2,7 @@
 import { useClientId } from "@/hooks/useClientId";
 import { useGlobalStore } from "@/store/global";
 import { TooltipPortal } from "@radix-ui/react-tooltip";
-import { Navigation, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
@@ -30,22 +30,7 @@ export const ConnectedUsersList = () => {
             <Users className="h-3.5 w-3.5" />
             <h2 className="text-xs font-medium uppercase tracking-wider">Connected Users</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Navigation className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors" />
-              </TooltipTrigger>
-              <TooltipPortal>
-                <TooltipContent side="top" className="max-w-xs">
-                  <div className="text-xs font-mono p-2">
-                    Locations are estimated from IP addresses using public geolocation databases. Accuracy varies by
-                    region.
-                  </div>
-                </TooltipContent>
-              </TooltipPortal>
-            </Tooltip>
-            <Badge variant="outline">{clients.length}</Badge>
-          </div>
+          <Badge variant="outline">{clients.length}</Badge>
         </div>
 
         <div className="px-4 pb-3">

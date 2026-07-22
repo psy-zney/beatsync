@@ -18,6 +18,7 @@ export const UserVoicePanel = () => {
 
   const {
     isConnected: isVoiceActive,
+    isConnecting,
     isMuted,
     toggleMute,
     localStream,
@@ -69,13 +70,18 @@ export const UserVoicePanel = () => {
               size="icon"
               className="h-8 w-8 rounded-md hover:bg-white/10 transition-colors group"
               onClick={connect}
+              disabled={isConnecting}
               title="Join Voice Chat (Spy icons created by Leremy - Flaticon)"
             >
-              <img
-                src="/account.png"
-                alt="Join"
-                className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100 transition-opacity"
-              />
+              {isConnecting ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <img
+                  src="/account.png"
+                  alt="Join"
+                  className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100 transition-opacity"
+                />
+              )}
             </Button>
           ) : (
             <>

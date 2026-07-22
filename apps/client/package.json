@@ -50,6 +50,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "input-otp": "^1.4.2",
+    "livekit-client": "^2.20.2",
     "lucide-react": "^0.576.0",
     "motion": "^12.34.5",
     "nanoid": "^5.1.6",

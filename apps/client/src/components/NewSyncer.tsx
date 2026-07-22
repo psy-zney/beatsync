@@ -1,9 +1,9 @@
 "use client";
-import { generateName } from "@/lib/randomNames";
+import { readLocalProfile, saveLocalProfile } from "@/lib/profile";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useRoomStore } from "@/store/room";
 import { motion } from "motion/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { IS_DEMO_MODE } from "@/lib/demo";
 import { Dashboard } from "./dashboard/Dashboard";
 import { DemoDashboard } from "./dashboard/DemoDashboard";
@@ -14,23 +14,41 @@ interface NewSyncerProps {
 }
 
 import { VoiceChatProvider } from "./room/VoiceChatProvider";
+import { ProfileSetup } from "./ProfileSetup";
 
 // Main component has been refactored into smaller components
 export const NewSyncer = ({ roomId }: NewSyncerProps) => {
   const setUsername = useRoomStore((state) => state.setUsername);
+  const setAvatar = useRoomStore((state) => state.setAvatar);
   const setRoomId = useRoomStore((state) => state.setRoomId);
   const username = useRoomStore((state) => state.username);
+  const [isProfileReady, setIsProfileReady] = useState(false);
 
   // Update document title based on playback state
   useDocumentTitle();
 
-  // Generate a new random username when the component mounts
   useEffect(() => {
     setRoomId(roomId);
-    if (!username) {
-      setUsername(generateName());
+    const profile = readLocalProfile();
+    if (profile) {
+      setUsername(profile.name);
+      setAvatar(profile.avatar);
     }
-  }, [setUsername, username, roomId, setRoomId]);
+    queueMicrotask(() => setIsProfileReady(true));
+  }, [setUsername, setAvatar, roomId, setRoomId]);
+
+  if (!isProfileReady) return null;
+  if (!username) {
+    return (
+      <ProfileSetup
+        onSave={(profile) => {
+          saveLocalProfile(profile);
+          setUsername(profile.name);
+          setAvatar(profile.avatar);
+        }}
+      />
+    );
+  }
 
   return (
     <VoiceChatProvider>

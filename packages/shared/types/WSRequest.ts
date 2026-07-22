@@ -125,6 +125,7 @@ export const SetGlobalVolumeSchema = z.object({
 export const SendChatMessageSchema = z.object({
   type: z.literal(ClientActionEnum.enum.SEND_CHAT_MESSAGE),
   text: z.string().max(CHAT_CONSTANTS.MAX_MESSAGE_LENGTH),
+  replyToMessageId: z.number().int().positive().optional(),
 });
 
 export const AudioSourceLoadedSchema = z.object({

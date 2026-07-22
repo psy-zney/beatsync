@@ -5,12 +5,14 @@ import { create } from "zustand";
 interface RoomStateValues {
   roomId: string;
   username: string;
+  avatar: string;
   isLoadingRoom: boolean;
 }
 
 interface RoomState extends RoomStateValues {
   setRoomId: (roomId: string) => void;
   setUsername: (username: string) => void;
+  setAvatar: (avatar: string) => void;
   setIsLoading: (isLoading: boolean) => void;
   reset: () => void;
 }
@@ -19,6 +21,7 @@ interface RoomState extends RoomStateValues {
 const initialState: RoomStateValues = {
   roomId: "",
   username: "",
+  avatar: "🎧",
   isLoadingRoom: false,
 };
 
@@ -29,6 +32,7 @@ export const useRoomStore = create<RoomState>()((set) => ({
   // Actions
   setRoomId: (roomId) => set({ roomId }),
   setUsername: (username) => set({ username }),
+  setAvatar: (avatar) => set({ avatar }),
   setIsLoading: (isLoading) => set({ isLoadingRoom: isLoading }),
 
   // Reset to initial state
@@ -36,5 +40,6 @@ export const useRoomStore = create<RoomState>()((set) => ({
     set((state) => ({
       ...initialState,
       username: state.username, // Preserve the current username
+      avatar: state.avatar,
     })),
 }));

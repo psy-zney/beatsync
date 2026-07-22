@@ -18,12 +18,23 @@ export class ChatManager {
   /**
    * Add a chat message to the room
    */
-  addMessage({ client, text }: { client: ClientDataType; text: string }): ChatMessageType {
+  addMessage({
+    client,
+    text,
+    replyToMessageId,
+  }: {
+    client: ClientDataType;
+    text: string;
+    replyToMessageId?: number;
+  }): ChatMessageType {
     // Minimal validation - React handles XSS protection on the client
     if (!text) {
       throw new Error("Chat message cannot be empty");
     }
 
+    const repliedMessage = replyToMessageId
+      ? this.chatMessages.find((item) => item.id === replyToMessageId)
+      : undefined;
     const message: ChatMessageType = {
       id: this.nextMessageId++,
       clientId: client.clientId,
@@ -32,6 +43,9 @@ export class ChatManager {
       timestamp: epochNow(),
       countryCode: client.location?.countryCode,
       isCreator: client.isCreator,
+      replyTo: repliedMessage
+        ? { id: repliedMessage.id, username: repliedMessage.username, text: repliedMessage.text }
+        : undefined,
     };
 
     this.chatMessages.push(message);

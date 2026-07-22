@@ -22,6 +22,7 @@ export function handleSendChatMessage({
     const chatMessage = room.addChatMessage({
       clientId: ws.data.clientId,
       text: message.text,
+      replyToMessageId: message.replyToMessageId,
     });
 
     // Get the newest ID after adding the message

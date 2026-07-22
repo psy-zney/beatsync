@@ -28,5 +28,12 @@ export const ChatMessageSchema = z.object({
   timestamp: z.number(),
   countryCode: z.string().optional(),
   isCreator: z.boolean().default(false),
+  replyTo: z
+    .object({
+      id: z.number(),
+      username: z.string(),
+      text: z.string(),
+    })
+    .optional(),
 });
 export type ChatMessageType = z.infer<typeof ChatMessageSchema>;
