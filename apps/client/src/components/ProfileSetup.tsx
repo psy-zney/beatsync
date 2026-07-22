@@ -56,10 +56,22 @@ function processAvatarImage(imageSrc: string, scale: number, rotation: number): 
   });
 }
 
-export const ProfileSetup = ({ onSave }: { onSave: (profile: LocalProfile) => void }) => {
-  const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
+export interface ProfileSetupProps {
+  initialProfile?: LocalProfile | null;
+  onSave: (profile: LocalProfile) => void;
+}
+
+export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
+  const [name, setName] = useState(initialProfile?.name || "");
+  const [avatar, setAvatar] = useState(initialProfile?.avatar || DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialProfile) {
+      if (initialProfile.name) setName(initialProfile.name);
+      if (initialProfile.avatar) setAvatar(initialProfile.avatar);
+    }
+  }, [initialProfile]);
 
   // Editor modal state
   const [rawImage, setRawImage] = useState<string | null>(null);

@@ -15,6 +15,7 @@ interface NewSyncerProps {
 
 import { VoiceChatProvider } from "./room/VoiceChatProvider";
 import { ProfileSetup } from "./ProfileSetup";
+import type { LocalProfile } from "@/lib/profile";
 
 // Main component has been refactored into smaller components
 export const NewSyncer = ({ roomId }: NewSyncerProps) => {
@@ -22,29 +23,35 @@ export const NewSyncer = ({ roomId }: NewSyncerProps) => {
   const setAvatar = useRoomStore((state) => state.setAvatar);
   const setRoomId = useRoomStore((state) => state.setRoomId);
   const username = useRoomStore((state) => state.username);
-  const [isProfileReady, setIsProfileReady] = useState(false);
+
+  const [isConfirmedProfile, setIsConfirmedProfile] = useState(false);
+  const [localProfile] = useState<LocalProfile | null>(() => {
+    if (typeof window !== "undefined") {
+      return readLocalProfile();
+    }
+    return null;
+  });
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Update document title based on playback state
   useDocumentTitle();
 
   useEffect(() => {
     setRoomId(roomId);
-    const profile = readLocalProfile();
-    if (profile) {
-      setUsername(profile.name);
-      setAvatar(profile.avatar);
-    }
-    queueMicrotask(() => setIsProfileReady(true));
-  }, [setUsername, setAvatar, roomId, setRoomId]);
+    queueMicrotask(() => setIsLoaded(true));
+  }, [roomId, setRoomId]);
 
-  if (!isProfileReady) return null;
-  if (!username) {
+  if (!isLoaded) return null;
+
+  if (!isConfirmedProfile) {
     return (
       <ProfileSetup
+        initialProfile={localProfile}
         onSave={(profile) => {
           saveLocalProfile(profile);
           setUsername(profile.name);
           setAvatar(profile.avatar);
+          setIsConfirmedProfile(true);
         }}
       />
     );
