@@ -232,7 +232,7 @@ export async function fetchSpotifyTracks(
 
     if (response.ok) {
       const html = await response.text();
-      const match = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s.exec(html);
+      const match = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/.exec(html);
       if (match && match[1]) {
         const nextData = JSON.parse(match[1]) as {
           props?: { pageProps?: { state?: { data?: { entity?: Record<string, unknown> } } } };
