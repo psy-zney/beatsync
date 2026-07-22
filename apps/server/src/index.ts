@@ -10,6 +10,7 @@ import { handleStats } from "@/routes/stats";
 import { handleGetPresignedURL, handleUploadComplete } from "@/routes/upload";
 import { handleYoutubeUpload, handleYoutubeProxy } from "@/routes/youtube";
 import { handleVoiceToken } from "@/routes/voice";
+import { handleSpotifyResolve } from "@/routes/spotify";
 import { handleWebSocketUpgrade } from "@/routes/websocket";
 import { handleClose, handleMessage, handleOpen } from "@/routes/websocketHandlers";
 import { corsHeaders, errorResponse } from "@/utils/responses";
@@ -51,6 +52,14 @@ const server = Bun.serve<WSData>({
               response = errorResponse("Method not allowed", 405);
             } else {
               response = await handleVoiceToken(req);
+            }
+            break;
+
+          case "/spotify/resolve":
+            if (req.method !== "POST") {
+              response = errorResponse("Method not allowed", 405);
+            } else {
+              response = await handleSpotifyResolve(req);
             }
             break;
 

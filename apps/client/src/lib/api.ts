@@ -154,3 +154,27 @@ export async function fetchVoiceToken(data: {
   const response = await baseAxios.post<VoiceTokenResponse>("/voice/token", data);
   return response.data;
 }
+
+export interface SpotifyResolveResponse {
+  success: boolean;
+  data: {
+    title: string;
+    type: "playlist" | "album" | "track";
+    coverUrl?: string;
+    tracks: Array<{
+      spotify: {
+        title: string;
+        artist: string;
+        album?: string;
+        coverUrl?: string;
+        durationMs?: number;
+      };
+      youtubeTrack: Record<string, unknown> | null;
+    }>;
+  };
+}
+
+export async function resolveSpotifyPlaylist(url: string, maxTracks = 50): Promise<SpotifyResolveResponse> {
+  const response = await baseAxios.post<SpotifyResolveResponse>("/spotify/resolve", { url, maxTracks });
+  return response.data;
+}
