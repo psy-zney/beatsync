@@ -23,7 +23,7 @@
     "dev:log": "turbo run dev:log",
     "start:log": "turbo run start:log",
     "prepare": "lefthook install",
-    "postinstall": "bun run --cwd apps/server scripts/fetch-extractor.ts"
+    "postinstall": "bun run --cwd apps/server scripts/fetch-extractor.ts || true"
   },
   "workspaces": [
     "apps/*",

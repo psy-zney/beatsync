@@ -1,4 +1,6 @@
 {
-  "buildCommand": "cd apps/client && next build",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npx turbo run build --filter=client",
   "outputDirectory": "apps/client/.next"
 }
