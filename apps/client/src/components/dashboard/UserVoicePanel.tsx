@@ -7,10 +7,11 @@ import { useWebRTCStore } from "@/store/webrtc";
 import { Headphones, Mic, MicOff, PhoneOff } from "lucide-react";
 import React from "react";
 import { Button } from "../ui/button";
-import { Avatar, AvatarFallback } from "../ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useAudioVolume } from "@/hooks/useAudioVolume";
 import { AudioWaveform } from "../ui/AudioWaveform";
 import { useVoiceChat } from "../room/VoiceChatProvider";
+import { useRoomStore } from "@/store/room";
 
 export const UserVoicePanel = () => {
   const { clientId } = useClientId();
@@ -34,9 +35,11 @@ export const UserVoicePanel = () => {
 
   // Current client
   const currentUser = connectedClients.find((c) => c.clientId === clientId);
+  const roomAvatar = useRoomStore((state) => state.avatar);
   const username = currentUser?.username || "You";
 
-  // Generate avatar fallback
+  const isDataAvatar = roomAvatar?.startsWith("data:");
+  const isEmojiAvatar = roomAvatar && !isDataAvatar && roomAvatar.length <= 4;
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
@@ -45,7 +48,13 @@ export const UserVoicePanel = () => {
         {/* User Info */}
         <div className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/5 rounded-md p-1 cursor-pointer transition-colors">
           <Avatar className="h-8 w-8 rounded-full border-none ring-0">
-            <AvatarFallback className="bg-indigo-500 text-white text-xs font-medium">{initials}</AvatarFallback>
+            {isDataAvatar ? (
+              <AvatarImage src={roomAvatar} className="object-cover" alt={username} />
+            ) : isEmojiAvatar ? (
+              <AvatarFallback className="bg-indigo-600 text-sm font-normal select-none">{roomAvatar}</AvatarFallback>
+            ) : (
+              <AvatarFallback className="bg-indigo-500 text-white text-xs font-medium">{initials}</AvatarFallback>
+            )}
           </Avatar>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold text-white truncate leading-none mb-1">{username}</span>
