@@ -1,4 +1,5 @@
 import { useVoiceChat } from "./VoiceChatProvider";
+import { MicOff } from "lucide-react";
 
 export const ActiveSpeakerIndicator = ({ clientId, isCurrentUser }: { clientId: string; isCurrentUser: boolean }) => {
   const { activeSpeakers } = useVoiceChat();
@@ -14,14 +15,17 @@ export const ActiveSpeakerIndicator = ({ clientId, isCurrentUser }: { clientId: 
   );
 };
 
-export const MicMutedIndicator = ({ isCurrentUser }: { isCurrentUser: boolean }) => {
-  const { isMuted } = useVoiceChat();
+export const MicMutedIndicator = ({ clientId, isCurrentUser }: { clientId: string; isCurrentUser: boolean }) => {
+  const { isMuted, mutedParticipantIds } = useVoiceChat();
+  const isParticipantMuted = isCurrentUser ? isMuted : mutedParticipantIds.has(clientId);
 
-  if (!isCurrentUser || !isMuted) {
+  if (!isParticipantMuted) {
     return null;
   }
 
   return (
-    <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full w-3 h-3 border border-neutral-900 pointer-events-none"></div>
+    <div className="absolute -bottom-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full border border-neutral-900 bg-red-500 text-white pointer-events-none">
+      <MicOff className="size-2.5" />
+    </div>
   );
 };

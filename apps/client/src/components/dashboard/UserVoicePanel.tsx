@@ -20,6 +20,7 @@ export const UserVoicePanel = () => {
   const {
     isConnected: isVoiceActive,
     isConnecting,
+    isReconnecting,
     isMuted,
     toggleMute,
     localStream,
@@ -59,7 +60,12 @@ export const UserVoicePanel = () => {
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold text-white truncate leading-none mb-1">{username}</span>
             <span className="text-[10px] text-neutral-400 truncate leading-none flex items-center gap-1">
-              {isVoiceActive ? (
+              {isReconnecting ? (
+                <span className="flex h-3 items-center gap-1.5 text-amber-400">
+                  <span className="size-2 animate-pulse rounded-full bg-amber-400" />
+                  Reconnecting Voice…
+                </span>
+              ) : isVoiceActive ? (
                 <span className="text-emerald-400 flex items-center gap-1.5 h-3">
                   <AudioWaveform volume={localVolume} className="mb-[1px]" />
                   Voice Connected

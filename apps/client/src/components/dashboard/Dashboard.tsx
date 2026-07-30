@@ -6,7 +6,7 @@ import { useGlobalStore } from "@/store/global";
 import { Library, ListMusic, PartyPopper } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { TopBar } from "../room/TopBar";
-import { SyncProgress } from "../ui/SyncProgress";
+import { ConnectionStatusBanner } from "../room/ConnectionStatusBanner";
 import { BeatFlash } from "./BeatFlash";
 import { Bottom } from "./Bottom";
 import { Left } from "./Left";
@@ -22,7 +22,10 @@ export const Dashboard = ({ roomId }: DashboardProps) => {
   const isLoadingAudio = useGlobalStore((state) => state.isInitingSystem);
   const hasUserStartedSystem = useGlobalStore((state) => state.hasUserStartedSystem);
 
-  const isReady = isSynced && !isLoadingAudio;
+  // Once the user has entered the app, never unmount the dashboard because of
+  // a short WebSocket outage. Keeping it mounted preserves UI state and decoded
+  // AudioBuffers already held in browser RAM.
+  const isReady = !isLoadingAudio && (isSynced || hasUserStartedSystem);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -39,11 +42,9 @@ export const Dashboard = ({ roomId }: DashboardProps) => {
     <div className="w-full h-dvh flex flex-col text-white bg-neutral-950">
       <BeatFlash />
       <LoadingEtaOverlay />
+      <ConnectionStatusBanner />
       {/* Top bar: Fixed height */}
       <TopBar roomId={roomId} />
-
-      {/* Show SyncProgress during reconnection (when user has already started but lost sync) */}
-      {!isSynced && hasUserStartedSystem && !isLoadingAudio && <SyncProgress />}
 
       {isReady && (
         <motion.div

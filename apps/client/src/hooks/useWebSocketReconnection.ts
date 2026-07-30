@@ -61,8 +61,9 @@ export const useWebSocketReconnection = ({
       maxAttempts,
     });
 
-    // Check if we've exceeded max reconnection attempts
-    if (reconnectAttempts.current >= maxAttempts) {
+    // A maxAttempts value of 0 means retry indefinitely. This is used after a
+    // room has already loaded so a temporary outage never ejects the user.
+    if (maxAttempts > 0 && reconnectAttempts.current >= maxAttempts) {
       onMaxAttemptsReached?.();
       return;
     }

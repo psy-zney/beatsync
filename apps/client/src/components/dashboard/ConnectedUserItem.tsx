@@ -3,7 +3,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import { ClientDataType } from "@beatsync/shared";
 import { TooltipPortal } from "@radix-ui/react-tooltip";
-import { Crown, MoreVertical, User } from "lucide-react";
+import { Crown, MoreVertical, MicOff, User, VolumeX } from "lucide-react";
 import { motion } from "motion/react";
 import { memo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
@@ -62,8 +62,12 @@ const getInitials = (name: string) => {
 export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser }) => {
   const isMobile = useIsMobile();
   const [showLocation, setShowLocation] = useState(false);
-  const { isConnected } = useVoiceChat();
+  const { isConnected, isReconnecting, isMuted, voiceParticipantIds, mutedParticipantIds, deafenedParticipantIds } =
+    useVoiceChat();
   const roomAvatar = useRoomStore((state) => state.avatar);
+  const hasJoinedVoice = isCurrentUser ? isConnected || isReconnecting : voiceParticipantIds.has(client.clientId);
+  const participantIsMuted = isCurrentUser ? isMuted : mutedParticipantIds.has(client.clientId);
+  const participantIsDeafened = deafenedParticipantIds.has(client.clientId);
 
   const isDataAvatar = isCurrentUser && roomAvatar?.startsWith("data:");
   const isEmojiAvatar = isCurrentUser && roomAvatar && !isDataAvatar && roomAvatar.length <= 4;
@@ -71,7 +75,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
 
   const avatarContent = (
     <div className="relative">
-      {isConnected && <ActiveSpeakerIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
+      {hasJoinedVoice && <ActiveSpeakerIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
       <Avatar className="h-8 w-8">
         {isDataAvatar ? (
           <AvatarImage src={roomAvatar} className="object-cover w-full h-full" alt={client.username} />
@@ -89,7 +93,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
           </AvatarFallback>
         )}
       </Avatar>
-      {isConnected && <MicMutedIndicator isCurrentUser={isCurrentUser} />}
+      {hasJoinedVoice && <MicMutedIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
     </div>
   );
 
@@ -140,6 +144,12 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
       <div className="flex flex-col min-w-0">
         <div className="text-xs font-medium truncate flex items-center gap-1.5">
           <span>{client.username}</span>
+          {hasJoinedVoice && participantIsMuted && (
+            <MicOff className="size-3 shrink-0 text-red-400" aria-label="Microphone off" />
+          )}
+          {hasJoinedVoice && participantIsDeafened && (
+            <VolumeX className="size-3 shrink-0 text-red-400" aria-label="Audio off" />
+          )}
           {client.location?.flagSvgURL && (
             <img
               src={client.location.flagSvgURL}
@@ -149,15 +159,17 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
           )}
         </div>
       </div>
-      <Badge
-        variant={client.isCreator ? "default" : isCurrentUser ? "default" : "outline"}
-        className={cn(
-          "ml-auto text-xs shrink-0 min-w-[60px] text-center py-0 h-5",
-          client.isCreator ? "bg-sky-600 text-sky-50" : isCurrentUser ? "bg-primary-600 text-primary-50" : ""
-        )}
-      >
-        {client.isCreator ? "Creator" : isCurrentUser ? "You" : "Connected"}
-      </Badge>
+      {(client.isCreator || isCurrentUser || hasJoinedVoice) && (
+        <Badge
+          variant={client.isCreator ? "default" : isCurrentUser ? "default" : "outline"}
+          className={cn(
+            "ml-auto text-xs shrink-0 min-w-[60px] text-center py-0 h-5",
+            client.isCreator ? "bg-sky-600 text-sky-50" : isCurrentUser ? "bg-primary-600 text-primary-50" : ""
+          )}
+        >
+          {client.isCreator ? "Creator" : isCurrentUser ? "You" : "Connected"}
+        </Badge>
+      )}
     </motion.div>
   );
 });

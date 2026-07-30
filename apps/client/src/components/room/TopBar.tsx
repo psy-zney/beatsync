@@ -15,6 +15,7 @@ interface TopBarProps {
 export const TopBar = ({ roomId }: TopBarProps) => {
   const isLoadingAudio = useGlobalStore((state) => state.isInitingSystem);
   const isSynced = useGlobalStore((state) => state.isSynced);
+  const hasUserStartedSystem = useGlobalStore((state) => state.hasUserStartedSystem);
   const roundTripEstimate = useGlobalStore((state) => state.roundTripEstimate);
   const connectedClientCount = useGlobalStore((state) => state.connectedClients.length);
   const clockOffset = useGlobalStore((state) => state.offsetEstimate);
@@ -23,7 +24,7 @@ export const TopBar = ({ roomId }: TopBarProps) => {
   // Get current user from global store
 
   // Show minimal nav bar when synced and not loading
-  if (!isLoadingAudio && isSynced) {
+  if (!isLoadingAudio && (isSynced || hasUserStartedSystem)) {
     return (
       <div className="h-8 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-4 border-b border-zinc-800">
         <div className="flex items-center space-x-4 text-xs text-neutral-400 py-2 md:py-0">

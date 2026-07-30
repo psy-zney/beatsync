@@ -4,16 +4,25 @@ import { create } from "zustand";
 interface ChatState {
   messages: ChatMessageType[];
   newestId: number;
+  notificationVolume: number;
 
   // Actions
   setMessages: (messages: ChatMessageType[], isFullSync: boolean, newestId: number) => void;
   addMessage: (message: ChatMessageType) => void;
+  setNotificationVolume: (volume: number) => void;
   reset: () => void;
 }
+
+const getSavedNotificationVolume = () => {
+  if (typeof window === "undefined") return 1;
+  const savedVolume = Number(window.localStorage.getItem("beatsync-chat-notification-volume"));
+  return Number.isFinite(savedVolume) ? Math.max(0, Math.min(1, savedVolume)) : 1;
+};
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   newestId: 0,
+  notificationVolume: getSavedNotificationVolume(),
 
   setMessages: (messages, isFullSync, newestId) => {
     set((state) => {
@@ -36,6 +45,14 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [...state.messages, message],
       newestId: message.id,
     }));
+  },
+
+  setNotificationVolume: (volume) => {
+    const safeVolume = Math.max(0, Math.min(1, volume));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("beatsync-chat-notification-volume", String(safeVolume));
+    }
+    set({ notificationVolume: safeVolume });
   },
 
   reset: () => {

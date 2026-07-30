@@ -10,7 +10,7 @@ import { useRoomStore } from "@/store/room";
 import { validateProbePair, getProbeStats, NTPMeasurement } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, epochNow, NTPResponseMessageType, WSResponseSchema } from "@beatsync/shared";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Process an NTP_RESPONSE into a measurement and attempt to complete a probe pair.
@@ -61,6 +61,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const setActiveStreamJobs = useGlobalStore((state) => state.setActiveStreamJobs);
   const setMessages = useChatStore((state) => state.setMessages);
   const handleLoadAudioSource = useGlobalStore((state) => state.handleLoadAudioSource);
+  const hasConnectedOnceRef = useRef(false);
 
   // Use the NTP heartbeat hook
   const { startHeartbeat, stopHeartbeat, markNTPResponseReceived } = useNtpHeartbeat({
@@ -78,7 +79,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     scheduleReconnection,
     cleanup: cleanupReconnection,
   } = useWebSocketReconnection({
-    maxAttempts: 5,
+    maxAttempts: 0,
     initialInterval: 1000,
     maxInterval: 3000,
     createConnection: () => createConnection(),
@@ -97,14 +98,16 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     const SOCKET_URL = `${getWsUrl()}?roomId=${roomId}&username=${username}&clientId=${clientId}${adminParam}${creatorParam}`;
     console.log("Creating new WS connection to", SOCKET_URL);
 
-    // Clear previous connection if it exists
-    if (socket) {
+    // Clear the actual current connection, including sockets created by a
+    // previous reconnect attempt (the render closure can otherwise be stale).
+    const previousSocket = useGlobalStore.getState().socket;
+    if (previousSocket) {
       console.log("Clearing previous connection");
-      socket.onclose = () => {};
-      socket.onerror = () => {};
-      socket.onmessage = () => {};
-      socket.onopen = () => {};
-      socket.close();
+      previousSocket.onclose = () => {};
+      previousSocket.onerror = () => {};
+      previousSocket.onmessage = () => {};
+      previousSocket.onopen = () => {};
+      previousSocket.close();
     }
 
     const ws = new WebSocket(SOCKET_URL);
@@ -113,12 +116,25 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
     ws.onopen = async () => {
       console.log("Websocket onopen fired.");
+      hasConnectedOnceRef.current = true;
 
       // Reset reconnection state
       onConnectionOpen();
 
       // Start NTP heartbeat
       startHeartbeat();
+
+      // Resume an audio load that was requested while the backend was offline.
+      const globalState = useGlobalStore.getState();
+      const pendingAudio = globalState.audioSources.find(
+        (source) => source.source.url === globalState.awaitingSyncAfterLoadUrl
+      );
+      if (pendingAudio && pendingAudio.status !== "loaded" && pendingAudio.status !== "loading") {
+        handleLoadAudioSource({
+          type: "LOAD_AUDIO_SOURCE",
+          audioSourceToPlay: pendingAudio.source,
+        });
+      }
 
       // Request notification permission for chat alerts outside browser
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -140,6 +156,14 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
       // Schedule reconnection with exponential backoff
       scheduleReconnection();
+    };
+
+    ws.onerror = () => {
+      // Closing guarantees the normal reconnection path runs on browsers that
+      // otherwise leave a failed socket stuck in CONNECTING.
+      if (ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+        ws.close();
+      }
     };
 
     // TODO: Refactor into exhaustive handler registry
@@ -182,7 +206,12 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
             event.messages.forEach((msg) => {
               if (msg.clientId !== clientId) {
                 // Play notification sound
-                new Audio("/anime-ahh.mp3").play().catch(() => {});
+                const notificationVolume = useChatStore.getState().notificationVolume;
+                if (notificationVolume > 0) {
+                  const notificationAudio = new Audio("/anime-ahh.mp3");
+                  notificationAudio.volume = notificationVolume;
+                  notificationAudio.play().catch(() => {});
+                }
 
                 // Show desktop notification even when user is outside the browser window
                 if (typeof window !== "undefined" && "Notification" in window) {
@@ -294,17 +323,13 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
     // Only run this effect once after room is loaded and clientId is available
     if (isLoadingRoom || !roomId || !username || !clientId) return;
 
-    // Safety fallback timer: if initial connection does not open within 8s, trigger 404 error screen
+    // Only the initial backend failure uses the static 404 page. Once a room has
+    // opened successfully, later packet loss must preserve the mounted UI.
     const safetyTimer = setTimeout(() => {
       const currentSocket = useGlobalStore.getState().socket;
-      const isSynced = useGlobalStore.getState().isSynced;
-      if (!isSynced && (!currentSocket || currentSocket.readyState !== WebSocket.OPEN)) {
-        console.warn("Backend connection timeout reached (8s), triggering 404 connection error.");
-        useGlobalStore.getState().setReconnectionInfo({
-          isReconnecting: true,
-          currentAttempt: 5,
-          maxAttempts: 5,
-        });
+      if (!hasConnectedOnceRef.current && (!currentSocket || currentSocket.readyState !== WebSocket.OPEN)) {
+        console.warn("Initial backend connection timed out; opening the static 404 page.");
+        window.location.replace("/404.html");
       }
     }, 8000);
 

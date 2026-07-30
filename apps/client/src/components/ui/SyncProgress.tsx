@@ -92,7 +92,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
 
   // Check if max reconnection attempts have been reached
   const hasReconnectionFailed =
-    reconnectionInfo.isReconnecting && reconnectionInfo.currentAttempt >= reconnectionInfo.maxAttempts;
+    reconnectionInfo.isReconnecting &&
+    reconnectionInfo.maxAttempts > 0 &&
+    reconnectionInfo.currentAttempt >= reconnectionInfo.maxAttempts;
 
   // If reconnection failed after max attempts or backend unreachable
   if (hasReconnectionFailed) {
@@ -253,7 +255,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.25 }}
           >
-            Thử lần {reconnectionInfo.currentAttempt} trên {reconnectionInfo.maxAttempts}
+            {reconnectionInfo.maxAttempts > 0
+              ? `Thử lần ${reconnectionInfo.currentAttempt} trên ${reconnectionInfo.maxAttempts}`
+              : `Lần thử ${reconnectionInfo.currentAttempt} • sẽ tự động tiếp tục`}
           </motion.p>
         </motion.div>
       </OuterModal>

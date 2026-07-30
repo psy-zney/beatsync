@@ -559,37 +559,68 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       addURLToLRU(url);
 
       // Send message to server that the source is loaded (re-read socket in case of reconnect during fetch)
-      const { socket } = getSocket(get());
-      sendWSRequest({
-        ws: socket,
-        request: {
-          type: ClientActionEnum.enum.AUDIO_SOURCE_LOADED,
-          source: { url },
-        },
-      });
+      const socket = get().socket;
+      const didNotifyServer = socket
+        ? sendWSRequest({
+            ws: socket,
+            request: {
+              type: ClientActionEnum.enum.AUDIO_SOURCE_LOADED,
+              source: { url },
+            },
+          })
+        : false;
 
       const refreshedState = get();
       if (refreshedState.awaitingSyncAfterLoadUrl === url && !refreshedState.isPlaying) {
         set({ awaitingSyncAfterLoadUrl: null });
-        sendWSRequest({
-          ws: socket,
-          request: { type: ClientActionEnum.enum.SYNC },
-        });
+        if (didNotifyServer && socket) {
+          sendWSRequest({
+            ws: socket,
+            request: { type: ClientActionEnum.enum.SYNC },
+          });
+        } else {
+          const audioIndex = refreshedState.findAudioIndexByUrl(url);
+          if (audioIndex !== null) {
+            refreshedState.playAudio({ offset: 0, when: 0, audioIndex });
+            toast.info("Đã tải xong. Đang phát cục bộ trong lúc chờ kết nối lại.", {
+              id: "offline-local-playback",
+            });
+          }
+        }
       }
 
       eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
     } catch (error) {
       console.error(`Failed to load audio source ${url}:`, error);
+      const currentSocket = get().socket;
+      const isConnectionUnavailable =
+        !currentSocket ||
+        currentSocket.readyState !== WebSocket.OPEN ||
+        (typeof navigator !== "undefined" && !navigator.onLine);
       // Update the source with error status
       set((currentState) => ({
         audioSources: currentState.audioSources.map((as) =>
-          as.source.url === url ? { ...as, status: "error", error: String(error) } : as
+          as.source.url === url
+            ? isConnectionUnavailable
+              ? { ...as, status: "idle", buffer: undefined, error: undefined }
+              : { ...as, status: "error", error: String(error) }
+            : as
         ),
         awaitingSyncAfterLoadUrl:
-          currentState.awaitingSyncAfterLoadUrl === url ? null : currentState.awaitingSyncAfterLoadUrl,
+          !isConnectionUnavailable && currentState.awaitingSyncAfterLoadUrl === url
+            ? null
+            : currentState.awaitingSyncAfterLoadUrl,
       }));
 
-      eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
+      if (isConnectionUnavailable) {
+        toast.warning("Bài này chưa có trong RAM. Beatsync sẽ tải lại khi kết nối được khôi phục.", {
+          id: "offline-audio-loading",
+        });
+      }
+
+      if (!isConnectionUnavailable) {
+        eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
+      }
     }
   };
 
@@ -1005,6 +1036,26 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         return;
       }
 
+      if (socket.readyState !== WebSocket.OPEN) {
+        const audioIndex = state.findAudioIndexByUrl(audioId);
+        const audioSource = audioIndex === null ? null : state.audioSources[audioIndex];
+        const offset = trackTimeSeconds ?? state.getCurrentTrackPosition();
+
+        if (audioIndex !== null && audioSource?.status === "loaded" && audioSource.buffer) {
+          state.playAudio({ offset, when: 0, audioIndex });
+          toast.info("Server đang mất kết nối — nhạc có trong RAM vẫn được phát cục bộ.", {
+            id: "offline-local-playback",
+          });
+        } else {
+          set({ awaitingSyncAfterLoadUrl: audioId });
+          if (audioSource?.status !== "loading") void loadAudioSource(audioId);
+          toast.warning("Đang chờ tải bài và kết nối lại với server…", {
+            id: "offline-audio-loading",
+          });
+        }
+        return;
+      }
+
       sendWSRequest({
         ws: socket,
         request: {
@@ -1018,6 +1069,14 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     broadcastPause: () => {
       const state = get();
       const { socket } = getSocket(state);
+
+      if (socket.readyState !== WebSocket.OPEN) {
+        if (state.isPlaying) state.pauseAudio({ when: 0 });
+        toast.info("Đã tạm dừng cục bộ trong lúc mất kết nối.", {
+          id: "offline-local-playback",
+        });
+        return;
+      }
 
       sendWSRequest({
         ws: socket,
@@ -1107,7 +1166,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       const state = get();
       const { socket } = getSocket(state);
 
-      sendWSRequest({
+      const sent = sendWSRequest({
         ws: socket,
         request: {
           type: ClientActionEnum.enum.SEND_CHAT_MESSAGE,
@@ -1115,6 +1174,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           replyToMessageId,
         },
       });
+      if (!sent) {
+        toast.warning("Tin nhắn chưa gửi được vì đang mất kết nối.");
+      }
     },
 
     processStopSpatialAudio: () => {

@@ -8,9 +8,10 @@ import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
 import { formatChatTimestamp } from "@/utils/time";
 import { ChatMessageType } from "@beatsync/shared";
-import { ChevronDown, MessageCircle, Reply, X } from "lucide-react";
+import { ChevronDown, MessageCircle, Reply, Volume2, VolumeX, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Slider } from "@/components/ui/slider";
 
 // Constants
 const MESSAGE_GROUP_TIME_WINDOW_MS = 1 * 60 * 1000; // 1 minute
@@ -29,8 +30,11 @@ export const Chat = () => {
   const [replyingTo, setReplyingTo] = useState<ChatMessageType | null>(null);
 
   const currentMessages = useChatStore((state) => state.messages);
+  const notificationVolume = useChatStore((state) => state.notificationVolume);
+  const setNotificationVolume = useChatStore((state) => state.setNotificationVolume);
   const sendChatMessage = useGlobalStore((state) => state.sendChatMessage);
   const currentUser = useGlobalStore((state) => state.currentUser);
+  const lastAudibleVolumeRef = useRef(notificationVolume || 0.7);
 
   // Calculate new messages since user started scrolling
   const newMessageCount = isUserScrolling ? currentMessages.length - messageCountSnapshot : 0;
@@ -164,8 +168,44 @@ export const Chat = () => {
 
   return (
     <div className="relative h-full overflow-hidden">
+      <div className="absolute inset-x-0 top-0 z-20 flex h-10 items-center gap-2 border-b border-neutral-800/60 bg-neutral-900/95 px-3 backdrop-blur">
+        <button
+          type="button"
+          className="text-neutral-400 transition-colors hover:text-white"
+          title={notificationVolume === 0 ? "Bật âm báo chat" : "Tắt âm báo chat"}
+          aria-label={notificationVolume === 0 ? "Bật âm báo chat" : "Tắt âm báo chat"}
+          onClick={() => {
+            if (notificationVolume > 0) {
+              lastAudibleVolumeRef.current = notificationVolume;
+              setNotificationVolume(0);
+            } else {
+              setNotificationVolume(lastAudibleVolumeRef.current);
+            }
+          }}
+        >
+          {notificationVolume === 0 ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+        </button>
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-neutral-500">Âm báo</span>
+        <Slider
+          value={[notificationVolume * 100]}
+          min={0}
+          max={100}
+          step={1}
+          aria-label="Âm lượng thông báo chat"
+          onValueChange={(value) => {
+            const nextVolume = value[0] / 100;
+            if (nextVolume > 0) lastAudibleVolumeRef.current = nextVolume;
+            setNotificationVolume(nextVolume);
+          }}
+          className="flex-1"
+        />
+        <span className="w-7 text-right text-[10px] tabular-nums text-neutral-500">
+          {Math.round(notificationVolume * 100)}
+        </span>
+      </div>
+
       {/* Messages Area with padding container */}
-      <div className="h-full" style={{ paddingBottom: `${inputAreaHeight}px` }}>
+      <div className="h-full pt-10" style={{ paddingBottom: `${inputAreaHeight}px` }}>
         <ScrollArea ref={scrollAreaRef} className="h-full px-2 pt-3">
           {/* Empty state */}
           <AnimatePresence>
