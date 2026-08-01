@@ -195,7 +195,7 @@ async function extractViaDirectYtDlp(
   const ytdlpPath = findYtDlpBinary();
   const watchUrl = createWatchUrl(videoId);
 
-  const args = ["--dump-json", "-f", "bestaudio/best", "--no-warnings", "--cookies", join(process.cwd(), "cookies.txt"), ...extraArgs, watchUrl];
+  const args = ["--dump-json", "-f", "bestaudio/best", "--no-warnings", "--cookies", "/home/ubuntu/beatsync/cookies.txt", ...extraArgs, watchUrl];
 
   const proc = Bun.spawn([ytdlpPath, ...args], {
     stdout: "pipe",

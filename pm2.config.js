@@ -5,6 +5,6 @@ module.exports = {
   script: "dist/index.js", // Bundled entry point
   interpreter: "bun", // Bun interpreter
   env: {
-    PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH}`, // Add "~/.bun/bin/bun" to PATH
+    PATH: `/usr/local/bin:${process.env.HOME}/.bun/bin:${process.env.PATH}`, // Add deno & bun to PATH
   },
 };
