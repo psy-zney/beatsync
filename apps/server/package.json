@@ -7,7 +7,7 @@
     "dev:demo": "DEMO=1 bun run --hot src/index.ts",
     "dev:log": "rm -f ../../logs/server.log && bun run --hot src/index.ts 2>&1 | tee ../../logs/server.log",
     "dev:demo:log": "rm -f ../../logs/server.log && DEMO=1 bun run --hot src/index.ts 2>&1 | tee ../../logs/server.log",
-    "build": "bun run build:rust && bun run build:ts",
+    "build": "bun run build:ts",
     "build:ts": "bun build src/index.ts --target=bun --outdir=dist --sourcemap",
     "build:rust": "cargo build --release --manifest-path yt-rust-extractor/Cargo.toml",
     "build:demo": "bun run build",
