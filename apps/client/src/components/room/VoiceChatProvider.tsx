@@ -35,6 +35,8 @@ interface VoiceChatContextType {
   disconnect: () => void;
   toggleMute: () => void;
   toggleAINoiseSuppression: () => void;
+  switchAudioInputDevice: (deviceId: string) => Promise<void>;
+  switchAudioOutputDevice: (deviceId: string) => Promise<void>;
 }
 
 const VoiceChatContext = createContext<VoiceChatContextType | null>(null);
@@ -71,6 +73,8 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const username = useRoomStore((state) => state.username);
   const micVolumes = useGlobalStore((state) => state.micVolumes);
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
+  const setAudioInputDeviceId = useWebRTCStore((state) => state.setAudioInputDeviceId);
+  const setAudioOutputDeviceId = useWebRTCStore((state) => state.setAudioOutputDeviceId);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -272,6 +276,12 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             element.setAttribute("playsinline", "");
             element.dataset.livekitParticipant = participant.identity;
             element.style.display = "none";
+            // Apply custom audio output device if set
+            const currentOutputDeviceId = useWebRTCStore.getState().audioOutputDeviceId;
+            if (currentOutputDeviceId && "setSinkId" in element) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (element as any).setSinkId(currentOutputDeviceId).catch(console.error);
+            }
             document.body.appendChild(element);
             const current = remoteAudioRef.current.get(participant.identity) ?? [];
             remoteAudioRef.current.set(participant.identity, [...current, element]);
@@ -328,12 +338,20 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         });
 
         await room.connect(credentials.serverUrl, credentials.participantToken, { autoSubscribe: true });
+
+        if (useWebRTCStore.getState().audioOutputDeviceId) {
+          await room
+            .switchActiveDevice("audiooutput", useWebRTCStore.getState().audioOutputDeviceId as string)
+            .catch(console.error);
+        }
+
         await room.startAudio();
         const publication = await room.localParticipant.setMicrophoneEnabled(!desiredMutedRef.current, {
           echoCancellation: true,
           noiseSuppression: isAINoiseSuppressionEnabled,
           autoGainControl: true,
           channelCount: 1,
+          deviceId: useWebRTCStore.getState().audioInputDeviceId,
         });
 
         if (!shouldStayConnectedRef.current || roomRef.current !== room) {
@@ -439,6 +457,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         noiseSuppression: isAINoiseSuppressionEnabled,
         autoGainControl: true,
         channelCount: 1,
+        deviceId: useWebRTCStore.getState().audioInputDeviceId,
       })
       .then((publication) => {
         setLocalStream(publication?.audioTrack ? new MediaStream([publication.audioTrack.mediaStreamTrack]) : null);
@@ -455,6 +474,43 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     setIsAINoiseSuppressionEnabled((value) => !value);
     toast.message("Khử ồn sẽ được áp dụng ở lần bật microphone tiếp theo.");
   }, []);
+
+  const switchAudioInputDevice = useCallback(
+    async (deviceId: string) => {
+      setAudioInputDeviceId(deviceId);
+      const room = roomRef.current;
+      if (room && !isMuted) {
+        await room.switchActiveDevice("audioinput", deviceId).catch(() => {
+          toast.error("Không thể đổi thiết bị microphone");
+        });
+      }
+    },
+    [isMuted, setAudioInputDeviceId]
+  );
+
+  const switchAudioOutputDevice = useCallback(
+    async (deviceId: string) => {
+      setAudioOutputDeviceId(deviceId);
+      const room = roomRef.current;
+
+      // Update all current audio elements manually as fallback
+      remoteAudioRef.current.forEach((elements) => {
+        elements.forEach((element) => {
+          if ("setSinkId" in element) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (element as any).setSinkId(deviceId).catch(console.error);
+          }
+        });
+      });
+
+      if (room) {
+        await room.switchActiveDevice("audiooutput", deviceId).catch(() => {
+          toast.error("Không thể đổi thiết bị loa");
+        });
+      }
+    },
+    [setAudioOutputDeviceId]
+  );
 
   useEffect(() => {
     const room = roomRef.current;
@@ -483,6 +539,8 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         disconnect,
         toggleMute,
         toggleAINoiseSuppression,
+        switchAudioInputDevice,
+        switchAudioOutputDevice,
       }}
     >
       {children}

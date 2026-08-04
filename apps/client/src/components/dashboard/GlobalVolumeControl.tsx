@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useClientId } from "@/hooks/useClientId";
 import { useVoiceChat } from "../room/VoiceChatProvider";
+import { AudioDeviceSelector } from "./AudioDeviceSelector";
 
 interface VolumeControlProps {
   icon: React.ReactNode;
@@ -271,6 +272,9 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
           </div>
 
           <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
+            {/* Audio Device Selector */}
+            <AudioDeviceSelector />
+
             {/* Personal Music Volume */}
             <div className="bg-black/10 p-2.5 rounded-md border border-white/5">
               <VolumeControl
