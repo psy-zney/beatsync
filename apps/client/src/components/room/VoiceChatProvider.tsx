@@ -346,13 +346,23 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await room.startAudio();
-        const publication = await room.localParticipant.setMicrophoneEnabled(!desiredMutedRef.current, {
-          echoCancellation: true,
-          noiseSuppression: isAINoiseSuppressionEnabled,
-          autoGainControl: true,
-          channelCount: 1,
-          deviceId: useWebRTCStore.getState().audioInputDeviceId,
-        });
+
+        const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
+        const shouldEnableMic = !desiredMutedRef.current && audioInputDeviceId !== "none";
+
+        let publication = null;
+        if (shouldEnableMic) {
+          publication = await room.localParticipant
+            .setMicrophoneEnabled(true, {
+              echoCancellation: true,
+              noiseSuppression: isAINoiseSuppressionEnabled,
+              autoGainControl: true,
+              channelCount: 1,
+              deviceId:
+                audioInputDeviceId === "default" || audioInputDeviceId === "none" ? undefined : audioInputDeviceId,
+            })
+            .catch(console.error);
+        }
 
         if (!shouldStayConnectedRef.current || roomRef.current !== room) {
           room.disconnect(true);
@@ -439,11 +449,17 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const connect = useCallback(async () => {
     if (connectionInFlightRef.current || shouldStayConnectedRef.current) return;
     shouldStayConnectedRef.current = true;
-    desiredMutedRef.current = false;
+    desiredMutedRef.current = true; // Default to muted to prevent Bluetooth HFP drop
     await connectInternalRef.current(false);
   }, []);
 
   const toggleMute = useCallback(() => {
+    const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
+    if (audioInputDeviceId === "none") {
+      toast.error("Vui lòng chọn Microphone trong phần Cài đặt để nói chuyện.");
+      return;
+    }
+
     const nextMuted = !desiredMutedRef.current;
     desiredMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
@@ -457,7 +473,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         noiseSuppression: isAINoiseSuppressionEnabled,
         autoGainControl: true,
         channelCount: 1,
-        deviceId: useWebRTCStore.getState().audioInputDeviceId,
+        deviceId: audioInputDeviceId === "default" ? undefined : audioInputDeviceId,
       })
       .then((publication) => {
         setLocalStream(publication?.audioTrack ? new MediaStream([publication.audioTrack.mediaStreamTrack]) : null);
@@ -479,13 +495,25 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     async (deviceId: string) => {
       setAudioInputDeviceId(deviceId);
       const room = roomRef.current;
+
+      if (deviceId === "none") {
+        desiredMutedRef.current = true;
+        setIsMuted(true);
+        if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, true);
+        if (room) {
+          await room.localParticipant.setMicrophoneEnabled(false).catch(console.error);
+          setLocalStream(null);
+        }
+        return;
+      }
+
       if (room && !isMuted) {
-        await room.switchActiveDevice("audioinput", deviceId).catch(() => {
+        await room.switchActiveDevice("audioinput", deviceId === "default" ? "" : deviceId).catch(() => {
           toast.error("Không thể đổi thiết bị microphone");
         });
       }
     },
-    [isMuted, setAudioInputDeviceId]
+    [isMuted, setAudioInputDeviceId, clientId]
   );
 
   const switchAudioOutputDevice = useCallback(

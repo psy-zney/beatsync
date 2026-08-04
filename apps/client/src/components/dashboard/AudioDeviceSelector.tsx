@@ -15,8 +15,8 @@ export const AudioDeviceSelector = () => {
   useEffect(() => {
     const fetchDevices = async () => {
       try {
-        // Request permissions first to get device labels
-        await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+        // Simply enumerate devices without aggressively requesting permission
+        // which would trigger Bluetooth HFP and drop audio quality.
         const allDevices = await navigator.mediaDevices.enumerateDevices();
         setDevices(allDevices);
       } catch (error) {
@@ -47,7 +47,8 @@ export const AudioDeviceSelector = () => {
             onChange={(e) => switchAudioInputDevice(e.target.value)}
             className="w-full bg-neutral-900 border border-neutral-700 text-xs text-neutral-300 rounded-md px-2 py-1 outline-none focus:border-purple-500"
           >
-            <option value="default">Default</option>
+            <option value="none">Không dùng Mic (Nghe nhạc chất lượng cao)</option>
+            <option value="default">Mặc định</option>
             {audioInputDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
                 {device.label || `Microphone ${device.deviceId.substring(0, 5)}...`}
@@ -66,7 +67,7 @@ export const AudioDeviceSelector = () => {
             onChange={(e) => switchAudioOutputDevice(e.target.value)}
             className="w-full bg-neutral-900 border border-neutral-700 text-xs text-neutral-300 rounded-md px-2 py-1 outline-none focus:border-purple-500"
           >
-            <option value="default">Default</option>
+            <option value="default">Mặc định</option>
             {audioOutputDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
                 {device.label || `Speaker ${device.deviceId.substring(0, 5)}...`}
