@@ -50,7 +50,9 @@ export const FlyAudioController = () => {
       // the animation: currentPan is the exact value sent to the audio graph.
       const smoothing = 1 - Math.exp(-deltaSeconds / PAN_SMOOTHING_SECONDS);
       appliedPan += (targetPan - appliedPan) * smoothing;
-      audioContextManager.setStereoPan(appliedPan);
+      // AudioParam automation interpolates between animation frames at audio
+      // sample rate, avoiding zipper/click noise on sensitive headphones.
+      audioContextManager.setStereoPan(appliedPan, 0.035);
 
       if (now - lastVisualUpdate >= 33) {
         setCurrentPan(appliedPan);

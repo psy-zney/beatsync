@@ -354,8 +354,15 @@ class AudioContextManager {
 
     if (rampTime && rampTime > 0) {
       const now = this.audioContext.currentTime;
-      pan.cancelScheduledValues(now);
-      pan.setValueAtTime(pan.value, now);
+      // Hold the sample-accurate value already being rendered before replacing
+      // its automation. Resetting from pan.value here causes audible zipper
+      // noise while a manual slider emits rapid updates.
+      if (typeof pan.cancelAndHoldAtTime === "function") {
+        pan.cancelAndHoldAtTime(now);
+      } else {
+        pan.cancelScheduledValues(now);
+        pan.setValueAtTime(pan.value, now);
+      }
       pan.linearRampToValueAtTime(clampedValue, now + rampTime);
     } else {
       pan.value = clampedValue;
