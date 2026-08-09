@@ -25,6 +25,10 @@ class AudioContextManager {
   private masterGainNode: GainNode | null = null;
   private lowPassFilterNode: BiquadFilterNode | null = null;
   private stereoPannerNode: StereoPannerNode | null = null;
+  private flyOscillatorNode: OscillatorNode | null = null;
+  private flyDepthGainNode: GainNode | null = null;
+  private flyAnalyserNode: AnalyserNode | null = null;
+  private flyAnalyserBuffer: Float32Array<ArrayBuffer> | null = null;
   private stateChangeCallback: ((state: AudioContextState) => void) | null = null;
   private wakeLock: WakeLockSentinel | null = null;
   private hasVisibilityListener = false;
@@ -281,6 +285,22 @@ class AudioContextManager {
     this.stereoPannerNode = this.audioContext.createStereoPanner();
     this.stereoPannerNode.pan.value = 0;
 
+    // The Fly LFO runs on the audio rendering thread, so background-tab timer
+    // throttling and track changes cannot freeze the stereo movement.
+    this.flyOscillatorNode = this.audioContext.createOscillator();
+    this.flyOscillatorNode.type = "triangle";
+    this.flyOscillatorNode.frequency.value = 1 / 8;
+    this.flyDepthGainNode = this.audioContext.createGain();
+    this.flyDepthGainNode.gain.value = 0;
+    this.flyAnalyserNode = this.audioContext.createAnalyser();
+    this.flyAnalyserNode.fftSize = 32;
+    this.flyAnalyserBuffer = new Float32Array(this.flyAnalyserNode.fftSize);
+
+    this.flyOscillatorNode.connect(this.flyDepthGainNode);
+    this.flyDepthGainNode.connect(this.stereoPannerNode.pan);
+    this.flyDepthGainNode.connect(this.flyAnalyserNode);
+    this.flyOscillatorNode.start();
+
     this.lowPassFilterNode.connect(this.stereoPannerNode);
     this.stereoPannerNode.connect(this.masterGainNode);
     this.masterGainNode.connect(this.audioContext.destination);
@@ -366,6 +386,59 @@ class AudioContextManager {
       pan.linearRampToValueAtTime(clampedValue, now + rampTime);
     } else {
       pan.value = clampedValue;
+    }
+  }
+
+  setFlyAuto(depth: number, cycleSeconds: number): void {
+    this.getContext();
+    if (!this.audioContext || !this.flyOscillatorNode || !this.flyDepthGainNode) return;
+
+    const now = this.audioContext.currentTime;
+    const clampedDepth = Math.max(0, Math.min(0.8, depth));
+    const clampedCycle = Math.max(2, Math.min(16, cycleSeconds));
+
+    this.setStereoPan(0, 0.2);
+    this.flyOscillatorNode.frequency.setTargetAtTime(1 / clampedCycle, now, 0.08);
+    this.holdAudioParam(this.flyDepthGainNode.gain, now);
+    this.flyDepthGainNode.gain.linearRampToValueAtTime(clampedDepth, now + 0.2);
+  }
+
+  setFlyManual(pan: number): void {
+    this.getContext();
+    if (!this.audioContext || !this.flyDepthGainNode) return;
+
+    const now = this.audioContext.currentTime;
+    this.holdAudioParam(this.flyDepthGainNode.gain, now);
+    this.flyDepthGainNode.gain.linearRampToValueAtTime(0, now + 0.16);
+    this.setStereoPan(Math.max(-0.8, Math.min(0.8, pan)), 0.2);
+  }
+
+  disableFly(): void {
+    if (!this.audioContext || !this.flyDepthGainNode) return;
+    const now = this.audioContext.currentTime;
+    this.holdAudioParam(this.flyDepthGainNode.gain, now);
+    this.flyDepthGainNode.gain.linearRampToValueAtTime(0, now + 0.3);
+    this.setStereoPan(0, 0.3);
+  }
+
+  getCurrentFlyPan(): number {
+    if (!this.stereoPannerNode) return 0;
+
+    let modulation = 0;
+    if (this.flyAnalyserNode && this.flyAnalyserBuffer) {
+      this.flyAnalyserNode.getFloatTimeDomainData(this.flyAnalyserBuffer);
+      modulation = this.flyAnalyserBuffer[this.flyAnalyserBuffer.length - 1] ?? 0;
+    }
+
+    return Math.max(-1, Math.min(1, this.stereoPannerNode.pan.value + modulation));
+  }
+
+  private holdAudioParam(param: AudioParam, time: number): void {
+    if (typeof param.cancelAndHoldAtTime === "function") {
+      param.cancelAndHoldAtTime(time);
+    } else {
+      param.cancelScheduledValues(time);
+      param.setValueAtTime(param.value, time);
     }
   }
 
