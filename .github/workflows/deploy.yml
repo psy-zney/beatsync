@@ -45,14 +45,35 @@ jobs:
           fi
 
       - name: Deploy to VPS
-        # Pin the action commit so a moved tag cannot gain access to the VPS key.
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          fingerprint: ${{ secrets.VPS_FINGERPRINT }}
-          script: |
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_FINGERPRINT: ${{ secrets.VPS_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          key_file="$(mktemp)"
+          host_keys="$(mktemp)"
+          trap 'rm -f "$key_file" "$host_keys"' EXIT
+
+          printf '%s\n' "$VPS_SSH_KEY" >"$key_file"
+          chmod 600 "$key_file"
+
+          ssh-keyscan -T 10 -t ed25519 "$VPS_HOST" >"$host_keys" 2>/dev/null
+          actual_fingerprint="$(ssh-keygen -lf "$host_keys" -E sha256 | awk '{print $2}')"
+          if [ "$actual_fingerprint" != "$VPS_FINGERPRINT" ]; then
+            echo "::error::VPS host fingerprint mismatch"
+            exit 1
+          fi
+
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 "$host_keys" "$HOME/.ssh/known_hosts"
+          ssh \
+            -i "$key_file" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USERNAME@$VPS_HOST" 'bash -se' <<'REMOTE_SCRIPT'
             export PATH="$HOME/.bun/bin:/usr/local/bin:$PATH"
             cd ~/beatsync
             git pull --ff-only origin main
@@ -64,3 +85,4 @@ jobs:
               DEPLOY_HOME="$HOME" \
               bash scripts/configure-oracle-memory.sh
             SKIP_PULL=1 bash update.sh
+          REMOTE_SCRIPT
