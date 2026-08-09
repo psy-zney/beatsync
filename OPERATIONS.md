@@ -8,6 +8,7 @@ The production defaults are tuned for an Oracle VM with 1 GB RAM:
 - request a PM2-supervised restart if RSS remains above 750 MB for three checks;
 - PM2 performs an additional restart at 850 MB and restores the process after a crash;
 - a 2 GB swap file and the `pm2-<user>` systemd unit survive OOM events and VM reboots.
+- a systemd timer resurrects the saved PM2 process list if the shared PM2 daemon itself is killed.
 
 State is saved first to `apps/server/data/state-backup-latest.json`, then to R2. Startup selects the newer valid snapshot, so a temporary R2/network failure does not require logging in to Oracle to recover rooms and playlists.
 
@@ -43,5 +44,6 @@ pm2 status
 pm2 logs beatsync-server --lines 100
 swapon --show
 systemctl status pm2-$(id -un)
+systemctl status beatsync-pm2-watchdog.timer
 curl -fsS "http://localhost:${PORT:-1001}/health"
 ```

@@ -11,6 +11,15 @@ DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-ubuntu}}"
 DEPLOY_HOME="${DEPLOY_HOME:-/home/$DEPLOY_USER}"
 PM2_BIN="${PM2_BIN:-$DEPLOY_HOME/.bun/bin/pm2}"
 
+if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+  echo "Invalid DEPLOY_USER: $DEPLOY_USER" >&2
+  exit 1
+fi
+if [[ "$DEPLOY_HOME" != /* ]] || [[ "$DEPLOY_HOME" == "/" ]]; then
+  echo "Invalid DEPLOY_HOME: $DEPLOY_HOME" >&2
+  exit 1
+fi
+
 if [[ ! "$SWAP_SIZE_GB" =~ ^[1-9][0-9]*$ ]]; then
   echo "SWAP_SIZE_GB must be a positive integer" >&2
   exit 1
@@ -45,4 +54,39 @@ else
   exit 1
 fi
 
-echo "Oracle memory resilience configured (swap + PM2 systemd startup)."
+# A shared PM2 daemon may already own processes that are unrelated to Beatsync.
+# This timer safely resurrects the saved PM2 dump after daemon/OOM failure
+# without killing or adopting the currently running daemon.
+printf '%s\n' \
+  '[Unit]' \
+  'Description=Resurrect the saved PM2 process list' \
+  'After=network-online.target' \
+  'Wants=network-online.target' \
+  '' \
+  '[Service]' \
+  'Type=oneshot' \
+  "User=$DEPLOY_USER" \
+  "Environment=PM2_HOME=$DEPLOY_HOME/.pm2" \
+  "Environment=PATH=$(dirname "$PM2_BIN"):/usr/local/bin:/usr/bin:/bin" \
+  "ExecStart=$PM2_BIN resurrect" \
+  >/etc/systemd/system/beatsync-pm2-watchdog.service
+
+printf '%s\n' \
+  '[Unit]' \
+  'Description=Periodically ensure the PM2 process list is running' \
+  '' \
+  '[Timer]' \
+  'OnBootSec=45s' \
+  'OnUnitActiveSec=60s' \
+  'AccuracySec=10s' \
+  'Persistent=true' \
+  'Unit=beatsync-pm2-watchdog.service' \
+  '' \
+  '[Install]' \
+  'WantedBy=timers.target' \
+  >/etc/systemd/system/beatsync-pm2-watchdog.timer
+
+systemctl daemon-reload
+systemctl enable --now beatsync-pm2-watchdog.timer >/dev/null
+
+echo "Oracle memory resilience configured (swap + PM2 startup/watchdog)."
