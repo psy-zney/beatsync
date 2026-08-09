@@ -5,7 +5,7 @@ log() { printf '%s\n' "[deploy] $1"; }
 
 health_port="${HEALTH_PORT:-}"
 if [[ -z "$health_port" && -f apps/server/.env ]]; then
-  health_port="$(awk -F= '$1 == "PORT" { value = substr($0, index($0, "=") + 1); gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value); print value; exit }' apps/server/.env)"
+  health_port="$(awk -F= '$1 == "PORT" { value = substr($0, index($0, "=") + 1); gsub(/^[[:space:]"]+|[[:space:]"]+$/, "", value); print value; exit }' apps/server/.env)"
 fi
 health_port="${health_port:-1001}"
 if [[ ! "$health_port" =~ ^[1-9][0-9]{0,4}$ ]] || ((health_port > 65535)); then
