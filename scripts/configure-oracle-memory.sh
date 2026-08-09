@@ -2,6 +2,9 @@
 # Idempotent host setup for a small Oracle Ubuntu VM.
 set -euo pipefail
 
+# Administrative utilities such as swapon and sysctl live in sbin on Ubuntu.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
 SWAP_SIZE_GB="${SWAP_SIZE_GB:-2}"
 SWAP_FILE="${SWAP_FILE:-/swapfile}"
 DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-ubuntu}}"

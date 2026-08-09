@@ -43,5 +43,5 @@ pm2 status
 pm2 logs beatsync-server --lines 100
 swapon --show
 systemctl status pm2-$(id -un)
-curl -fsS http://localhost:1001/health
+curl -fsS "http://localhost:${PORT:-1001}/health"
 ```

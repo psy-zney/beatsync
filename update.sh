@@ -3,6 +3,17 @@ set -euo pipefail
 
 log() { printf '%s\n' "[deploy] $1"; }
 
+health_port="${HEALTH_PORT:-}"
+if [[ -z "$health_port" && -f apps/server/.env ]]; then
+  health_port="$(awk -F= '$1 == "PORT" { value = substr($0, index($0, "=") + 1); gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value); print value; exit }' apps/server/.env)"
+fi
+health_port="${health_port:-1001}"
+if [[ ! "$health_port" =~ ^[1-9][0-9]{0,4}$ ]] || ((health_port > 65535)); then
+  echo "Invalid health-check port: $health_port" >&2
+  exit 1
+fi
+health_url="http://127.0.0.1:${health_port}/health"
+
 if [[ ! -f package.json || ! -f pm2.config.js ]]; then
   echo "Run update.sh from the beatsync repository root" >&2
   exit 1
@@ -41,10 +52,10 @@ log "Starting/reloading PM2 with the resilience config"
 pm2 startOrReload pm2.config.js --update-env
 pm2 save
 
-log "Waiting for health check"
+log "Waiting for health check at $health_url"
 healthy=0
 for _attempt in $(seq 1 15); do
-  if curl -fsS --max-time 5 http://localhost:1001/health >/dev/null; then
+  if curl -fsS --max-time 5 "$health_url" >/dev/null; then
     healthy=1
     break
   fi
