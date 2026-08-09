@@ -19,6 +19,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Validate deploy secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_FINGERPRINT: ${{ secrets.VPS_FINGERPRINT }}
+        run: |
+          missing=""
+          [ -n "$VPS_HOST" ] || missing="$missing VPS_HOST"
+          [ -n "$VPS_USERNAME" ] || missing="$missing VPS_USERNAME"
+          [ -n "$VPS_SSH_KEY" ] || missing="$missing VPS_SSH_KEY"
+          [ -n "$VPS_FINGERPRINT" ] || missing="$missing VPS_FINGERPRINT"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository Actions secret(s):$missing"
+            exit 1
+          fi
+          case "$VPS_FINGERPRINT" in
+            SHA256:*) ;;
+            *) echo "::error::VPS_FINGERPRINT must start with SHA256:"; exit 1 ;;
+          esac
+          if ! printf '%s' "$VPS_SSH_KEY" | grep -Eq 'BEGIN (OPENSSH |RSA )?PRIVATE KEY'; then
+            echo "::error::VPS_SSH_KEY is not a complete private key"
+            exit 1
+          fi
+
       - name: Deploy to VPS
         # Pin the action commit so a moved tag cannot gain access to the VPS key.
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
