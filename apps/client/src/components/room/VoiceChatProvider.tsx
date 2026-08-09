@@ -2,6 +2,7 @@
 
 import { useClientId } from "@/hooks/useClientId";
 import { fetchVoiceToken } from "@/lib/api";
+import { audioContextManager } from "@/lib/audioContextManager";
 import { useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { useWebRTCStore } from "@/store/webrtc";
@@ -73,6 +74,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const username = useRoomStore((state) => state.username);
   const micVolumes = useGlobalStore((state) => state.micVolumes);
   const isDeafened = useWebRTCStore((state) => state.isDeafened);
+  const audioOutputDeviceId = useWebRTCStore((state) => state.audioOutputDeviceId);
   const setAudioInputDeviceId = useWebRTCStore((state) => state.setAudioInputDeviceId);
   const setAudioOutputDeviceId = useWebRTCStore((state) => state.setAudioOutputDeviceId);
 
@@ -142,6 +144,11 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => syncRemoteVolume(), [syncRemoteVolume]);
+
+  useEffect(() => {
+    if (!audioOutputDeviceId) return;
+    void audioContextManager.setOutputDevice(audioOutputDeviceId).catch(console.error);
+  }, [audioOutputDeviceId]);
 
   // A quiet two-tone cue makes call recovery noticeable without ending the call.
   useEffect(() => {
@@ -507,19 +514,47 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      if (room && !desiredMutedRef.current) {
+        // Fully release the previous capture track so a Bluetooth headset does
+        // not keep macOS in its low-quality hands-free profile.
+        await room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
+        setLocalStream(null);
+        try {
+          const publication = await room.localParticipant.setMicrophoneEnabled(true, {
+            echoCancellation: true,
+            noiseSuppression: isAINoiseSuppressionEnabled,
+            autoGainControl: true,
+            channelCount: 1,
+            deviceId: deviceId === "default" ? undefined : deviceId,
+          });
+          setLocalStream(publication?.audioTrack ? new MediaStream([publication.audioTrack.mediaStreamTrack]) : null);
+          return;
+        } catch {
+          desiredMutedRef.current = true;
+          setIsMuted(true);
+          if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, true);
+          toast.error("Không thể đổi microphone. Mic đã được tắt để bảo vệ chất lượng nhạc.");
+          return;
+        }
+      }
+
       if (room && !isMuted) {
         await room.switchActiveDevice("audioinput", deviceId === "default" ? "" : deviceId).catch(() => {
           toast.error("Không thể đổi thiết bị microphone");
         });
       }
     },
-    [isMuted, setAudioInputDeviceId, clientId]
+    [isMuted, setAudioInputDeviceId, clientId, isAINoiseSuppressionEnabled]
   );
 
   const switchAudioOutputDevice = useCallback(
     async (deviceId: string) => {
       setAudioOutputDeviceId(deviceId);
       const room = roomRef.current;
+
+      void audioContextManager.setOutputDevice(deviceId).catch(() => {
+        toast.error("Trình duyệt này không cho đổi đầu ra của nhạc.");
+      });
 
       // Update all current audio elements manually as fallback
       remoteAudioRef.current.forEach((elements) => {

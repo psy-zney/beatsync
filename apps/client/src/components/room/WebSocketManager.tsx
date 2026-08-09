@@ -124,6 +124,11 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
       // Start NTP heartbeat
       startHeartbeat();
 
+      sendWSRequest({
+        ws,
+        request: { type: ClientActionEnum.enum.UPDATE_PROFILE, avatar: useRoomStore.getState().avatar },
+      });
+
       // Resume an audio load that was requested while the backend was offline.
       const globalState = useGlobalStore.getState();
       const pendingAudio = globalState.audioSources.find(

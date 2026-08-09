@@ -22,9 +22,14 @@ import { handleWebRTCSignal } from "@/websocket/handlers/handleWebRTCSignal";
 import { handleSync } from "@/websocket/handlers/sync";
 import { handleSavePlaylist } from "@/websocket/handlers/handleSavePlaylist";
 import { handleImportSpotifyTracks } from "@/websocket/handlers/handleImportSpotifyTracks";
+import { handleUpdateProfile } from "@/websocket/handlers/handleUpdateProfile";
 import type { WebsocketRegistry } from "@/websocket/types";
 
 export const WS_REGISTRY: WebsocketRegistry = {
+  [ClientActionEnum.enum.UPDATE_PROFILE]: {
+    handle: handleUpdateProfile,
+    description: "Update and broadcast a client's avatar",
+  },
   [ClientActionEnum.enum.AUDIO_SOURCE_LOADED]: {
     handle: handleAudioSourceLoaded,
     description: "Audio source loaded event",

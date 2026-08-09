@@ -15,6 +15,7 @@ interface NewSyncerProps {
 
 import { VoiceChatProvider } from "./room/VoiceChatProvider";
 import { ProfileSetup } from "./ProfileSetup";
+import { FlyAudioController } from "./room/FlyAudioController";
 import type { LocalProfile } from "@/lib/profile";
 
 // Main component has been refactored into smaller components
@@ -62,6 +63,7 @@ export const NewSyncer = ({ roomId }: NewSyncerProps) => {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
         {/* WebSocket connection manager (non-visual component) */}
         <WebSocketManager roomId={roomId} username={username} />
+        <FlyAudioController />
 
         {/* Spatial audio background effects */}
         {/* <SpatialAudioBackground /> */}

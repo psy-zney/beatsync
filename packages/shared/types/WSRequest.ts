@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CHAT_CONSTANTS, LOW_PASS_CONSTANTS } from "../constants";
-import { AudioSourceSchema, PositionSchema } from "./basic";
+import { AudioSourceSchema, AvatarSchema, PositionSchema } from "./basic";
 
 // ROOM EVENTS
 export const LocationSchema = z.object({
@@ -36,6 +36,7 @@ export const ClientActionEnum = z.enum([
   "WEBRTC_SIGNAL", // WebRTC signaling message (Offer, Answer, ICE Candidate)
   "SAVE_PLAYLIST", // Save room playlist to bucket and clean up unused files
   "IMPORT_SPOTIFY_TRACKS", // Sequentially import spotify tracks
+  "UPDATE_PROFILE", // Broadcast the local avatar to other room members
 ]);
 
 export const NTPRequestPacketSchema = z.object({
@@ -161,13 +162,21 @@ export const SavePlaylistSchema = z.object({
 
 export const ImportSpotifyTracksSchema = z.object({
   type: z.literal(ClientActionEnum.enum.IMPORT_SPOTIFY_TRACKS),
-  tracks: z.array(
-    z.object({
-      title: z.string(),
-      artist: z.string(),
-      coverUrl: z.string().optional(),
-    })
-  ).min(1).max(500),
+  tracks: z
+    .array(
+      z.object({
+        title: z.string(),
+        artist: z.string(),
+        coverUrl: z.string().optional(),
+      })
+    )
+    .min(1)
+    .max(500),
+});
+
+export const UpdateProfileSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.UPDATE_PROFILE),
+  avatar: AvatarSchema,
 });
 
 export const WSRequestSchema = z.discriminatedUnion("type", [
@@ -194,6 +203,7 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   WebRTCSignalSchema,
   SavePlaylistSchema,
   ImportSpotifyTracksSchema,
+  UpdateProfileSchema,
 ]);
 export type WSRequestType = z.infer<typeof WSRequestSchema>;
 export type PlayActionType = z.infer<typeof PlayActionSchema>;

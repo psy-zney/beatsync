@@ -1,16 +1,13 @@
 import { z } from "zod";
 import { LOW_PASS_CONSTANTS } from "../constants";
-import {
-  LocationSchema,
-  PauseActionSchema,
-  PlayActionSchema,
-} from "./WSRequest";
-import { AudioSourceSchema, ChatMessageSchema, PositionSchema } from "./basic";
+import { LocationSchema, PauseActionSchema, PlayActionSchema } from "./WSRequest";
+import { AudioSourceSchema, AvatarSchema, ChatMessageSchema, PositionSchema } from "./basic";
 
 // Client change
 export const ClientDataSchema = z.object({
   username: z.string(),
   clientId: z.string(),
+  avatar: AvatarSchema.optional(),
   rtt: z.number().nonnegative().default(0), // Round-trip time in milliseconds
   compensationMs: z.number().nonnegative().default(0), // Client's local compensation (outputLatency + nudge)
   nudgeMs: z.number().default(0), // Manual timing nudge set by the user
@@ -135,8 +132,6 @@ const DemoAudioReadyCountSchema = z.object({
   count: z.number().nonnegative(),
 });
 export type DemoAudioReadyCountType = z.infer<typeof DemoAudioReadyCountSchema>;
-
-
 
 // Export both broadcast types
 export const WSBroadcastSchema = z.discriminatedUnion("type", [

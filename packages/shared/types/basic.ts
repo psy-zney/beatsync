@@ -14,6 +14,14 @@ export const PositionSchema = z.object({
 });
 export type PositionType = z.infer<typeof PositionSchema>;
 
+export const AvatarSchema = z
+  .string()
+  .max(120_000)
+  .refine(
+    (value) => Array.from(value).length <= 8 || value.startsWith("data:image/jpeg;base64,"),
+    "Avatar must be a short emoji or a processed JPEG"
+  );
+
 export const AudioSourceSchema = z.object({
   url: z.string(),
   title: z.string().optional(),

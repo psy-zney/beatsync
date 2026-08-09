@@ -69,8 +69,9 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
   const participantIsMuted = isCurrentUser ? isMuted : mutedParticipantIds.has(client.clientId);
   const participantIsDeafened = deafenedParticipantIds.has(client.clientId);
 
-  const isDataAvatar = isCurrentUser && roomAvatar?.startsWith("data:");
-  const isEmojiAvatar = isCurrentUser && roomAvatar && !isDataAvatar && roomAvatar.length <= 4;
+  const avatar = client.avatar || (isCurrentUser ? roomAvatar : undefined);
+  const isDataAvatar = avatar?.startsWith("data:image/");
+  const isEmojiAvatar = avatar && !isDataAvatar && Array.from(avatar).length <= 4;
   const initials = getInitials(client.username);
 
   const avatarContent = (
@@ -78,9 +79,9 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
       {hasJoinedVoice && <ActiveSpeakerIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
       <Avatar className="h-8 w-8">
         {isDataAvatar ? (
-          <AvatarImage src={roomAvatar} className="object-cover w-full h-full" alt={client.username} />
+          <AvatarImage src={avatar} className="object-cover w-full h-full" alt={client.username} />
         ) : isEmojiAvatar ? (
-          <AvatarFallback className="bg-indigo-600/90 text-sm font-normal select-none">{roomAvatar}</AvatarFallback>
+          <AvatarFallback className="bg-indigo-600/90 text-sm font-normal select-none">{avatar}</AvatarFallback>
         ) : (
           <AvatarFallback
             className={

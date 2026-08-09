@@ -24,6 +24,7 @@ class AudioContextManager {
   private audioContext: AudioContext | null = null;
   private masterGainNode: GainNode | null = null;
   private lowPassFilterNode: BiquadFilterNode | null = null;
+  private stereoPannerNode: StereoPannerNode | null = null;
   private stateChangeCallback: ((state: AudioContextState) => void) | null = null;
   private wakeLock: WakeLockSentinel | null = null;
   private hasVisibilityListener = false;
@@ -277,7 +278,11 @@ class AudioContextManager {
     this.masterGainNode = this.audioContext.createGain();
     this.masterGainNode.gain.value = 1.0;
 
-    this.lowPassFilterNode.connect(this.masterGainNode);
+    this.stereoPannerNode = this.audioContext.createStereoPanner();
+    this.stereoPannerNode.pan.value = 0;
+
+    this.lowPassFilterNode.connect(this.stereoPannerNode);
+    this.stereoPannerNode.connect(this.masterGainNode);
     this.masterGainNode.connect(this.audioContext.destination);
 
     // Bluetooth keepalive: prevents A2DP buffer from resettling between pause/play
@@ -339,6 +344,30 @@ class AudioContextManager {
     } else {
       this.masterGainNode.gain.value = clampedValue;
     }
+  }
+
+  /** Pan synchronized music only. Voice-chat audio elements bypass this graph. */
+  setStereoPan(value: number, rampTime?: number): void {
+    if (!this.stereoPannerNode || !this.audioContext) return;
+    const clampedValue = Math.max(-1, Math.min(1, value));
+    const pan = this.stereoPannerNode.pan;
+
+    if (rampTime && rampTime > 0) {
+      const now = this.audioContext.currentTime;
+      pan.cancelScheduledValues(now);
+      pan.setValueAtTime(pan.value, now);
+      pan.linearRampToValueAtTime(clampedValue, now + rampTime);
+    } else {
+      pan.value = clampedValue;
+    }
+  }
+
+  /** Route music output where the browser supports AudioContext.setSinkId. */
+  async setOutputDevice(deviceId: string): Promise<boolean> {
+    const context = this.getContext() as AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
+    if (!context.setSinkId) return false;
+    await context.setSinkId(deviceId === "default" ? "" : deviceId);
+    return true;
   }
 
   /**

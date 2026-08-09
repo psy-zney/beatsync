@@ -366,6 +366,7 @@ export class RoomManager {
       clientData.location = cachedClient.location;
       clientData.joinedAt = cachedClient.joinedAt;
       clientData.nudgeMs = cachedClient.nudgeMs;
+      clientData.avatar = cachedClient.avatar;
     }
 
     this.clientData.set(clientId, clientData);
@@ -496,6 +497,13 @@ export class RoomManager {
   getClients(): ClientDataType[] {
     // Only return clients that have an active WebSocket connection
     return Array.from(this.clientData.values()).filter((client) => this.wsConnections.has(client.clientId));
+  }
+
+  updateClientAvatar(clientId: string, avatar: string): boolean {
+    const client = this.clientData.get(clientId);
+    if (!client || !this.wsConnections.has(clientId)) return false;
+    client.avatar = avatar;
+    return true;
   }
 
   /**
