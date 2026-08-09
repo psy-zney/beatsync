@@ -7,6 +7,8 @@ import { useVoiceChat } from "../room/VoiceChatProvider";
 
 const BUILT_IN_MIC = /macbook|built[- ]?in|internal microphone|microphone.*mac/i;
 const HEADSET_MIC = /airpods|bluetooth|headset|hands[- ]?free|buds|wh-|wf-|bose|beats|jabra|soundcore/i;
+const isVirtualDefaultDevice = (device: MediaDeviceInfo) =>
+  device.deviceId === "default" || device.deviceId === "communications";
 
 export const AudioDeviceSelector = () => {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -33,11 +35,25 @@ export const AudioDeviceSelector = () => {
     return () => navigator.mediaDevices.removeEventListener("devicechange", fetchDevices);
   }, [fetchDevices]);
 
-  const audioInputDevices = useMemo(() => devices.filter((device) => device.kind === "audioinput"), [devices]);
-  const audioOutputDevices = useMemo(() => devices.filter((device) => device.kind === "audiooutput"), [devices]);
+  const audioInputDevices = useMemo(
+    () => devices.filter((device) => device.kind === "audioinput" && !isVirtualDefaultDevice(device)),
+    [devices]
+  );
+  const audioOutputDevices = useMemo(
+    () => devices.filter((device) => device.kind === "audiooutput" && !isVirtualDefaultDevice(device)),
+    [devices]
+  );
+  const defaultInput = devices.find((device) => device.kind === "audioinput" && device.deviceId === "default");
+  const defaultOutput = devices.find((device) => device.kind === "audiooutput" && device.deviceId === "default");
   const preferredMacMic = audioInputDevices.find((device) => BUILT_IN_MIC.test(device.label));
-  const selectedInput = audioInputDevices.find((device) => device.deviceId === audioInputDeviceId);
-  const selectedOutput = audioOutputDevices.find((device) => device.deviceId === audioOutputDeviceId);
+  const selectedInput =
+    audioInputDeviceId === "default" || !audioInputDeviceId
+      ? defaultInput
+      : audioInputDevices.find((device) => device.deviceId === audioInputDeviceId);
+  const selectedOutput =
+    audioOutputDeviceId === "default" || !audioOutputDeviceId
+      ? defaultOutput
+      : audioOutputDevices.find((device) => device.deviceId === audioOutputDeviceId);
   const headsetMicSelected = Boolean(selectedInput?.label && HEADSET_MIC.test(selectedInput.label));
   const bluetoothOutputSelected = Boolean(selectedOutput?.label && HEADSET_MIC.test(selectedOutput.label));
   const showBluetoothWarning = headsetMicSelected || (audioInputDeviceId === "default" && bluetoothOutputSelected);
@@ -78,7 +94,7 @@ export const AudioDeviceSelector = () => {
             onChange={(event) => void switchAudioInputDevice(event.target.value)}
             className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
           >
-            <option value="none">Không dùng mic · giữ nhạc chất lượng cao</option>
+            <option value="none">Tắt microphone</option>
             <option value="default">Mặc định hệ thống</option>
             {audioInputDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
