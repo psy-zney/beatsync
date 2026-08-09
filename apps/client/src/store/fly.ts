@@ -23,8 +23,8 @@ export const useFlyStore = create<FlyState>()(
     (set) => ({
       enabled: false,
       mode: "auto",
-      width: 0.85,
-      cycleSeconds: 6,
+      width: 0.8,
+      cycleSeconds: 8,
       manualPan: 0,
       currentPan: 0,
       setEnabled: (enabled) => set({ enabled }),
