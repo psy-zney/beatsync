@@ -31,7 +31,6 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
   const socket = useGlobalStore((state) => state.socket);
 
-  // Handle URL resolution
   const handleAnalyze = async () => {
     const cleanUrl = spotifyUrl.trim();
     if (!cleanUrl) return toast.error("Vui lòng nhập đường link Spotify (Playlist, Album hoặc Track).");
@@ -41,16 +40,20 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
     setSelectedIndices(new Set());
 
     try {
-      const res = await resolveSpotifyPlaylist(cleanUrl, 50);
+      // Fast resolve: returns only Spotify metadata, no YouTube searches!
+      const res = await fetch("/api/spotify/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: cleanUrl, maxTracks: 50 }),
+      }).then((r) => r.json());
+
       if (res.success && res.data) {
         setResolvedData(res.data);
-        // Select all valid mapped tracks by default
-        const validIndices = new Set<number>();
-        res.data.tracks.forEach((item, index) => {
-          if (item.youtubeTrack) validIndices.add(index);
-        });
-        setSelectedIndices(validIndices);
-        toast.success(`Đã phân tích ${res.data.tracks.length} bài hát từ ${res.data.title}`);
+        // Select all tracks by default
+        const allIndices = new Set<number>();
+        res.data.tracks.forEach((_, index) => allIndices.add(index));
+        setSelectedIndices(allIndices);
+        toast.success(`Đã lấy được ${res.data.tracks.length} bài hát từ ${res.data.title}`);
       } else {
         toast.error("Không thể phân tích danh sách phát Spotify.");
       }
@@ -89,44 +92,39 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
     if (!resolvedData || selectedIndices.size === 0) return toast.error("Chưa chọn bài hát nào.");
 
     setIsAdding(true);
-    let addedCount = 0;
 
     try {
       const itemsToAdd = Array.from(selectedIndices)
         .map((idx) => resolvedData.tracks[idx])
         .filter(Boolean);
 
-      for (const item of itemsToAdd) {
-        const ytTrack = item.youtubeTrack;
-        const spotInfo = item.spotify;
+      // Send the batch of tracks to the server to be processed in the background queue
+      sendWSRequest({
+        ws: socket,
+        request: {
+          type: ClientActionEnum.enum.IMPORT_SPOTIFY_TRACKS,
+          tracks: itemsToAdd.map(
+            (t: {
+              title?: string;
+              artist?: string;
+              coverUrl?: string;
+              spotify?: { title: string; artist: string; coverUrl?: string };
+            }) => ({
+              title: t.title || t.spotify?.title || "Unknown Title",
+              artist: t.artist || t.spotify?.artist || "Unknown Artist",
+              coverUrl: t.coverUrl || t.spotify?.coverUrl,
+            })
+          ),
+        },
+      });
 
-        if (ytTrack) {
-          const trackId = ytTrack.id as string | number;
-          const artistName = String((ytTrack.performer as { name?: string })?.name || spotInfo.artist || "Spotify");
-          const title = String(ytTrack.title || spotInfo.title);
-          const formattedTrackName = `${artistName} - ${title}`;
-
-          sendWSRequest({
-            ws: socket,
-            request: {
-              type: ClientActionEnum.enum.STREAM_MUSIC,
-              trackId,
-              trackName: formattedTrackName,
-            },
-          });
-          addedCount++;
-          // Brief pause between requests to prevent socket flooding
-          await new Promise((r) => setTimeout(r, 150));
-        }
-      }
-
-      toast.success(`Đã thêm ${addedCount} bài hát từ Spotify vào danh sách phát phòng!`);
+      toast.success(`Đang xử lý thêm ${itemsToAdd.length} bài hát vào hàng chờ...`);
       onClose();
       // Reset modal state
       setResolvedData(null);
       setSpotifyUrl("");
     } catch (err) {
-      console.error("Error adding Spotify tracks to queue:", err);
+      console.error("Error sending Spotify tracks to queue:", err);
       toast.error("Lỗi khi thêm bài hát vào phòng.");
     } finally {
       setIsAdding(false);
@@ -243,47 +241,43 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
                   {/* Tracks List */}
                   <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                    {resolvedData.tracks.map((item, idx) => {
-                      const isSelected = selectedIndices.has(idx);
-                      const hasMatch = !!item.youtubeTrack;
+                    {resolvedData.tracks.map(
+                      (
+                        item: { title?: string; artist?: string; spotify?: { title: string; artist: string } },
+                        idx: number
+                      ) => {
+                        const isSelected = selectedIndices.has(idx);
+                        // In the new flow, we don't have youtubeTrack yet.
+                        // Fallback for old cached data just in case
+                        const title = item.title || item.spotify?.title;
+                        const artist = item.artist || item.spotify?.artist;
 
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => hasMatch && toggleTrack(idx)}
-                          className={`flex items-center gap-3 p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
-                            !hasMatch
-                              ? "opacity-50 border-neutral-800/40 bg-neutral-900/30 cursor-not-allowed"
-                              : isSelected
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => toggleTrack(idx)}
+                            className={`flex items-center gap-3 p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
+                              isSelected
                                 ? "border-emerald-500/40 bg-emerald-500/10 text-white"
                                 : "border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800/80 text-neutral-300"
-                          }`}
-                        >
-                          <div className="shrink-0 text-emerald-400">
-                            {isSelected ? (
-                              <CheckSquare className="size-4" />
-                            ) : (
-                              <Square className="size-4 text-neutral-600" />
-                            )}
-                          </div>
+                            }`}
+                          >
+                            <div className="shrink-0 text-emerald-400">
+                              {isSelected ? (
+                                <CheckSquare className="size-4" />
+                              ) : (
+                                <Square className="size-4 text-neutral-600" />
+                              )}
+                            </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-white truncate">{item.spotify.title}</div>
-                            <div className="text-[11px] text-neutral-400 truncate">{item.spotify.artist}</div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-white truncate">{title}</div>
+                              <div className="text-[11px] text-neutral-400 truncate">{artist}</div>
+                            </div>
                           </div>
-
-                          <div className="text-right shrink-0">
-                            {hasMatch ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-mono">
-                                <Check className="size-3" /> YouTube Match
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-neutral-500 italic">Không tìm thấy</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      }
+                    )}
                   </div>
                 </div>
               )}

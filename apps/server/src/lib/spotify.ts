@@ -43,9 +43,9 @@ interface SpotifyApiPlaylistResponse {
   name?: string;
   images?: SpotifyApiImage[];
   tracks?: {
-    items?: Array<{
+    items?: {
       track?: SpotifyApiTrack;
-    }>;
+    }[];
   };
 }
 
@@ -308,45 +308,4 @@ export async function fetchSpotifyTracks(
   }
 
   throw new Error("Could not parse Spotify playlist tracks with any of the 3 fallback tiers.");
-}
-
-/**
- * Resolves a Spotify playlist URL and maps each track to YouTube Stream Item
- */
-export async function resolveSpotifyPlaylist(spotifyUrl: string, maxTracks = 50): Promise<ResolvedSpotifyResult> {
-  const parsed = parseSpotifyUrl(spotifyUrl);
-  if (!parsed) throw new Error("Invalid Spotify link");
-
-  const meta = await fetchSpotifyTracks(spotifyUrl);
-  const selectedTracks = meta.tracks.slice(0, maxTracks);
-
-  const limit = pLimit(3);
-  const mapped = await Promise.all(
-    selectedTracks.map((spotTrack) =>
-      limit(async () => {
-        try {
-          const query = `${spotTrack.title} ${spotTrack.artist}`;
-          const searchResult = await MUSIC_PROVIDER_MANAGER.search(query, 0);
-          const firstItem = searchResult.data.tracks.items[0] ?? null;
-          return {
-            spotify: spotTrack,
-            youtubeTrack: firstItem as unknown as Record<string, unknown> | null,
-          };
-        } catch (err) {
-          console.warn(`Failed to resolve YouTube track for "${spotTrack.title} ${spotTrack.artist}":`, err);
-          return {
-            spotify: spotTrack,
-            youtubeTrack: null,
-          };
-        }
-      })
-    )
-  );
-
-  return {
-    title: meta.title,
-    type: parsed.type,
-    coverUrl: meta.coverUrl,
-    tracks: mapped,
-  };
 }

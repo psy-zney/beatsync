@@ -21,6 +21,7 @@ import { handleSetLowPassFreq } from "@/websocket/handlers/setLowPassFreq";
 import { handleWebRTCSignal } from "@/websocket/handlers/handleWebRTCSignal";
 import { handleSync } from "@/websocket/handlers/sync";
 import { handleSavePlaylist } from "@/websocket/handlers/handleSavePlaylist";
+import { handleImportSpotifyTracks } from "@/websocket/handlers/handleImportSpotifyTracks";
 import type { WebsocketRegistry } from "@/websocket/types";
 
 export const WS_REGISTRY: WebsocketRegistry = {
@@ -125,5 +126,9 @@ export const WS_REGISTRY: WebsocketRegistry = {
   [ClientActionEnum.enum.SAVE_PLAYLIST]: {
     handle: handleSavePlaylist,
     description: "Save room playlist to bucket and clean up unused files",
+  },
+  [ClientActionEnum.enum.IMPORT_SPOTIFY_TRACKS]: {
+    handle: handleImportSpotifyTracks,
+    description: "Import Spotify tracks into room queue sequentially in background",
   },
 };

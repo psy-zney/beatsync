@@ -1,4 +1,4 @@
-import { parseSpotifyUrl, resolveSpotifyPlaylist } from "@/lib/spotify";
+import { parseSpotifyUrl } from "@/lib/spotify";
 import { describe, expect, it, mock } from "bun:test";
 
 // Mock MUSIC_PROVIDER_MANAGER.search to avoid hitting YouTube in tests

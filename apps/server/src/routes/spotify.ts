@@ -1,4 +1,4 @@
-import { resolveSpotifyPlaylist } from "@/lib/spotify";
+import { fetchSpotifyTracks, parseSpotifyUrl } from "@/lib/spotify";
 import { errorResponse, jsonResponse } from "@/utils/responses";
 import { z } from "zod";
 
@@ -16,12 +16,22 @@ export async function handleSpotifyResolve(req: Request): Promise<Response> {
     const body = await req.json();
     const { url, maxTracks } = SpotifyResolveSchema.parse(body);
 
-    console.log(`Resolving Spotify playlist/album URL: ${url}`);
-    const resolved = await resolveSpotifyPlaylist(url, maxTracks);
+    console.log(`Fetching Spotify playlist/album URL: ${url}`);
 
+    const parsed = parseSpotifyUrl(url);
+    if (!parsed) throw new Error("Invalid Spotify URL");
+
+    const meta = await fetchSpotifyTracks(url);
+
+    // Return early without doing the heavy YouTube mapping
     return jsonResponse({
       success: true,
-      data: resolved,
+      data: {
+        title: meta.title,
+        type: parsed.type,
+        coverUrl: meta.coverUrl,
+        tracks: meta.tracks.slice(0, maxTracks),
+      },
     });
   } catch (err) {
     console.error("Spotify resolve failed:", err);
