@@ -158,7 +158,6 @@ export const handleYoutubeProxy = async (req: Request) => {
       console.error("YouTube upstream proxy failure:", {
         status: response.status,
         videoId,
-        targetUrl,
         errorText: errorText.slice(0, 500),
       });
 

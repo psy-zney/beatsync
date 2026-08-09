@@ -1,4 +1,7 @@
 import pLimit from "p-limit";
+import { mkdir, readFile, rename } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { RESOURCE_LIMITS } from "@/config";
 import {
   cleanupOrphanedRooms,
   deleteObject,
@@ -30,7 +33,11 @@ interface RoomRestoreResult {
 
 export class BackupManager {
   private static readonly BACKUP_PREFIX = "state-backup/";
-  private static readonly DEFAULT_RESTORE_CONCURRENCY = 1000;
+  private static readonly LOCAL_BACKUP_PATH = resolve(
+    process.env.LOCAL_BACKUP_PATH ?? "./data/state-backup-latest.json"
+  );
+  private static backupInFlight: Promise<void> | null = null;
+  private static restoreInProgress = false;
   private static lastYoutubeCleanupTime = 0;
   private static readonly YOUTUBE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -41,8 +48,10 @@ export class BackupManager {
     try {
       const room = globalManager.getOrCreateRoom(roomId);
 
-      // Concurrently validate all audio sources in R2 (no limit on concurrency)
-      const validationPromises = roomData.audioSources.map((source) => validateAudioFileExists(source.url));
+      const objectLimit = pLimit(RESOURCE_LIMITS.restoreObjectConcurrency);
+      const validationPromises = roomData.audioSources.map((source) =>
+        objectLimit(() => validateAudioFileExists(source.url))
+      );
       const validationResults = await Promise.all(validationPromises);
 
       // Filter out audio sources that are not valid
@@ -50,24 +59,26 @@ export class BackupManager {
 
       // Heal missing or invalid titles for YouTube cached tracks concurrently
       let healedCount = 0;
-      const healPromises = validAudioSources.map(async (source) => {
-        if (needsYoutubeTitleHeal(source)) {
-          const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
-          if (match?.[1]) {
-            try {
-              console.log(
-                `[Heal] Fetching missing/invalid title "${source.title ?? ""}" for YouTube track ${match[1]}...`
-              );
-              const { getYoutubeMetadata } = await import("@/lib/youtube");
-              const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
-              source.title = title;
-              healedCount++;
-            } catch (err) {
-              console.error(`[Heal] Failed to fetch title for ${match[1]}:`, err);
+      const healPromises = validAudioSources.map((source) =>
+        objectLimit(async () => {
+          if (needsYoutubeTitleHeal(source)) {
+            const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
+            if (match?.[1]) {
+              try {
+                console.log(
+                  `[Heal] Fetching missing/invalid title "${source.title ?? ""}" for YouTube track ${match[1]}...`
+                );
+                const { getYoutubeMetadata } = await import("@/lib/youtube");
+                const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
+                source.title = title;
+                healedCount++;
+              } catch (err) {
+                console.error(`[Heal] Failed to fetch title for ${match[1]}:`, err);
+              }
             }
           }
-        }
-      });
+        })
+      );
       await Promise.all(healPromises);
 
       // Restore audio sources
@@ -132,11 +143,63 @@ export class BackupManager {
     return `${this.BACKUP_PREFIX}backup-${timestamp}.json`;
   }
 
+  private static collectState(): ServerBackupType {
+    const rooms: ServerBackupType["data"]["rooms"] = {};
+    globalManager.forEachRoom((room, roomId) => {
+      rooms[roomId] = room.createBackup();
+    });
+    return { timestamp: Date.now(), data: { rooms } };
+  }
+
+  private static async writeLocalBackup(backupData: ServerBackupType): Promise<void> {
+    const target = this.LOCAL_BACKUP_PATH;
+    const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    await mkdir(dirname(target), { recursive: true });
+    await Bun.write(temporary, JSON.stringify(backupData));
+    await rename(temporary, target);
+  }
+
+  private static async readLocalBackup(): Promise<ServerBackupType | null> {
+    try {
+      const raw = JSON.parse(await readFile(this.LOCAL_BACKUP_PATH, "utf8")) as unknown;
+      const parsed = ServerBackupSchema.safeParse(raw);
+      if (!parsed.success) {
+        console.error(`[Backup] Ignoring invalid local snapshot: ${parsed.error.message}`);
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") console.error("[Backup] Failed to read local snapshot:", error);
+      return null;
+    }
+  }
+
+  /** Fast, network-independent snapshot used before an emergency restart. */
+  static async backupLocalState(): Promise<void> {
+    if (this.restoreInProgress) {
+      console.warn("[Backup] Skipping snapshot while startup restore is still in progress");
+      return;
+    }
+    const backupData = this.collectState();
+    await this.writeLocalBackup(backupData);
+    console.log(`[Backup] Local snapshot saved (${Object.keys(backupData.data.rooms).length} rooms)`);
+  }
+
   /**
    * Save the current server state to R2
    */
-  static async backupState(): Promise<void> {
+  static backupState(): Promise<void> {
+    if (this.restoreInProgress) return Promise.resolve();
+    this.backupInFlight ??= this.performBackupState().finally(() => {
+      this.backupInFlight = null;
+    });
+    return this.backupInFlight;
+  }
+
+  private static async performBackupState(): Promise<void> {
     try {
+      await this.backupLocalState();
       // Collect state from all rooms
       const rooms: ServerBackupType["data"]["rooms"] = {};
 
@@ -169,11 +232,20 @@ export class BackupManager {
    * Restore server state from the latest backup in R2
    */
   static async restoreState(): Promise<boolean> {
+    this.restoreInProgress = true;
     try {
       console.log("🔍 Looking for state backups...");
 
+      const localBackup = await this.readLocalBackup();
+
       // Get the latest backup file
-      const latestBackupKey = await getLatestFileWithPrefix(this.BACKUP_PREFIX);
+      let latestBackupKey: string | null = null;
+      try {
+        latestBackupKey = await getLatestFileWithPrefix(this.BACKUP_PREFIX);
+      } catch (error) {
+        if (!localBackup) throw error;
+        console.warn("[Backup] Could not list remote backups; falling back to the local snapshot");
+      }
 
       if (!latestBackupKey) {
         console.log("📭 No backups found");
@@ -181,13 +253,22 @@ export class BackupManager {
         // Still clean up orphaned rooms even if no backup exists
         // await this.cleanupOrphanedRooms(); // DISABLED to keep music list even when closed
 
-        return false;
+        if (!localBackup) return false;
+        latestBackupKey = "[local snapshot]";
       }
 
       console.log(`📥 Restoring from: ${latestBackupKey}`);
 
       // Download and parse the backup
-      const rawBackupData = await downloadJSON(latestBackupKey);
+      let rawBackupData: unknown = localBackup;
+      if (latestBackupKey !== "[local snapshot]") {
+        try {
+          rawBackupData = await downloadJSON(latestBackupKey);
+        } catch (error) {
+          if (!localBackup) throw error;
+          console.warn("[Backup] Remote restore failed; using the local snapshot instead");
+        }
+      }
 
       if (!rawBackupData) {
         throw new Error("Failed to read backup data");
@@ -196,14 +277,19 @@ export class BackupManager {
       // Validate backup data with Zod schema
       const parseResult = ServerBackupSchema.safeParse(rawBackupData);
 
+      let backupData: ServerBackupType;
       if (!parseResult.success) {
-        throw new Error(`Invalid backup data format: ${parseResult.error.message}`);
+        if (!localBackup) {
+          throw new Error(`Invalid backup data format: ${parseResult.error.message}`);
+        }
+        console.warn("[Backup] Remote snapshot is invalid; using the local snapshot instead");
+        backupData = localBackup;
+      } else {
+        backupData = localBackup && localBackup.timestamp > parseResult.data.timestamp ? localBackup : parseResult.data;
       }
 
-      const backupData = parseResult.data;
-
       // Get configurable concurrency limit
-      const concurrency = this.DEFAULT_RESTORE_CONCURRENCY;
+      const concurrency = RESOURCE_LIMITS.restoreRoomConcurrency;
       const limit = pLimit(concurrency);
 
       const roomEntries = Object.entries(backupData.data.rooms);
@@ -258,7 +344,9 @@ export class BackupManager {
       const totalHealed = successful.reduce((sum, res) => sum + (res.healedCount ?? 0), 0);
       if (totalHealed > 0) {
         console.log(`💾 Persisting ${totalHealed} healed track title(s) to state backup...`);
-        this.backupState().catch((err) => console.error("Failed to persist healed titles to backup:", err));
+        queueMicrotask(() => {
+          void this.backupState().catch((err) => console.error("Failed to persist healed titles to backup:", err));
+        });
       }
 
       // Clean up orphaned rooms after state restore
@@ -269,6 +357,8 @@ export class BackupManager {
       const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
       console.error(`❌ State restore failed: ${msg}`);
       return false;
+    } finally {
+      this.restoreInProgress = false;
     }
   }
 
@@ -335,18 +425,21 @@ export class BackupManager {
         const playlistKeys = roomObjects.filter((obj) => obj.Key?.endsWith("/playlist.json")).map((obj) => obj.Key!);
 
         // Load saved playlists concurrently
-        const loadPromises = playlistKeys.map(async (key) => {
-          try {
-            const savedSources = await downloadJSON<AudioSourceType[]>(key);
-            if (savedSources && Array.isArray(savedSources)) {
-              savedSources.forEach((source) => {
-                referencedUrls.add(source.url);
-              });
+        const loadLimit = pLimit(RESOURCE_LIMITS.restoreObjectConcurrency);
+        const loadPromises = playlistKeys.map((key) =>
+          loadLimit(async () => {
+            try {
+              const savedSources = await downloadJSON<AudioSourceType[]>(key);
+              if (savedSources && Array.isArray(savedSources)) {
+                savedSources.forEach((source) => {
+                  referencedUrls.add(source.url);
+                });
+              }
+            } catch (err) {
+              console.error(`Failed to load saved playlist ${key} for cache checking:`, err);
             }
-          } catch (err) {
-            console.error(`Failed to load saved playlist ${key} for cache checking:`, err);
-          }
-        });
+          })
+        );
         await Promise.all(loadPromises);
       }
 

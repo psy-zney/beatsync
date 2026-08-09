@@ -167,7 +167,7 @@ export const ImportSpotifyTracksSchema = z.object({
       artist: z.string(),
       coverUrl: z.string().optional(),
     })
-  ).min(1),
+  ).min(1).max(500),
 });
 
 export const WSRequestSchema = z.discriminatedUnion("type", [

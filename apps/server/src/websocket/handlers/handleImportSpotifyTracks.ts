@@ -5,11 +5,7 @@ import type { HandlerFunction } from "@/websocket/types";
 import { sleep } from "bun";
 import { handleStreamMusic } from "./handleStreamMusic";
 
-export const handleImportSpotifyTracks: HandlerFunction<ImportSpotifyTracksType> = async ({
-  ws,
-  message,
-  server,
-}) => {
+export const handleImportSpotifyTracks: HandlerFunction<ImportSpotifyTracksType> = ({ ws, message, server }) => {
   const room = globalManager.getRoom(ws.data.roomId);
   if (!room) return;
 
@@ -32,8 +28,8 @@ export const handleImportSpotifyTracks: HandlerFunction<ImportSpotifyTracksType>
 
         if (firstItem) {
           const trackId = firstItem.id;
-          const artistName = String((firstItem.performer as { name?: string })?.name || track.artist || "Spotify");
-          const title = String(firstItem.title || track.title);
+          const artistName = String((firstItem.performer as { name?: string })?.name ?? track.artist ?? "Spotify");
+          const title = String(firstItem.title ?? track.title);
           const formattedTrackName = `${artistName} - ${title}`;
 
           // Reuse the stream music handler for each found track
@@ -56,4 +52,4 @@ export const handleImportSpotifyTracks: HandlerFunction<ImportSpotifyTracksType>
 
     console.log(`[Room: ${ws.data.roomId}] Completed background Spotify import, added ${addedCount} tracks.`);
   })();
-}
+};

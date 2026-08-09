@@ -1,5 +1,7 @@
 import * as os from "os";
 import { globalManager } from "@/managers";
+import { memoryPressureManager } from "@/managers/MemoryPressureManager";
+import { streamTaskQueue } from "@/managers/StreamTaskQueue";
 import { formatBytes, getBlobStats } from "@/utils/blobStats";
 import { corsHeaders } from "@/utils/responses";
 
@@ -21,7 +23,9 @@ export async function handleStats(): Promise<Response> {
         external: `${(memoryUsage.external / 1024 / 1024).toFixed(2)} MB`,
         arrayBuffers: `${(memoryUsage.arrayBuffers / 1024 / 1024).toFixed(2)} MB`,
       },
+      pressure: memoryPressureManager.getStatus(),
     },
+    streamQueue: streamTaskQueue.getStats(),
   };
 
   // --- Get Blob Storage Stats ---

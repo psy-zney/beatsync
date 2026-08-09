@@ -162,19 +162,16 @@ export interface SpotifyResolveResponse {
     type: "playlist" | "album" | "track";
     coverUrl?: string;
     tracks: Array<{
-      spotify: {
-        title: string;
-        artist: string;
-        album?: string;
-        coverUrl?: string;
-        durationMs?: number;
-      };
-      youtubeTrack: Record<string, unknown> | null;
+      title: string;
+      artist: string;
+      album?: string;
+      coverUrl?: string;
+      durationMs?: number;
     }>;
   };
 }
 
-export async function resolveSpotifyPlaylist(url: string, maxTracks = 50): Promise<SpotifyResolveResponse> {
+export async function resolveSpotifyPlaylist(url: string, maxTracks = 500): Promise<SpotifyResolveResponse> {
   const response = await baseAxios.post<SpotifyResolveResponse>("/spotify/resolve", { url, maxTracks });
   return response.data;
 }

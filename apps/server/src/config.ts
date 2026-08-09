@@ -22,3 +22,21 @@ export function calculateScheduleTimeMs(maxRTT: number): number {
   // Cap at 3000ms to prevent excessive delays
   return Math.min(dynamicDelay, CAP_SCHEDULE_TIME_MS);
 }
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+// Resource protection defaults target a small (1 GB) Oracle VM. Every value can
+// be overridden without rebuilding the server.
+export const RESOURCE_LIMITS = {
+  streamConcurrency: positiveIntegerEnv("STREAM_MAX_CONCURRENCY", 1),
+  streamQueueSize: positiveIntegerEnv("STREAM_MAX_QUEUE", 20),
+  maxAudioDownloadBytes: positiveIntegerEnv("MAX_AUDIO_DOWNLOAD_MB", 120) * 1024 * 1024,
+  memorySoftLimitBytes: positiveIntegerEnv("MEMORY_SOFT_LIMIT_MB", 600) * 1024 * 1024,
+  memoryHardLimitBytes: positiveIntegerEnv("MEMORY_HARD_LIMIT_MB", 750) * 1024 * 1024,
+  memoryCheckIntervalMs: positiveIntegerEnv("MEMORY_CHECK_INTERVAL_MS", 5_000),
+  restoreRoomConcurrency: positiveIntegerEnv("RESTORE_ROOM_CONCURRENCY", 4),
+  restoreObjectConcurrency: positiveIntegerEnv("RESTORE_OBJECT_CONCURRENCY", 8),
+} as const;

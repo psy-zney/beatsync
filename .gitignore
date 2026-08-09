@@ -6,6 +6,7 @@ node_modules
 
 # uploads in server
 apps/server/uploads/*
+apps/server/data/
 .DS_Store
 .vercel
 

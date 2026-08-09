@@ -1,5 +1,6 @@
-import { ADMIN_SECRET, IS_DEMO_MODE } from "@/demo";
+import { IS_DEMO_MODE } from "@/demo";
 import { BackupManager } from "@/managers/BackupManager";
+import { memoryPressureManager } from "@/managers/MemoryPressureManager";
 import { getActiveRooms } from "@/routes/active";
 import { handleGetDefaultAudio } from "@/routes/default";
 import { handleServeAudio } from "@/routes/demoAudio";
@@ -149,15 +150,18 @@ const server = Bun.serve<WSData>({
 console.log(`HTTP listening on http://${server.hostname}:${server.port}`);
 
 if (IS_DEMO_MODE) {
-  console.log(`🔑 Admin secret: ${ADMIN_SECRET}`);
+  console.log("Demo mode enabled; admin secret loaded from server-only configuration");
+  memoryPressureManager.start();
 }
 
 if (!IS_DEMO_MODE) {
   // Restore state from backup on startup
-  BackupManager.restoreState().catch((error) => {
-    const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
-    console.error(`Failed to restore state on startup: ${msg}`);
-  });
+  BackupManager.restoreState()
+    .catch((error) => {
+      const msg = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      console.error(`Failed to restore state on startup: ${msg}`);
+    })
+    .finally(() => memoryPressureManager.start());
 
   // Set up periodic backups every minute (for Render persistence issues)
   const BACKUP_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -171,15 +175,22 @@ if (!IS_DEMO_MODE) {
 }
 
 // Simple graceful shutdown
-const shutdown = async () => {
+let isShuttingDown = false;
+const shutdown = async (exitCode = 0) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   console.log("\n⚠️ Shutting down...");
 
+  memoryPressureManager.stop();
   void server.stop(); // Stop accepting new connections
   if (!IS_DEMO_MODE) {
-    await BackupManager.backupState(); // Save state
+    await Promise.race([
+      BackupManager.backupState(),
+      new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+    ]).catch((error) => console.error("Final backup failed:", error));
   }
 
-  process.exit(0);
+  process.exit(exitCode);
 };
 
 // Handle shutdown signals
@@ -189,7 +200,7 @@ process.on("SIGINT", () => void shutdown());
 // Crash handlers — log the error before PM2 restarts the process
 process.on("uncaughtException", (error) => {
   console.error(`[${new Date().toISOString()}] UNCAUGHT EXCEPTION — process will exit:`, error);
-  process.exit(1);
+  void BackupManager.backupLocalState().finally(() => void shutdown(1));
 });
 
 process.on("unhandledRejection", (reason) => {

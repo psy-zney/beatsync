@@ -41,11 +41,7 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
     try {
       // Fast resolve: returns only Spotify metadata, no YouTube searches!
-      const res = await fetch("/api/spotify/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: cleanUrl, maxTracks: 50 }),
-      }).then((r) => r.json());
+      const res = await resolveSpotifyPlaylist(cleanUrl, 500);
 
       if (res.success && res.data) {
         setResolvedData(res.data);
@@ -103,18 +99,11 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
         ws: socket,
         request: {
           type: ClientActionEnum.enum.IMPORT_SPOTIFY_TRACKS,
-          tracks: itemsToAdd.map(
-            (t: {
-              title?: string;
-              artist?: string;
-              coverUrl?: string;
-              spotify?: { title: string; artist: string; coverUrl?: string };
-            }) => ({
-              title: t.title || t.spotify?.title || "Unknown Title",
-              artist: t.artist || t.spotify?.artist || "Unknown Artist",
-              coverUrl: t.coverUrl || t.spotify?.coverUrl,
-            })
-          ),
+          tracks: itemsToAdd.map((track) => ({
+            title: track.title,
+            artist: track.artist,
+            coverUrl: track.coverUrl,
+          })),
         },
       });
 

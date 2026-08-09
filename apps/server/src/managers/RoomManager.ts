@@ -1,4 +1,4 @@
-import { calculateScheduleTimeMs, DEFAULT_CLIENT_RTT_MS } from "@/config";
+import { calculateScheduleTimeMs, DEFAULT_CLIENT_RTT_MS, RESOURCE_LIMITS } from "@/config";
 import { IS_DEMO_MODE } from "@/demo";
 import {
   uploadJSON,
@@ -28,6 +28,7 @@ import { ClientDataSchema, epochNow, LOW_PASS_CONSTANTS, NTP_CONSTANTS } from "@
 import { AudioSourceSchema, GRID } from "@beatsync/shared/types/basic";
 import type { SendLocationSchema } from "@beatsync/shared/types/WSRequest";
 import type { ServerWebSocket } from "bun";
+import pLimit from "p-limit";
 import { z } from "zod";
 
 interface RoomData {
@@ -1059,7 +1060,8 @@ export class RoomManager {
       const savedSources = await downloadJSON<AudioSourceType[]>(key);
       if (savedSources && Array.isArray(savedSources) && savedSources.length > 0) {
         // Validate all audio sources concurrently
-        const validationPromises = savedSources.map((source) => validateAudioFileExists(source.url));
+        const loadLimit = pLimit(RESOURCE_LIMITS.restoreObjectConcurrency);
+        const validationPromises = savedSources.map((source) => loadLimit(() => validateAudioFileExists(source.url)));
         const validationResults = await Promise.all(validationPromises);
 
         // Filter out audio sources that are not valid
@@ -1072,20 +1074,22 @@ export class RoomManager {
         const { needsYoutubeTitleHeal, getYoutubeMetadata } = await import("@/lib/youtube");
         let healed = false;
         await Promise.all(
-          validSources.map(async (source) => {
-            if (needsYoutubeTitleHeal(source)) {
-              const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
-              if (match?.[1]) {
-                try {
-                  const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
-                  source.title = title;
-                  healed = true;
-                } catch {
-                  /* ignore */
+          validSources.map((source) =>
+            loadLimit(async () => {
+              if (needsYoutubeTitleHeal(source)) {
+                const match = /\/youtube-cache\/([^.]+)\./.exec(source.url);
+                if (match?.[1]) {
+                  try {
+                    const { title } = await getYoutubeMetadata(`https://youtube.com/watch?v=${match[1]}`);
+                    source.title = title;
+                    healed = true;
+                  } catch {
+                    /* ignore */
+                  }
                 }
               }
-            }
-          })
+            })
+          )
         );
 
         this.audioSources = validSources;

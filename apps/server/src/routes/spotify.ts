@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const SpotifyResolveSchema = z.object({
   url: z.string().url(),
-  maxTracks: z.number().int().min(1).max(100).optional().default(50),
+  maxTracks: z.number().int().min(1).max(500).optional().default(500),
 });
 
 export async function handleSpotifyResolve(req: Request): Promise<Response> {
@@ -13,7 +13,7 @@ export async function handleSpotifyResolve(req: Request): Promise<Response> {
   }
 
   try {
-    const body = await req.json();
+    const body: unknown = await req.json();
     const { url, maxTracks } = SpotifyResolveSchema.parse(body);
 
     console.log(`Fetching Spotify playlist/album URL: ${url}`);
@@ -21,7 +21,7 @@ export async function handleSpotifyResolve(req: Request): Promise<Response> {
     const parsed = parseSpotifyUrl(url);
     if (!parsed) throw new Error("Invalid Spotify URL");
 
-    const meta = await fetchSpotifyTracks(url);
+    const meta = await fetchSpotifyTracks(url, maxTracks);
 
     // Return early without doing the heavy YouTube mapping
     return jsonResponse({

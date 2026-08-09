@@ -1,6 +1,3 @@
-import { MUSIC_PROVIDER_MANAGER } from "@/managers/MusicProviderManager";
-import pLimit from "p-limit";
-
 export interface SpotifyTrackInfo {
   title: string;
   artist: string;
@@ -39,13 +36,23 @@ interface SpotifyApiTrack {
   duration_ms?: number;
 }
 
+interface SpotifyApiPlaylistItem {
+  track?: SpotifyApiTrack;
+  item?: SpotifyApiTrack;
+}
+
+interface SpotifyApiPage<T> {
+  items?: T[];
+  next?: string | null;
+}
+
 interface SpotifyApiPlaylistResponse {
   name?: string;
   images?: SpotifyApiImage[];
+  items?: SpotifyApiPage<SpotifyApiPlaylistItem>;
   tracks?: {
-    items?: {
-      track?: SpotifyApiTrack;
-    }[];
+    items?: SpotifyApiPlaylistItem[];
+    next?: string | null;
   };
 }
 
@@ -55,13 +62,61 @@ interface SpotifyApiAlbumResponse {
   artists?: SpotifyApiArtist[];
   tracks?: {
     items?: SpotifyApiTrack[];
+    next?: string | null;
   };
+}
+
+function toTrackInfo(track: SpotifyApiTrack, fallback: { album?: string; coverUrl?: string } = {}): SpotifyTrackInfo {
+  return {
+    title: track.name,
+    artist: track.artists?.map((artist) => artist.name).join(", ") ?? "Unknown Artist",
+    album: track.album?.name ?? fallback.album,
+    coverUrl: track.album?.images?.[0]?.url ?? fallback.coverUrl,
+    durationMs: track.duration_ms,
+  };
+}
+
+async function fetchSpotifyPage<T>(url: string, token: string): Promise<SpotifyApiPage<T>> {
+  const pageUrl = new URL(url);
+  // `next` comes from Spotify, but validate before forwarding the bearer token.
+  if (pageUrl.protocol !== "https:" || pageUrl.hostname !== "api.spotify.com") {
+    throw new Error("Spotify returned an untrusted pagination URL");
+  }
+
+  const response = await fetch(pageUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Spotify pagination returned HTTP ${response.status}`);
+  }
+  return (await response.json()) as SpotifyApiPage<T>;
+}
+
+async function collectSpotifyPages<T>(
+  firstPage: SpotifyApiPage<T> | undefined,
+  token: string,
+  maxTracks: number
+): Promise<T[]> {
+  const items = [...(firstPage?.items ?? [])];
+  let next = firstPage?.next ?? null;
+  const visitedPages = new Set<string>();
+
+  while (next && items.length < maxTracks) {
+    if (visitedPages.has(next)) throw new Error("Spotify returned a repeated pagination URL");
+    visitedPages.add(next);
+    const page = await fetchSpotifyPage<T>(next, token);
+    items.push(...(page.items ?? []));
+    next = page.next ?? null;
+  }
+
+  return items.slice(0, maxTracks);
 }
 
 export function parseSpotifyUrl(urlInput: string): { type: "playlist" | "album" | "track"; id: string } | null {
   try {
     const url = new URL(urlInput.trim());
-    if (!url.hostname.includes("spotify.com")) return null;
+    if (url.hostname !== "spotify.com" && !url.hostname.endsWith(".spotify.com")) return null;
 
     const parts = url.pathname.split("/").filter(Boolean);
     const typeIndex = parts.findIndex((p) => ["playlist", "album", "track"].includes(p));
@@ -99,6 +154,7 @@ async function getSpotifyApiToken(): Promise<string | null> {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: "grant_type=client_credentials",
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
@@ -127,7 +183,8 @@ async function getSpotifyApiToken(): Promise<string | null> {
  * - Tier 3: Public Spotify oEmbed API
  */
 export async function fetchSpotifyTracks(
-  spotifyUrl: string
+  spotifyUrl: string,
+  maxTracks = 500
 ): Promise<{ title: string; coverUrl?: string; tracks: SpotifyTrackInfo[] }> {
   const parsed = parseSpotifyUrl(spotifyUrl);
   if (!parsed) throw new Error("Invalid Spotify URL format.");
@@ -143,6 +200,7 @@ export async function fetchSpotifyTracks(
       if (type === "track") {
         const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10_000),
         });
         if (res.ok) {
           const data = (await res.json()) as SpotifyApiTrack;
@@ -162,24 +220,24 @@ export async function fetchSpotifyTracks(
         }
         console.warn(`[Tier 1] Spotify API returned HTTP ${res.status}. Falling back to Tier 2.`);
       } else if (type === "playlist") {
-        const res = await fetch(
-          `https://api.spotify.com/v1/playlists/${id}?fields=name,images,tracks.items(track(name,artists,album,duration_ms))`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+        const playlistUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
+        const res = await fetch(playlistUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10_000),
+        });
         if (res.ok) {
           const data = (await res.json()) as SpotifyApiPlaylistResponse;
-          const tracks: SpotifyTrackInfo[] = (data.tracks?.items ?? [])
-            .map((item) => item.track)
+          // Spotify Development Mode renamed `tracks` to `items` in 2026;
+          // Extended Quota apps may still receive the legacy shape.
+          const playlistPage = data.items ?? data.tracks;
+          const playlistItems = await collectSpotifyPages(playlistPage, token, maxTracks);
+          const tracks: SpotifyTrackInfo[] = playlistItems
+            .map((item) => item.track ?? item.item)
             .filter((t): t is SpotifyApiTrack => Boolean(t))
-            .map((t) => ({
-              title: t.name,
-              artist: t.artists?.map((a) => a.name).join(", ") ?? "Unknown Artist",
-              album: t.album?.name,
-              coverUrl: t.album?.images?.[0]?.url,
-              durationMs: t.duration_ms,
-            }));
+            .map((track) => toTrackInfo(track));
+          if (tracks.length === 0) {
+            throw new Error("Spotify API did not expose playlist items; trying the public embed fallback");
+          }
           return {
             title: data.name ?? "Spotify Playlist",
             coverUrl: data.images?.[0]?.url,
@@ -190,20 +248,20 @@ export async function fetchSpotifyTracks(
       } else if (type === "album") {
         const res = await fetch(`https://api.spotify.com/v1/albums/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10_000),
         });
         if (res.ok) {
           const data = (await res.json()) as SpotifyApiAlbumResponse;
           const albumCover = data.images?.[0]?.url;
-          const tracks: SpotifyTrackInfo[] = (data.tracks?.items ?? []).map((t) => ({
-            title: t.name,
-            artist:
-              t.artists?.map((a) => a.name).join(", ") ??
-              data.artists?.map((a) => a.name).join(", ") ??
-              "Unknown Artist",
-            album: data.name,
-            coverUrl: albumCover,
-            durationMs: t.duration_ms,
-          }));
+          const albumItems = await collectSpotifyPages(data.tracks, token, maxTracks);
+          const albumArtist = data.artists?.map((artist) => artist.name).join(", ");
+          const tracks: SpotifyTrackInfo[] = albumItems.map((track) => {
+            const mapped = toTrackInfo(track, { album: data.name, coverUrl: albumCover });
+            return {
+              ...mapped,
+              artist: mapped.artist === "Unknown Artist" ? (albumArtist ?? mapped.artist) : mapped.artist,
+            };
+          });
           return {
             title: data.name ?? "Spotify Album",
             coverUrl: albumCover,
@@ -228,18 +286,24 @@ export async function fetchSpotifyTracks(
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (response.ok) {
       const html = await response.text();
       const match = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/.exec(html);
-      if (match && match[1]) {
+      if (match?.[1]) {
         const nextData = JSON.parse(match[1]) as {
           props?: { pageProps?: { state?: { data?: { entity?: Record<string, unknown> } } } };
         };
         const entity = nextData.props?.pageProps?.state?.data?.entity;
         if (entity) {
-          const title = String(entity.name ?? entity.title ?? "Spotify Import");
+          const title =
+            typeof entity.name === "string"
+              ? entity.name
+              : typeof entity.title === "string"
+                ? entity.title
+                : "Spotify Import";
           const coverUrl =
             (entity.images as SpotifyApiImage[])?.[0]?.url ??
             (entity.coverArt as { sources?: SpotifyApiImage[] })?.sources?.[0]?.url;
@@ -256,7 +320,7 @@ export async function fetchSpotifyTracks(
           }
 
           const tracks: SpotifyTrackInfo[] = rawTracks.map((t) => {
-            const tName = String(t.name ?? t.title ?? "Unknown Track");
+            const tName = typeof t.name === "string" ? t.name : typeof t.title === "string" ? t.title : "Unknown Track";
             const artistsArr =
               (t.artists as unknown[]) ?? (typeof t.subtitle === "string" ? t.subtitle.split(",") : []);
             const artistName = Array.isArray(artistsArr)
@@ -286,7 +350,9 @@ export async function fetchSpotifyTracks(
   // TIER 3: Spotify Public oEmbed API Fallback
   // ─────────────────────────────────────────────────────────
   console.log(`[Tier 3] Trying Spotify oEmbed API Fallback for URL: ${spotifyUrl}...`);
-  const oembedRes = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`);
+  const oembedRes = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`, {
+    signal: AbortSignal.timeout(10_000),
+  });
   if (oembedRes.ok) {
     const oembedData = (await oembedRes.json()) as { title?: string; thumbnail_url?: string };
     const fullTitle = oembedData.title ?? "Spotify Track";
