@@ -50,7 +50,9 @@ fn find_yt_dlp() -> PathBuf {
 }
 
 fn main() {
-    let url = env::args().nth(1).unwrap_or_else(|| fail("Missing YouTube URL argument"));
+    let url = env::args()
+        .nth(1)
+        .unwrap_or_else(|| fail("Missing YouTube URL argument"));
     if !(url.starts_with("https://www.youtube.com/") || url.starts_with("https://youtube.com/")) {
         fail("Only canonical HTTPS YouTube URLs are accepted");
     }
@@ -101,7 +103,10 @@ fn main() {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let compact = stderr.chars().take(2_000).collect::<String>();
-        fail(format!("yt-dlp failed (code {:?}): {compact}", output.status.code()));
+        fail(format!(
+            "yt-dlp failed (code {:?}): {compact}",
+            output.status.code()
+        ));
     }
     if output.stdout.len() > 64 * 1024 {
         fail("yt-dlp output exceeded 64 KiB");
@@ -116,5 +121,8 @@ fn main() {
     if !(stream_url.starts_with("https://") || stream_url.starts_with("http://")) {
         fail("yt-dlp returned no valid stream URL");
     }
-    println!("{}", serde_json::to_string(&Output { stream_url, title }).unwrap());
+    println!(
+        "{}",
+        serde_json::to_string(&Output { stream_url, title }).unwrap()
+    );
 }
