@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	writeTimeout = 10 * time.Second
-	pongTimeout  = 70 * time.Second
-	pingInterval = 30 * time.Second
+	writeTimeout       = 10 * time.Second
+	pongTimeout        = 100 * time.Second
+	pingInterval       = 45 * time.Second
+	ntpTokenCapacity   = 4.0
+	ntpTokensPerSecond = 4.0
 )
 
 type Client struct {
@@ -25,10 +27,38 @@ type Client struct {
 	send chan []byte
 	done chan struct{}
 	once sync.Once
+
+	ntpMu         sync.Mutex
+	ntpTokens     float64
+	ntpLastRefill time.Time
 }
 
 func NewClient(roomID, clientID, username string, creator bool, conn *websocket.Conn) *Client {
-	return &Client{RoomID: roomID, ClientID: clientID, Username: username, IsCreator: creator, Conn: conn, send: make(chan []byte, 8), done: make(chan struct{})}
+	now := time.Now()
+	return &Client{
+		RoomID: roomID, ClientID: clientID, Username: username, IsCreator: creator,
+		Conn: conn, send: make(chan []byte, 8), done: make(chan struct{}),
+		ntpTokens: ntpTokenCapacity, ntpLastRefill: now,
+	}
+}
+
+// AllowNTP caps work per connection while retaining enough burst capacity for
+// one coded probe pair. WebSocket control pings continue to handle liveness.
+func (c *Client) AllowNTP(now time.Time) bool {
+	c.ntpMu.Lock()
+	defer c.ntpMu.Unlock()
+	if elapsed := now.Sub(c.ntpLastRefill).Seconds(); elapsed > 0 {
+		c.ntpTokens += elapsed * ntpTokensPerSecond
+		if c.ntpTokens > ntpTokenCapacity {
+			c.ntpTokens = ntpTokenCapacity
+		}
+		c.ntpLastRefill = now
+	}
+	if c.ntpTokens < 1 {
+		return false
+	}
+	c.ntpTokens--
+	return true
 }
 
 func (c *Client) StartWriter() { go c.writePump() }

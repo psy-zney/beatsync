@@ -12,6 +12,22 @@ export interface NTPMeasurement {
   clockOffset: number;
 }
 
+export const calculateNextProbeDelay = (data: {
+  measurementCount: number;
+  isPageHidden: boolean;
+  random?: number;
+}): number => {
+  const { measurementCount, isPageHidden, random = Math.random() } = data;
+  if (measurementCount < NTP_CONSTANTS.MAX_MEASUREMENTS) {
+    return NTP_CONSTANTS.INITIAL_INTERVAL_MS;
+  }
+
+  const baseInterval = isPageHidden ? NTP_CONSTANTS.BACKGROUND_INTERVAL_MS : NTP_CONSTANTS.STEADY_STATE_INTERVAL_MS;
+  const boundedRandom = Math.max(0, Math.min(1, random));
+  const jitter = (boundedRandom * 2 - 1) * NTP_CONSTANTS.STEADY_STATE_JITTER_RATIO;
+  return Math.round(baseInterval * (1 + jitter));
+};
+
 // ── Probe pair sending ─────────────────────────────────────────────
 
 let probeGroupCounter = 0;

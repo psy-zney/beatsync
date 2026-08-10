@@ -2,7 +2,12 @@
 // wait time calculation, and measurement filtering behavior.
 
 import { describe, expect, it, mock } from "bun:test";
-import { calculateOffsetEstimate, calculateWaitTimeMilliseconds, type NTPMeasurement } from "@/utils/ntp";
+import {
+  calculateNextProbeDelay,
+  calculateOffsetEstimate,
+  calculateWaitTimeMilliseconds,
+  type NTPMeasurement,
+} from "@/utils/ntp";
 import * as shared from "@beatsync/shared";
 
 const FROZEN_TIME = 10000;
@@ -100,5 +105,23 @@ describe("calculateWaitTimeMilliseconds", () => {
     // estimatedCurrentServerTime = 10000 + (-200) = 9800
     // wait = 10300 - 9800 = 500
     expect(calculateWaitTimeMilliseconds(10300, -200)).toBe(500);
+  });
+});
+
+describe("calculateNextProbeDelay", () => {
+  it("uses a bounded initial calibration interval", () => {
+    expect(calculateNextProbeDelay({ measurementCount: 0, isPageHidden: false, random: 1 })).toBe(500);
+    expect(calculateNextProbeDelay({ measurementCount: 7, isPageHidden: true, random: 0 })).toBe(500);
+  });
+
+  it("jitters steady probes between 24 and 36 seconds", () => {
+    expect(calculateNextProbeDelay({ measurementCount: 8, isPageHidden: false, random: 0 })).toBe(24_000);
+    expect(calculateNextProbeDelay({ measurementCount: 8, isPageHidden: false, random: 0.5 })).toBe(30_000);
+    expect(calculateNextProbeDelay({ measurementCount: 8, isPageHidden: false, random: 1 })).toBe(36_000);
+  });
+
+  it("uses a cheaper 48 to 72 second background interval", () => {
+    expect(calculateNextProbeDelay({ measurementCount: 8, isPageHidden: true, random: 0 })).toBe(48_000);
+    expect(calculateNextProbeDelay({ measurementCount: 8, isPageHidden: true, random: 1 })).toBe(72_000);
   });
 });

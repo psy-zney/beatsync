@@ -114,18 +114,26 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 }
 
 func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload []byte) {
-	t1 := nowMS()
+	receivedAt := time.Now()
+	t1 := float64(receivedAt.UnixNano()) / 1e6
 	var message model.WSRequest
 	if err := json.Unmarshal(payload, &message); err != nil || message.Type == "" {
 		client.Send(map[string]any{"type": "ERROR", "message": "Invalid message format"})
 		return
 	}
-	state.Touch(client.ClientID)
 	if message.Type == "NTP_REQUEST" {
-		state.ProcessNTP(client.ClientID, message.ClientRTT, message.ClientCompensationMS, message.ClientNudgeMS)
+		if !client.AllowNTP(receivedAt) {
+			return
+		}
+		// Capture the send timestamp before touching shared room state. Only the
+		// second packet updates client metrics, cutting room locks to one per pair.
 		client.Send(map[string]any{"type": "NTP_RESPONSE", "t0": message.T0, "t1": t1, "t2": nowMS(), "probeGroupId": message.ProbeGroupID, "probeGroupIndex": message.ProbeGroupIndex})
+		if message.ProbeGroupIndex == 1 {
+			state.ProcessNTP(client.ClientID, message.ClientRTT, message.ClientCompensationMS, message.ClientNudgeMS)
+		}
 		return
 	}
+	state.Touch(client.ClientID)
 	switch message.Type {
 	case "UPDATE_PROFILE":
 		clients, err := state.UpdateAvatar(client.ClientID, message.Avatar)

@@ -64,14 +64,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const hasConnectedOnceRef = useRef(false);
 
   // Use the NTP heartbeat hook
-  const { startHeartbeat, stopHeartbeat, markNTPResponseReceived } = useNtpHeartbeat({
-    onConnectionStale: () => {
-      const currentSocket = useGlobalStore.getState().socket;
-      if (currentSocket && currentSocket.readyState === WebSocket.OPEN) {
-        currentSocket.close();
-      }
-    },
-  });
+  const { startHeartbeat, stopHeartbeat } = useNtpHeartbeat();
 
   // Use the WebSocket reconnection hook
   const {
@@ -173,21 +166,23 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
     // TODO: Refactor into exhaustive handler registry
     ws.onmessage = async (msg) => {
-      // Update last message received time for connection health
-      useGlobalStore.setState({ lastMessageReceivedTime: Date.now() });
-
       const response = WSResponseSchema.parse(JSON.parse(msg.data));
+      if (response.type !== "NTP_RESPONSE") {
+        // Avoid a global store update for every timing probe. UI actions only
+        // need to observe actual application responses.
+        useGlobalStore.setState({ lastMessageReceivedTime: Date.now() });
+      }
 
       if (response.type === "NTP_RESPONSE") {
         const pairResult = handleNTPResponse(response);
         if (pairResult) {
           addProbePairResult(pairResult);
         }
-        // Always refresh probe stats so UI shows sent/pure/impure counts in real time
-        useGlobalStore.setState({ probeStats: getProbeStats() });
-
-        // Mark that we received an NTP response (for staleness detection)
-        markNTPResponseReceived();
+        // Pair statistics only change on the second response. Skipping the
+        // first response avoids one unnecessary global store update per pair.
+        if (response.probeGroupIndex === 1) {
+          useGlobalStore.setState({ probeStats: getProbeStats() });
+        }
       } else if (response.type === "ROOM_EVENT") {
         const { event } = response;
         console.log("Room event:", event);

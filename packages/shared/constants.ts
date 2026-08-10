@@ -1,17 +1,22 @@
 export const R2_AUDIO_FILE_NAME_DELIMITER = "___";
 
-const STEADY_STATE_INTERVAL_MS = 2500;
+const STEADY_STATE_INTERVAL_MS = 30_000;
 
 // NTP Heartbeat Constants
 export const NTP_CONSTANTS = {
-  // Initial interval for rapid measurement collection
-  INITIAL_INTERVAL_MS: 50,
-  // Steady state interval after initial measurements
+  // Two probes are sent per measurement. A 500 ms interval keeps initial
+  // calibration quick without creating a burst on a small VPS.
+  INITIAL_INTERVAL_MS: 500,
+  // Clock drift is slow, so recalibrating every 30 seconds is sufficient.
   STEADY_STATE_INTERVAL_MS: STEADY_STATE_INTERVAL_MS,
-  // Timeout before considering connection stale (60 seconds to prevent any timeout disconnects)
-  RESPONSE_TIMEOUT_MS: 24 * STEADY_STATE_INTERVAL_MS,
-  // Maximum number of NTP measurements to collect initially
-  MAX_MEASUREMENTS: 16,
+  // Background tabs rely on the WebSocket control ping for liveness and only
+  // refresh their clock occasionally.
+  BACKGROUND_INTERVAL_MS: 60_000,
+  // Spread steady probes across time so clients do not hit the VPS together.
+  STEADY_STATE_JITTER_RATIO: 0.2,
+  // Eight min-RTT samples are enough for a stable initial estimate and halve
+  // the previous calibration traffic.
+  MAX_MEASUREMENTS: 8,
   // Coded probes (Huygens) — inter-departure gap between probe pairs
   // Large enough gap to avoid TCP coalescing where browsers batch small writes into one segment
   PROBE_GAP_MS: 25,

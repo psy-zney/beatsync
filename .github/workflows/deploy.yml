@@ -98,6 +98,8 @@ jobs:
             set -euo pipefail
             cd "$HOME/beatsync"
             git pull --ff-only origin main
+            git diff --quiet
+            git diff --cached --quiet
             sudo env DEPLOY_USER="$(id -un)" DEPLOY_HOME="$HOME" bash scripts/configure-oracle-memory.sh
             sudo env \
               RELEASE_ID="$RELEASE_ID" \

@@ -104,5 +104,38 @@ if [[ "$healthy" -ne 1 ]]; then
 fi
 
 rm -f -- "$BUNDLE_PATH"
-if [[ -d "$repo_dir/apps/server/node_modules" && ! -L "$repo_dir/apps/server/node_modules" ]]; then rm -rf -- "$repo_dir/apps/server/node_modules"; fi
-echo "BeatSync release $RELEASE_ID is healthy."
+
+# Remove only known backend build/runtime leftovers. The frontend and user data
+# are deliberately outside this cleanup scope.
+for obsolete_dir in \
+  "$repo_dir/apps/server/node_modules" \
+  "$repo_dir/apps/server/dist" \
+  "$repo_dir/apps/server/yt-rust-extractor/target"; do
+  if [[ -d "$obsolete_dir" && ! -L "$obsolete_dir" && "$obsolete_dir" == "$repo_dir/apps/server/"* ]]; then
+    rm -rf -- "$obsolete_dir"
+  fi
+done
+
+# Keep the active release and exactly one known-good rollback release. Release
+# directories must be named by a full Git SHA before they are eligible here.
+for old_release in "$INSTALL_ROOT"/releases/*; do
+  [[ -d "$old_release" && ! -L "$old_release" ]] || continue
+  old_release_id="$(basename "$old_release")"
+  [[ "$old_release_id" =~ ^[0-9a-f]{40}$ ]] || continue
+  [[ "$old_release" == "$release_dir" || "$old_release" == "$previous" ]] && continue
+  rm -rf -- "$old_release"
+done
+
+# A removed PM2 app can leave logs behind even though it no longer consumes
+# RAM. Only BeatSync's historical log prefix is eligible for deletion.
+pm2_logs="$DEPLOY_HOME/.pm2/logs"
+if [[ -d "$pm2_logs" && ! -L "$pm2_logs" ]]; then
+  find "$pm2_logs" -maxdepth 1 -type f -name 'beatsync-server-*' -delete
+fi
+
+# Failed historical uploads are safe to discard after the new release passes
+# health checks. The current bundle was already removed explicitly above.
+find /tmp -maxdepth 1 -type f -name 'beatsync-*.tar.gz' -mtime +1 -delete
+
+release_count="$(find "$INSTALL_ROOT/releases" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d '[:space:]')"
+echo "BeatSync release $RELEASE_ID is healthy; VPS cleanup complete ($release_count release(s) retained)."
