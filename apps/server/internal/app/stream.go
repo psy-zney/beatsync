@@ -54,6 +54,24 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 	if _, ok := a.Rooms.Get(roomID); !ok {
 		return errors.New("room was released")
 	}
+	// A persisted R2 object is the durable YouTube cache. Check it before
+	// resolving a fresh, short-lived Googlevideo URL; cache hits should not pay
+	// the extractor's cold-start and network cost.
+	if cachedVideoID := youtube.ParseVideoID(trackID); a.Store != nil && cachedVideoID != "" {
+		for _, extension := range []string{"webm", "m4a", "mp3", "ogg"} {
+			key := "youtube-cache/" + cachedVideoID + "." + extension
+			exists, headErr := a.Store.Head(ctx, key)
+			if headErr == nil && exists {
+				if trackName == "" {
+					trackName = "YouTube Audio"
+				}
+				sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
+				a.broadcastSources(roomID, sources)
+				log.Printf("stream cache hit: room=%s video=%s", roomID, cachedVideoID)
+				return nil
+			}
+		}
+	}
 	streamURL, videoID, resolvedTitle, err := a.resolveProviderStream(ctx, trackID)
 	if err != nil {
 		return err
@@ -71,17 +89,6 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 		sources := state.AddAudioSource(model.AudioSource{URL: youtube.ProxyURL(videoID), Title: trackName})
 		a.broadcastSources(roomID, sources)
 		return nil
-	}
-	if videoID != "" {
-		for _, extension := range []string{"webm", "m4a", "mp3", "ogg"} {
-			key := "youtube-cache/" + videoID + "." + extension
-			exists, headErr := a.Store.Head(ctx, key)
-			if headErr == nil && exists {
-				sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
-				a.broadcastSources(roomID, sources)
-				return nil
-			}
-		}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
