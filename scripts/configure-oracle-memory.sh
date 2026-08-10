@@ -1,92 +1,22 @@
 #!/usr/bin/env bash
-# Idempotent host setup for a small Oracle Ubuntu VM.
+# Idempotent one-time host preparation for a small Oracle Ubuntu VM.
 set -euo pipefail
-
-# Administrative utilities such as swapon and sysctl live in sbin on Ubuntu.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
 SWAP_SIZE_GB="${SWAP_SIZE_GB:-2}"
 SWAP_FILE="${SWAP_FILE:-/swapfile}"
-DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-ubuntu}}"
-DEPLOY_HOME="${DEPLOY_HOME:-/home/$DEPLOY_USER}"
-PM2_BIN="${PM2_BIN:-$DEPLOY_HOME/.bun/bin/pm2}"
-
-if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
-  echo "Invalid DEPLOY_USER: $DEPLOY_USER" >&2
-  exit 1
-fi
-if [[ "$DEPLOY_HOME" != /* ]] || [[ "$DEPLOY_HOME" == "/" ]]; then
-  echo "Invalid DEPLOY_HOME: $DEPLOY_HOME" >&2
-  exit 1
-fi
-
-if [[ ! "$SWAP_SIZE_GB" =~ ^[1-9][0-9]*$ ]]; then
-  echo "SWAP_SIZE_GB must be a positive integer" >&2
-  exit 1
-fi
-if [[ "$SWAP_FILE" != /* ]] || [[ "$SWAP_FILE" == "/" ]] || [[ -L "$SWAP_FILE" ]]; then
-  echo "Refusing unsafe SWAP_FILE: $SWAP_FILE" >&2
-  exit 1
-fi
+if [[ ! "$SWAP_SIZE_GB" =~ ^[1-9][0-9]*$ ]]; then echo "Invalid SWAP_SIZE_GB" >&2; exit 1; fi
+if [[ "$SWAP_FILE" != /* || "$SWAP_FILE" == "/" || -L "$SWAP_FILE" ]]; then echo "Unsafe SWAP_FILE" >&2; exit 1; fi
 
 if ! swapon --show=NAME --noheadings | grep -Fxq "$SWAP_FILE"; then
-  if [[ -e "$SWAP_FILE" ]]; then
-    echo "$SWAP_FILE exists but is not active; refusing to overwrite it" >&2
-    exit 1
-  fi
-  echo "Creating ${SWAP_SIZE_GB}G swap at $SWAP_FILE"
+  if [[ -e "$SWAP_FILE" ]]; then echo "$SWAP_FILE exists but is not active; refusing to overwrite it" >&2; exit 1; fi
   fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE" || dd if=/dev/zero of="$SWAP_FILE" bs=1M count="$((SWAP_SIZE_GB * 1024))" status=progress
   chmod 600 "$SWAP_FILE"
-  mkswap "$SWAP_FILE"
+  mkswap "$SWAP_FILE" >/dev/null
   swapon "$SWAP_FILE"
   printf '%s\n' "$SWAP_FILE none swap sw 0 0" >>/etc/fstab
 fi
 
-# Prefer swapping over killing the PM2 supervisor, but still keep swapping low.
-printf '%s\n' "vm.swappiness=10" >/etc/sysctl.d/99-beatsync-memory.conf
+printf '%s\n' 'vm.swappiness=10' 'vm.overcommit_memory=0' >/etc/sysctl.d/99-beatsync-memory.conf
 sysctl --system >/dev/null
-
-if [[ -x "$PM2_BIN" ]]; then
-  env PATH="$(dirname "$PM2_BIN"):/usr/local/bin:/usr/bin:/bin" \
-    "$PM2_BIN" startup systemd -u "$DEPLOY_USER" --hp "$DEPLOY_HOME" >/dev/null
-else
-  echo "PM2 not found at $PM2_BIN; swap is configured but systemd startup was skipped" >&2
-  exit 1
-fi
-
-# A shared PM2 daemon may already own processes that are unrelated to Beatsync.
-# This timer safely resurrects the saved PM2 dump after daemon/OOM failure
-# without killing or adopting the currently running daemon.
-printf '%s\n' \
-  '[Unit]' \
-  'Description=Resurrect the saved PM2 process list' \
-  'After=network-online.target' \
-  'Wants=network-online.target' \
-  '' \
-  '[Service]' \
-  'Type=oneshot' \
-  "User=$DEPLOY_USER" \
-  "Environment=PM2_HOME=$DEPLOY_HOME/.pm2" \
-  "Environment=PATH=$(dirname "$PM2_BIN"):/usr/local/bin:/usr/bin:/bin" \
-  "ExecStart=$PM2_BIN resurrect" \
-  >/etc/systemd/system/beatsync-pm2-watchdog.service
-
-printf '%s\n' \
-  '[Unit]' \
-  'Description=Periodically ensure the PM2 process list is running' \
-  '' \
-  '[Timer]' \
-  'OnBootSec=45s' \
-  'OnUnitActiveSec=60s' \
-  'AccuracySec=10s' \
-  'Persistent=true' \
-  'Unit=beatsync-pm2-watchdog.service' \
-  '' \
-  '[Install]' \
-  'WantedBy=timers.target' \
-  >/etc/systemd/system/beatsync-pm2-watchdog.timer
-
-systemctl daemon-reload
-systemctl enable --now beatsync-pm2-watchdog.timer >/dev/null
-
-echo "Oracle memory resilience configured (swap + PM2 startup/watchdog)."
+echo "Oracle memory resilience configured (swap + conservative swapping)."

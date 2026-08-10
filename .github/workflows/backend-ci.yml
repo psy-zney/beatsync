@@ -1,0 +1,63 @@
+name: Backend CI
+
+on:
+  push:
+    branches-ignore: [backup/bun-backend]
+    paths:
+      - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/deploy.yml"
+      - "apps/server/**"
+      - "scripts/configure-oracle-memory.sh"
+      - "scripts/install-go-backend.sh"
+      - "Dockerfile"
+  pull_request:
+    paths:
+      - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/deploy.yml"
+      - "apps/server/**"
+      - "scripts/configure-oracle-memory.sh"
+      - "scripts/install-go-backend.sh"
+      - "Dockerfile"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.sum
+
+      - name: Test, vet and build Go backend
+        working-directory: apps/server
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          set -euo pipefail
+          go test -race ./...
+          go vet ./...
+          CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /tmp/beatsync-server ./cmd/beatsync
+
+      - name: Check and build Rust extractor
+        working-directory: apps/server
+        run: |
+          set -euo pipefail
+          cargo fmt --all --manifest-path yt-rust-extractor/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path yt-rust-extractor/Cargo.toml --all-targets -- -D warnings
+          cargo build --release --locked --manifest-path yt-rust-extractor/Cargo.toml
+
+      - name: Check deployment shell scripts
+        run: |
+          set -euo pipefail
+          bash -n scripts/configure-oracle-memory.sh
+          bash -n scripts/install-go-backend.sh

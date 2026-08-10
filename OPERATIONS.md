@@ -1,49 +1,37 @@
-# Beatsync production resilience
+# Vận hành backend Go trên VPS nhỏ
 
-The production defaults are tuned for an Oracle VM with 1 GB RAM:
+## Luồng chịu lỗi
 
-- one active music download and at most 20 waiting jobs;
-- reject new work and drop half of the waiting queue at 600 MB RSS;
-- drop all waiting work, abort the active download, and write an atomic local snapshot at 750 MB RSS;
-- request a PM2-supervised restart if RSS remains above 750 MB for three checks;
-- PM2 performs an additional restart at 850 MB and restores the process after a crash;
-- a 2 GB swap file and the `pm2-<user>` systemd unit survive OOM events and VM reboots.
-- a systemd timer resurrects the saved PM2 process list if the shared PM2 daemon itself is killed.
+- Server chạy một process để room/WebSocket state không bị chia cắt.
+- Tối đa 1 download chạy và 12 job chờ theo mặc định.
+- File nhạc được stream vào file tạm rồi upload S3/R2; không giữ cả bài trong RAM.
+- Ở 220 MiB RSS, server giải phóng bộ nhớ và bỏ một phần job chờ.
+- Ở 320 MiB RSS, server hủy download đang chạy, bỏ toàn bộ job chờ và ghi snapshot cục bộ.
+- systemd đặt `MemoryHigh=300M`, `MemoryMax=420M`, tự restart khi crash/OOM và khởi động lại sau reboot.
+- Swap 2 GiB là lớp đệm cuối, không phải nơi chạy workload thường xuyên.
 
-State is saved first to `apps/server/data/state-backup-latest.json`, then to R2. Startup selects the newer valid snapshot, so a temporary R2/network failure does not require logging in to Oracle to recover rooms and playlists.
+Snapshot được ghi nguyên tử vào `apps/server/data/state-backup-latest.json` trước khi upload R2. Khi khởi động, server chọn snapshot local/remote mới hơn. Playlist riêng vẫn được lưu tại `room-<id>/playlist.json`.
 
-## Deployment
+## Deploy tự động
 
-Push to `main` or run the `Deploy to VPS` GitHub Actions workflow. Deployments are serialized so rapid pushes cannot reload the VPS concurrently. The currently running bundle stays online while dependencies install and the new bundle builds. PM2 reloads only after a successful build; if `/health` fails, the script restores and reloads the previous server bundle automatically.
+Mỗi push lên `main` chạy `.github/workflows/deploy.yml`:
 
-The host setup script is idempotent: it only creates `/swapfile` when that path does not already exist, enables PM2 at boot, deploys, saves the PM2 process list, and verifies `/health`.
+1. test và build Go/Rust trên GitHub runner;
+2. tải `yt-dlp` và kiểm tra SHA-256 chính chủ;
+3. gửi bundle qua SSH đã pin host fingerprint;
+4. cài release vào `/opt/beatsync/releases/<commit>`;
+5. đổi symlink, restart `beatsync.service`, kiểm tra `/health`;
+6. tự quay lại release trước nếu health check thất bại.
 
-Required repository secrets:
+Repository secrets cần có: `VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`, `VPS_FINGERPRINT`. Không đưa S3/LiveKit/creator secret vào GitHub Actions; các giá trị đó tiếp tục nằm trong `apps/server/.env` trên VPS.
 
-- `VPS_HOST`
-- `VPS_USERNAME`
-- `VPS_SSH_KEY`
-- `VPS_FINGERPRINT` (SHA256 host-key fingerprint; prevents SSH man-in-the-middle attacks)
-
-The deployment user needs passwordless `sudo` for the one-time swap/systemd configuration used by the workflow.
-
-## Tuning
-
-Override these in `pm2.config.js` or the environment. Keep the limits in this order:
-
-```text
-MEMORY_SOFT_LIMIT_MB < MEMORY_HARD_LIMIT_MB < PM2_MEMORY_LIMIT
-```
-
-For the default 1 GB VM, use `600 < 750 < 850`. `GET /health` exposes the current pressure level and stream queue counts; `GET /stats` includes detailed process memory.
-
-Useful checks on the VM:
+## Lệnh kiểm tra trên VPS
 
 ```bash
-pm2 status
-pm2 logs beatsync-server --lines 100
+systemctl status beatsync.service
+journalctl -u beatsync.service -n 100 --no-pager
+curl -fsS http://127.0.0.1:1001/health
 swapon --show
-systemctl status pm2-$(id -un)
-systemctl status beatsync-pm2-watchdog.timer
-curl -fsS "http://localhost:${PORT:-1001}/health"
 ```
+
+Các giới hạn production 220/320 MiB và queue 1/12 được khóa trong unit do script cài đặt tạo ra, nên `.env` cũ 600/750 MiB không thể vô tình vượt `MemoryMax=420M`. Muốn đổi chúng, sửa đồng thời `ExecStart`, `MemoryHigh` và `MemoryMax` trong `scripts/install-go-backend.sh`, luôn giữ `soft < hard < MemoryMax`.

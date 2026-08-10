@@ -11,9 +11,9 @@ pre-commit:
       run: bun run typecheck
     server-check:
       root: "apps/server/"
-      glob: "*.{ts,tsx,json}"
-      run: bun run format && bun run lint:fix && git add {staged_files}
+      glob: "*.go"
+      run: gofmt -w {staged_files} && git add {staged_files}
     server-typecheck:
       root: "apps/server/"
-      glob: "*.{ts,tsx}"
-      run: bun run typecheck
+      glob: "*.go"
+      run: go test ./...

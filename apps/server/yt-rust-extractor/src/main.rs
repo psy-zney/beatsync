@@ -1,7 +1,14 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::env;
-use std::path::PathBuf;
-use std::process::{Command, exit};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio, exit};
+use std::thread;
+use std::time::{Duration, Instant};
+
+#[derive(Serialize)]
+struct ErrorOutput {
+    error: String,
+}
 
 #[derive(Serialize)]
 struct Output {
@@ -9,125 +16,105 @@ struct Output {
     title: String,
 }
 
-#[derive(Serialize)]
-struct ErrorOutput {
-    error: String,
+fn fail(message: impl Into<String>) -> ! {
+    let payload = ErrorOutput {
+        error: message.into(),
+    };
+    println!(
+        "{}",
+        serde_json::to_string(&payload)
+            .unwrap_or_else(|_| r#"{"error":"extractor failure"}"#.to_string())
+    );
+    exit(1);
 }
 
-#[derive(Deserialize)]
-struct YtdlOutput {
-    url: Option<String>,
-    title: Option<String>,
-}
+fn find_yt_dlp() -> PathBuf {
+    if let Some(configured) = env::var_os("YTDLP_PATH").filter(|value| !value.is_empty()) {
+        return PathBuf::from(configured);
+    }
 
-fn find_yt_dlp() -> Result<PathBuf, String> {
-    let ytdlp_name = if cfg!(target_os = "windows") { "yt-dlp.exe" } else { "yt-dlp" };
-
-    // 1. Try relative to current exe
-    if let Ok(exe_path) = env::current_exe() {
-        let mut path = exe_path;
-        for _ in 0..4 {
-            if let Some(parent) = path.parent() {
-                path = parent.to_path_buf();
-            } else {
-                break;
+    let binary = if cfg!(target_os = "windows") {
+        "yt-dlp.exe"
+    } else {
+        "yt-dlp"
+    };
+    if let Ok(executable) = env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let sibling = directory.join(binary);
+            if sibling.is_file() {
+                return sibling;
             }
         }
-        let candidate = path.join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
     }
-
-    // 2. Try relative to current working directory
-    if let Ok(cwd) = env::current_dir() {
-        let candidate1 = cwd.join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
-        if candidate1.exists() {
-            return Ok(candidate1);
-        }
-        let candidate2 = cwd.join("apps").join("server").join("node_modules").join("youtube-dl-exec").join("bin").join(ytdlp_name);
-        if candidate2.exists() {
-            return Ok(candidate2);
-        }
-    }
-
-    // 3. Fallback to just "yt-dlp" in PATH
-    Ok(PathBuf::from("yt-dlp"))
+    PathBuf::from(binary)
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        let err = ErrorOutput {
-            error: "Missing YouTube URL argument".to_string(),
-        };
-        println!("{}", serde_json::to_string(&err).unwrap());
-        exit(1);
+    let url = env::args().nth(1).unwrap_or_else(|| fail("Missing YouTube URL argument"));
+    if !(url.starts_with("https://www.youtube.com/") || url.starts_with("https://youtube.com/")) {
+        fail("Only canonical HTTPS YouTube URLs are accepted");
     }
 
-    let url = &args[1];
+    // --print keeps stdout to two tiny JSON strings. The old --dump-json path
+    // emitted every available media format and consumed much more memory.
+    let mut command = Command::new(find_yt_dlp());
+    command.args([
+        "--no-playlist",
+        "--no-warnings",
+        "--no-progress",
+        "--no-cache-dir",
+        "-f",
+        "bestaudio/best",
+        "--print",
+        "%(url)j",
+        "--print",
+        "%(title)j",
+    ]);
 
-    let yt_dlp_path = match find_yt_dlp() {
-        Ok(p) => p,
-        Err(e) => {
-            let err = ErrorOutput { error: e };
-            println!("{}", serde_json::to_string(&err).unwrap());
-            exit(1);
+    if let Some(cookies) = env::var_os("YOUTUBE_COOKIES_PATH") {
+        if Path::new(&cookies).is_file() {
+            command.arg("--cookies").arg(cookies);
         }
-    };
+    }
+    command.arg(&url);
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-    let result = Command::new(yt_dlp_path)
-        .args(&["--dump-json", "-f", "bestaudio", "--js-runtimes", "node", url])
-        .output();
-
-    let output = match result {
-        Ok(o) => o,
-        Err(e) => {
-            let err = ErrorOutput {
-                error: format!("Failed to execute yt-dlp: {}", e),
-            };
-            println!("{}", serde_json::to_string(&err).unwrap());
-            exit(1);
+    let mut child = command
+        .spawn()
+        .unwrap_or_else(|error| fail(format!("Failed to execute yt-dlp: {error}")));
+    let deadline = Instant::now() + Duration::from_secs(25);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(25)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                fail("yt-dlp timed out after 25 seconds");
+            }
+            Err(error) => fail(format!("Failed while waiting for yt-dlp: {error}")),
         }
-    };
-
+    }
+    let output = child
+        .wait_with_output()
+        .unwrap_or_else(|error| fail(format!("Failed to collect yt-dlp output: {error}")));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let err = ErrorOutput {
-            error: format!("yt-dlp failed (code {:?}): {} {}", output.status.code(), stderr, stdout),
-        };
-        println!("{}", serde_json::to_string(&err).unwrap());
-        exit(1);
+        let compact = stderr.chars().take(2_000).collect::<String>();
+        fail(format!("yt-dlp failed (code {:?}): {compact}", output.status.code()));
+    }
+    if output.stdout.len() > 64 * 1024 {
+        fail("yt-dlp output exceeded 64 KiB");
     }
 
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let parsed: YtdlOutput = match serde_json::from_str(&stdout_str) {
-        Ok(p) => p,
-        Err(e) => {
-            let err = ErrorOutput {
-                error: format!("Failed to parse yt-dlp JSON output: {}. Raw output: {}", e, stdout_str),
-            };
-            println!("{}", serde_json::to_string(&err).unwrap());
-            exit(1);
-        }
-    };
-
-    let stream_url = match parsed.url {
-        Some(u) => u,
-        None => {
-            let err = ErrorOutput {
-                error: "No stream URL found in yt-dlp output".to_string(),
-            };
-            println!("{}", serde_json::to_string(&err).unwrap());
-            exit(1);
-        }
-    };
-
-    let final_output = Output {
-        stream_url,
-        title: parsed.title.unwrap_or_else(|| "YouTube Audio".to_string()),
-    };
-
-    println!("{}", serde_json::to_string(&final_output).unwrap());
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let stream_url: String = serde_json::from_str(lines.next().unwrap_or_default())
+        .unwrap_or_else(|error| fail(format!("Invalid yt-dlp URL JSON: {error}")));
+    let title: String = serde_json::from_str(lines.next().unwrap_or(r#""YouTube Audio""#))
+        .unwrap_or_else(|error| fail(format!("Invalid yt-dlp title JSON: {error}")));
+    if !(stream_url.starts_with("https://") || stream_url.starts_with("http://")) {
+        fail("yt-dlp returned no valid stream URL");
+    }
+    println!("{}", serde_json::to_string(&Output { stream_url, title }).unwrap());
 }

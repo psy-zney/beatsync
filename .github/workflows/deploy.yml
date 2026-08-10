@@ -2,23 +2,60 @@ name: Deploy to VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never let two pushes build/reload the same VPS at the same time.
 concurrency:
   group: beatsync-production-vps
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.sum
+
+      - name: Test and build static Go backend
+        working-directory: apps/server
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          set -euo pipefail
+          go test ./...
+          mkdir -p dist
+          go build -trimpath -ldflags='-s -w' -o dist/beatsync-server ./cmd/beatsync
+
+      - name: Build small Rust YouTube extractor
+        working-directory: apps/server
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path yt-rust-extractor/Cargo.toml
+          install -m 755 yt-rust-extractor/target/release/yt-rust-extractor dist/yt-rust-extractor
+
+      - name: Download and verify yt-dlp runtime
+        working-directory: apps/server/dist
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+          curl --fail --location --retry 3 --output SHA2-256SUMS https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS
+          grep -E '  yt-dlp_linux$' SHA2-256SUMS | sed 's/yt-dlp_linux$/yt-dlp/' | sha256sum --check --strict
+          chmod 755 yt-dlp
+          rm SHA2-256SUMS
+
+      - name: Package deployment bundle
+        run: tar -C apps/server/dist -czf "beatsync-${GITHUB_SHA}.tar.gz" beatsync-server yt-rust-extractor yt-dlp
+
       - name: Validate deploy secrets
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -26,25 +63,17 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_FINGERPRINT: ${{ secrets.VPS_FINGERPRINT }}
         run: |
+          set -euo pipefail
           missing=""
           [ -n "$VPS_HOST" ] || missing="$missing VPS_HOST"
           [ -n "$VPS_USERNAME" ] || missing="$missing VPS_USERNAME"
           [ -n "$VPS_SSH_KEY" ] || missing="$missing VPS_SSH_KEY"
           [ -n "$VPS_FINGERPRINT" ] || missing="$missing VPS_FINGERPRINT"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing repository Actions secret(s):$missing"
-            exit 1
-          fi
-          case "$VPS_FINGERPRINT" in
-            SHA256:*) ;;
-            *) echo "::error::VPS_FINGERPRINT must start with SHA256:"; exit 1 ;;
-          esac
-          if ! printf '%s' "$VPS_SSH_KEY" | grep -Eq 'BEGIN (OPENSSH |RSA )?PRIVATE KEY'; then
-            echo "::error::VPS_SSH_KEY is not a complete private key"
-            exit 1
-          fi
+          [ -z "$missing" ] || { echo "::error::Missing repository Actions secret(s):$missing"; exit 1; }
+          case "$VPS_FINGERPRINT" in SHA256:*) ;; *) echo "::error::VPS_FINGERPRINT must start with SHA256:"; exit 1;; esac
+          printf '%s' "$VPS_SSH_KEY" | grep -Eq 'BEGIN (OPENSSH |RSA )?PRIVATE KEY' || { echo "::error::VPS_SSH_KEY is not a complete private key"; exit 1; }
 
-      - name: Deploy to VPS
+      - name: Install bundle with automatic rollback
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
@@ -55,34 +84,25 @@ jobs:
           key_file="$(mktemp)"
           host_keys="$(mktemp)"
           trap 'rm -f "$key_file" "$host_keys"' EXIT
-
           printf '%s\n' "$VPS_SSH_KEY" >"$key_file"
           chmod 600 "$key_file"
-
           ssh-keyscan -T 10 -t ed25519 "$VPS_HOST" >"$host_keys" 2>/dev/null
           actual_fingerprint="$(ssh-keygen -lf "$host_keys" -E sha256 | awk '{print $2}')"
-          if [ "$actual_fingerprint" != "$VPS_FINGERPRINT" ]; then
-            echo "::error::VPS host fingerprint mismatch"
-            exit 1
-          fi
-
+          [ "$actual_fingerprint" = "$VPS_FINGERPRINT" ] || { echo "::error::VPS host fingerprint mismatch"; exit 1; }
           install -d -m 700 "$HOME/.ssh"
           install -m 600 "$host_keys" "$HOME/.ssh/known_hosts"
-          ssh \
-            -i "$key_file" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$VPS_USERNAME@$VPS_HOST" 'bash -se' <<'REMOTE_SCRIPT'
-            export PATH="$HOME/.bun/bin:/usr/local/bin:$PATH"
-            cd ~/beatsync
+          scp -i "$key_file" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "beatsync-${GITHUB_SHA}.tar.gz" "$VPS_USERNAME@$VPS_HOST:/tmp/beatsync-${GITHUB_SHA}.tar.gz"
+          ssh -i "$key_file" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USERNAME@$VPS_HOST" "RELEASE_ID='$GITHUB_SHA' bash -se" <<'REMOTE_SCRIPT'
+            set -euo pipefail
+            cd "$HOME/beatsync"
             git pull --ff-only origin main
-            command -v pm2 >/dev/null || bun add --global pm2
+            sudo env DEPLOY_USER="$(id -un)" DEPLOY_HOME="$HOME" bash scripts/configure-oracle-memory.sh
             sudo env \
-              PATH="$PATH" \
-              PM2_BIN="$(command -v pm2)" \
+              RELEASE_ID="$RELEASE_ID" \
+              BUNDLE_PATH="/tmp/beatsync-${RELEASE_ID}.tar.gz" \
               DEPLOY_USER="$(id -un)" \
               DEPLOY_HOME="$HOME" \
-              bash scripts/configure-oracle-memory.sh
-            SKIP_PULL=1 bash update.sh
+              bash scripts/install-go-backend.sh
           REMOTE_SCRIPT
