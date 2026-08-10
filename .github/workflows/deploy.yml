@@ -40,8 +40,11 @@ jobs:
         working-directory: apps/server
         run: |
           set -euo pipefail
-          cargo build --release --locked --manifest-path yt-rust-extractor/Cargo.toml
-          install -m 755 yt-rust-extractor/target/release/yt-rust-extractor dist/yt-rust-extractor
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --release --locked --target x86_64-unknown-linux-musl --manifest-path yt-rust-extractor/Cargo.toml
+          extractor=yt-rust-extractor/target/x86_64-unknown-linux-musl/release/yt-rust-extractor
+          file "$extractor" | grep -Eq 'statically linked|static-pie linked'
+          install -m 755 "$extractor" dist/yt-rust-extractor
 
       - name: Download and verify yt-dlp runtime
         working-directory: apps/server/dist

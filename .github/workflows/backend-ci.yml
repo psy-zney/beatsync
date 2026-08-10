@@ -58,7 +58,10 @@ jobs:
           set -euo pipefail
           cargo fmt --all --manifest-path yt-rust-extractor/Cargo.toml -- --check
           cargo clippy --locked --manifest-path yt-rust-extractor/Cargo.toml --all-targets -- -D warnings
-          cargo build --release --locked --manifest-path yt-rust-extractor/Cargo.toml
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --release --locked --target x86_64-unknown-linux-musl --manifest-path yt-rust-extractor/Cargo.toml
+          extractor=yt-rust-extractor/target/x86_64-unknown-linux-musl/release/yt-rust-extractor
+          file "$extractor" | grep -Eq 'statically linked|static-pie linked'
 
       - name: Check deployment shell scripts
         run: |
