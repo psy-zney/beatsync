@@ -1,17 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap");
 
 .not-found-body {
   background-color: #03070a;
   color: #e0f8ff;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: "Share Tech Mono", monospace;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: fixed;
   inset: 0;
+  box-sizing: border-box;
+  padding-block: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-bottom));
+  overscroll-behavior: none;
   user-select: none;
   z-index: 9999;
 }
@@ -19,7 +24,7 @@
 /* CRT Monitor Scanlines Effect */
 .not-found-body::before {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: repeating-linear-gradient(
     0deg,
@@ -35,7 +40,7 @@
 /* Subtle Green CRT Glow & Vignette */
 .not-found-body::after {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: radial-gradient(circle at center, rgba(0, 255, 170, 0.05) 0%, rgba(0, 0, 0, 0.85) 80%);
   pointer-events: none;
@@ -49,11 +54,13 @@
   padding: 2rem;
   max-width: 650px;
   width: 100%;
+  margin: auto;
+  box-sizing: border-box;
 }
 
 /* Top ERROR text */
 .error-label {
-  font-family: 'VT323', monospace;
+  font-family: "VT323", monospace;
   font-size: 2.2rem;
   letter-spacing: 0.35em;
   color: #00ffaa;
@@ -71,7 +78,7 @@
 }
 
 .glitch {
-  font-family: 'VT323', monospace;
+  font-family: "VT323", monospace;
   font-size: clamp(8rem, 25vw, 14rem);
   font-weight: bold;
   line-height: 0.8;
@@ -110,11 +117,14 @@
 
 /* Bottom PAGE NOT FOUND */
 .not-found-text {
-  font-family: 'VT323', monospace;
+  font-family: "VT323", monospace;
   font-size: clamp(1.8rem, 6vw, 3rem);
   letter-spacing: 0.25em;
   color: #ffffff;
-  text-shadow: -2px 0 #ff0055, 2px 0 #00ffff, 0 0 15px rgba(255, 255, 255, 0.8);
+  text-shadow:
+    -2px 0 #ff0055,
+    2px 0 #00ffff,
+    0 0 15px rgba(255, 255, 255, 0.8);
   margin-bottom: 2.5rem;
   text-transform: uppercase;
 }
@@ -153,7 +163,7 @@
   background: transparent;
   color: #00ffaa;
   border: 2px solid #00ffaa;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: "Share Tech Mono", monospace;
   font-size: 1rem;
   font-weight: bold;
   text-decoration: none;
@@ -177,40 +187,163 @@
   transform: translateY(0);
 }
 
+.btn-return:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
+}
+
 /* Keyframes */
 @keyframes flicker {
-  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+  0%,
+  19%,
+  21%,
+  23%,
+  25%,
+  54%,
+  56%,
+  100% {
     opacity: 1;
   }
-  20%, 24%, 55% {
+  20%,
+  24%,
+  55% {
     opacity: 0.3;
   }
 }
 
 @keyframes glitch-anim-1 {
-  0% { clip-path: polygon(0 20%, 100% 20%, 100% 30%, 0 30%); transform: translate(-4px, -2px); }
-  20% { clip-path: polygon(0 60%, 100% 60%, 100% 65%, 0 65%); transform: translate(4px, 2px); }
-  40% { clip-path: polygon(0 40%, 100% 40%, 100% 50%, 0 50%); transform: translate(-2px, 4px); }
-  60% { clip-path: polygon(0 80%, 100% 80%, 100% 85%, 0 85%); transform: translate(2px, -4px); }
-  80% { clip-path: polygon(0 10%, 100% 10%, 100% 15%, 0 15%); transform: translate(-4px, 2px); }
-  100% { clip-path: polygon(0 30%, 100% 30%, 100% 45%, 0 45%); transform: translate(4px, -2px); }
+  0% {
+    clip-path: polygon(0 20%, 100% 20%, 100% 30%, 0 30%);
+    transform: translate(-4px, -2px);
+  }
+  20% {
+    clip-path: polygon(0 60%, 100% 60%, 100% 65%, 0 65%);
+    transform: translate(4px, 2px);
+  }
+  40% {
+    clip-path: polygon(0 40%, 100% 40%, 100% 50%, 0 50%);
+    transform: translate(-2px, 4px);
+  }
+  60% {
+    clip-path: polygon(0 80%, 100% 80%, 100% 85%, 0 85%);
+    transform: translate(2px, -4px);
+  }
+  80% {
+    clip-path: polygon(0 10%, 100% 10%, 100% 15%, 0 15%);
+    transform: translate(-4px, 2px);
+  }
+  100% {
+    clip-path: polygon(0 30%, 100% 30%, 100% 45%, 0 45%);
+    transform: translate(4px, -2px);
+  }
 }
 
 @keyframes glitch-anim-2 {
-  0% { clip-path: polygon(0 65%, 100% 65%, 100% 75%, 0 75%); transform: translate(4px, 2px); }
-  20% { clip-path: polygon(0 15%, 100% 15%, 100% 25%, 0 25%); transform: translate(-4px, -2px); }
-  40% { clip-path: polygon(0 50%, 100% 50%, 100% 55%, 0 55%); transform: translate(4px, -4px); }
-  60% { clip-path: polygon(0 85%, 100% 85%, 100% 95%, 0 95%); transform: translate(-2px, 4px); }
-  80% { clip-path: polygon(0 35%, 100% 35%, 100% 40%, 0 40%); transform: translate(2px, -2px); }
-  100% { clip-path: polygon(0 70%, 100% 70%, 100% 80%, 0 80%); transform: translate(-4px, 2px); }
+  0% {
+    clip-path: polygon(0 65%, 100% 65%, 100% 75%, 0 75%);
+    transform: translate(4px, 2px);
+  }
+  20% {
+    clip-path: polygon(0 15%, 100% 15%, 100% 25%, 0 25%);
+    transform: translate(-4px, -2px);
+  }
+  40% {
+    clip-path: polygon(0 50%, 100% 50%, 100% 55%, 0 55%);
+    transform: translate(4px, -4px);
+  }
+  60% {
+    clip-path: polygon(0 85%, 100% 85%, 100% 95%, 0 95%);
+    transform: translate(-2px, 4px);
+  }
+  80% {
+    clip-path: polygon(0 35%, 100% 35%, 100% 40%, 0 40%);
+    transform: translate(2px, -2px);
+  }
+  100% {
+    clip-path: polygon(0 70%, 100% 70%, 100% 80%, 0 80%);
+    transform: translate(-4px, 2px);
+  }
 }
 
 /* Binary matrix background canvas */
 #matrix-canvas {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   z-index: 1;
   opacity: 0.15;
+}
+
+@media (max-width: 480px) {
+  .nf-container {
+    padding: 1rem;
+  }
+
+  .error-label {
+    font-size: 1.8rem;
+    letter-spacing: 0.25em;
+  }
+
+  .glitch-wrapper {
+    margin: 0.25rem 0 1rem;
+  }
+
+  .glitch {
+    font-size: clamp(6rem, 36vw, 9rem);
+  }
+
+  .not-found-text {
+    font-size: clamp(1.7rem, 9vw, 2.4rem);
+    letter-spacing: 0.16em;
+    margin-bottom: 1.5rem;
+  }
+
+  .terminal-box {
+    padding: 1rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+  }
+
+  .btn-return {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    font-size: clamp(0.75rem, 3.5vw, 0.9rem);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+}
+
+@media (max-height: 700px) {
+  .nf-container {
+    margin-block: 0;
+  }
+
+  .error-label {
+    margin-bottom: 0.25rem;
+  }
+
+  .glitch-wrapper {
+    margin-block: 0.25rem 0.75rem;
+  }
+
+  .not-found-text,
+  .terminal-box {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .error-label,
+  .glitch::before,
+  .glitch::after {
+    animation: none;
+  }
+
+  .btn-return {
+    transition: none;
+  }
 }
