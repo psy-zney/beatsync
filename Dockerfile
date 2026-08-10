@@ -48,9 +48,9 @@ RUN case "$TARGETARCH" in \
       --output yt-dlp "${release_url}/${asset}" \
     && curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
       --output SHA2-256SUMS "${release_url}/SHA2-256SUMS" \
-    && grep -F "  ${asset}" SHA2-256SUMS \
-      | sed "s#${asset}\$#yt-dlp#" \
-      | sha256sum -c - \
+    && expected_hash="$(awk -v target="${asset}" '$2 == target { print $1 }' SHA2-256SUMS)" \
+    && test -n "${expected_hash}" \
+    && printf '%s  yt-dlp\n' "${expected_hash}" | sha256sum -c - \
     && chmod 0755 yt-dlp \
     && rm SHA2-256SUMS
 
