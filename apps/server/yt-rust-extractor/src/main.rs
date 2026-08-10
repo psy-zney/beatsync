@@ -38,12 +38,12 @@ fn find_yt_dlp() -> PathBuf {
     } else {
         "yt-dlp"
     };
-    if let Ok(executable) = env::current_exe() {
-        if let Some(directory) = executable.parent() {
-            let sibling = directory.join(binary);
-            if sibling.is_file() {
-                return sibling;
-            }
+    if let Ok(executable) = env::current_exe()
+        && let Some(directory) = executable.parent()
+    {
+        let sibling = directory.join(binary);
+        if sibling.is_file() {
+            return sibling;
         }
     }
     PathBuf::from(binary)
@@ -73,10 +73,10 @@ fn main() {
         "%(title)j",
     ]);
 
-    if let Some(cookies) = env::var_os("YOUTUBE_COOKIES_PATH") {
-        if Path::new(&cookies).is_file() {
-            command.arg("--cookies").arg(cookies);
-        }
+    if let Some(cookies) = env::var_os("YOUTUBE_COOKIES_PATH")
+        && Path::new(&cookies).is_file()
+    {
+        command.arg("--cookies").arg(cookies);
     }
     command.arg(&url);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
