@@ -36,6 +36,29 @@ func TestPlaybackRequiresQueuedSource(t *testing.T) {
 	}
 }
 
+func TestPauseCancelsPendingPlayAndAlwaysBroadcasts(t *testing.T) {
+	t.Parallel()
+	state := New("090624")
+	source := model.AudioSource{URL: "https://audio.test/a.mp3", Title: "A"}
+	state.AddAudioSource(source)
+	play := map[string]any{"type": "PLAY", "audioSource": source.URL, "trackTimeSeconds": 0.0}
+	token, _, ok := state.BeginPlay(play, "initiator")
+	if !ok {
+		t.Fatal("failed to create pending play")
+	}
+	pause := map[string]any{"type": "PAUSE", "audioSource": "stale-client-source", "trackTimeSeconds": 12.0}
+	if _, ok := state.Pause(pause); !ok {
+		t.Fatal("pause of a stale client source was not broadcast")
+	}
+	if _, _, ok := state.ExecutePending(token); ok {
+		t.Fatal("pending play survived pause")
+	}
+	_, playback, _, _, _, _, _ := state.State()
+	if playback.Type != "paused" {
+		t.Fatalf("playback type = %q", playback.Type)
+	}
+}
+
 func TestReorderValidationStateIsCopyOnWrite(t *testing.T) {
 	t.Parallel()
 	state := New("090624")

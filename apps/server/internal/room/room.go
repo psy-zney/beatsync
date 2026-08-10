@@ -302,9 +302,15 @@ func (r *Room) Pause(action map[string]any) (float64, bool) {
 	defer r.mu.Unlock()
 	url, _ := action["audioSource"].(string)
 	position, _ := action["trackTimeSeconds"].(float64)
+	// A pause must also invalidate a play that is waiting for clients to load
+	// the source; otherwise its timeout can restart playback after the user has
+	// already pressed pause.
+	r.pending = nil
 	if !r.hasSourceLocked(url) {
-		r.playback = model.PlaybackState{Type: "paused"}
-		return 0, false
+		// Clients can still be playing an in-memory buffer after a backend restart
+		// even though the restored room no longer contains that source. Broadcast
+		// the idempotent pause anyway, but do not persist an unknown URL.
+		url = r.playback.AudioSource
 	}
 	executeAt := r.scheduledTimeLocked(0)
 	r.playback = model.PlaybackState{Type: "paused", AudioSource: url, TrackPositionSeconds: position, ServerTimeToExecute: executeAt}

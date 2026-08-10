@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,6 +11,28 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/psy-zney/beatsync/apps/server/internal/config"
 )
+
+func TestLegacyClientCORSPreflight(t *testing.T) {
+	application, err := New(testConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Shutdown(t.Context())
+	request := httptest.NewRequest(http.MethodOptions, "/voice/token", nil)
+	request.Header.Set("Origin", "https://beatsync.zney295.id.vn")
+	request.Header.Set("Access-Control-Request-Headers", "content-type,bypass-tunnel-reminder,ngrok-skip-browser-warning")
+	response := httptest.NewRecorder()
+	application.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d", response.Code)
+	}
+	allowed := response.Header().Get("Access-Control-Allow-Headers")
+	for _, name := range []string{"bypass-tunnel-reminder", "ngrok-skip-browser-warning"} {
+		if !strings.Contains(strings.ToLower(allowed), name) {
+			t.Fatalf("Access-Control-Allow-Headers %q is missing %q", allowed, name)
+		}
+	}
+}
 
 func testConfig(t *testing.T) config.Config {
 	t.Helper()

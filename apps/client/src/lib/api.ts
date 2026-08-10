@@ -14,10 +14,6 @@ const baseAxios = axios.create({
   get baseURL() {
     return getApiUrl();
   },
-  headers: {
-    "ngrok-skip-browser-warning": "69420",
-    "bypass-tunnel-reminder": "true",
-  },
 });
 
 export const uploadAudioFile = async (data: { file: File; roomId: string }) => {
@@ -99,12 +95,7 @@ export const fetchAudio = async (url: string) => {
 
 export async function fetchDefaultAudioSources() {
   try {
-    const response = await fetch(`${getApiUrl()}/default`, {
-      headers: {
-        "ngrok-skip-browser-warning": "69420",
-        "bypass-tunnel-reminder": "true",
-      },
-    });
+    const response = await fetch(`${getApiUrl()}/default`);
 
     if (!response.ok) {
       console.error("Failed to fetch default audio sources:", response.status);
@@ -120,23 +111,13 @@ export async function fetchDefaultAudioSources() {
 }
 
 export async function fetchActiveRooms() {
-  const response = await fetch(`${getApiUrl()}/active-rooms`, {
-    headers: {
-      "ngrok-skip-browser-warning": "69420",
-      "bypass-tunnel-reminder": "true",
-    },
-  });
+  const response = await fetch(`${getApiUrl()}/active-rooms`);
   const data: GetActiveRoomsType = await response.json();
   return data;
 }
 
 export async function fetchDiscoverRooms() {
-  const response = await fetch(`${getApiUrl()}/discover`, {
-    headers: {
-      "ngrok-skip-browser-warning": "69420",
-      "bypass-tunnel-reminder": "true",
-    },
-  });
+  const response = await fetch(`${getApiUrl()}/discover`);
   const data: DiscoverRoomsType = await response.json();
   return data;
 }

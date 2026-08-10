@@ -85,7 +85,9 @@ func (a *App) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 func (a *App) setCORS(header http.Header) {
 	header.Set("Access-Control-Allow-Origin", "*")
 	header.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Range")
+	// Keep the two legacy development headers during the Bun-to-Go rollout so
+	// an already-open client can still complete cross-origin POST preflights.
+	header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Range, ngrok-skip-browser-warning, bypass-tunnel-reminder")
 	header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Content-Type, Accept-Ranges")
 }
 

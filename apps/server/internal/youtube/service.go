@@ -254,8 +254,13 @@ func (s *Service) Search(ctx context.Context, query string, offset int) (map[str
 
 func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
 	watch := "https://www.youtube.com/watch?v=" + id
+	cookiesPath, cleanupCookies, err := s.snapshotCookies()
+	if err != nil {
+		return Resolved{}, fmt.Errorf("prepare YouTube cookies: %w", err)
+	}
+	defer cleanupCookies()
 	if info, err := os.Stat(s.cfg.ExtractorPath); err == nil && !info.IsDir() {
-		if output, runErr := s.run(ctx, s.cfg.ExtractorPath, watch); runErr == nil {
+		if output, runErr := s.runWithCookies(ctx, cookiesPath, s.cfg.ExtractorPath, watch); runErr == nil {
 			var parsed struct {
 				StreamURL string `json:"stream_url"`
 				Title     string `json:"title"`
@@ -278,10 +283,8 @@ func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
 	var lastErr error
 	for _, strategy := range strategies {
 		args := []string{"--dump-single-json", "-f", "bestaudio/best", "--no-warnings", "--no-cache-dir", "--no-playlist"}
-		if s.cfg.CookiesPath != "" {
-			if _, err := os.Stat(s.cfg.CookiesPath); err == nil {
-				args = append(args, "--cookies", s.cfg.CookiesPath)
-			}
+		if cookiesPath != "" {
+			args = append(args, "--cookies", cookiesPath)
 		}
 		args = append(args, strategy...)
 		args = append(args, watch)
@@ -307,10 +310,14 @@ func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
 }
 
 func (s *Service) run(parent context.Context, binary string, args ...string) ([]byte, error) {
+	return s.runWithCookies(parent, s.cfg.CookiesPath, binary, args...)
+}
+
+func (s *Service) runWithCookies(parent context.Context, cookiesPath, binary string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(parent, s.cfg.ExtractorTimeout)
 	defer cancel()
 	command := exec.CommandContext(ctx, binary, args...)
-	command.Env = append(os.Environ(), "YTDLP_PATH="+s.cfg.YTDLPPath, "YOUTUBE_COOKIES_PATH="+s.cfg.CookiesPath)
+	command.Env = append(os.Environ(), "YTDLP_PATH="+s.cfg.YTDLPPath, "YOUTUBE_COOKIES_PATH="+cookiesPath)
 	var stdout, stderr cappedBuffer
 	stdout.max, stderr.max = maxProcessBytes, 64<<10
 	command.Stdout, command.Stderr = &stdout, &stderr
@@ -325,6 +332,48 @@ func (s *Service) run(parent context.Context, binary string, args ...string) ([]
 		return nil, errors.New("extractor output exceeded limit")
 	}
 	return stdout.Bytes(), nil
+}
+
+// yt-dlp updates a Netscape cookie jar when it exits. Production deliberately
+// mounts the repository home read-only, so give each extraction a private,
+// short-lived copy instead of letting yt-dlp mutate the canonical secret.
+func (s *Service) snapshotCookies() (string, func(), error) {
+	cleanup := func() {}
+	if s.cfg.CookiesPath == "" {
+		return "", cleanup, nil
+	}
+	source, err := os.Open(s.cfg.CookiesPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", cleanup, nil
+	}
+	if err != nil {
+		return "", cleanup, err
+	}
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		return "", cleanup, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 4<<20 {
+		return "", cleanup, errors.New("cookie file must be a regular file no larger than 4 MiB")
+	}
+	temporary, err := os.CreateTemp("", "beatsync-youtube-cookies-*.txt")
+	if err != nil {
+		return "", cleanup, err
+	}
+	name := temporary.Name()
+	cleanup = func() { _ = os.Remove(name) }
+	if err = temporary.Chmod(0o600); err == nil {
+		_, err = io.Copy(temporary, source)
+	}
+	if closeErr := temporary.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	return name, cleanup, nil
 }
 
 type cappedBuffer struct {
