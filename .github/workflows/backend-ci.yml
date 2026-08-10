@@ -9,7 +9,9 @@ on:
       - "apps/server/**"
       - "scripts/configure-oracle-memory.sh"
       - "scripts/install-go-backend.sh"
+      - ".dockerignore"
       - "Dockerfile"
+      - "compose.yml"
   pull_request:
     paths:
       - ".github/workflows/backend-ci.yml"
@@ -17,7 +19,9 @@ on:
       - "apps/server/**"
       - "scripts/configure-oracle-memory.sh"
       - "scripts/install-go-backend.sh"
+      - ".dockerignore"
       - "Dockerfile"
+      - "compose.yml"
 
 permissions:
   contents: read
@@ -61,3 +65,10 @@ jobs:
           set -euo pipefail
           bash -n scripts/configure-oracle-memory.sh
           bash -n scripts/install-go-backend.sh
+
+      - name: Validate and build the backend container
+        run: |
+          set -euo pipefail
+          cp apps/server/.env.example apps/server/.env
+          docker compose config --quiet
+          docker build --tag beatsync-server:ci .

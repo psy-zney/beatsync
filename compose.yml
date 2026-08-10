@@ -1,0 +1,34 @@
+name: beatsync
+
+services:
+  server:
+    image: beatsync-server:local
+    build:
+      context: .
+      args:
+        YTDLP_VERSION: ${YTDLP_VERSION:-2026.07.04}
+    env_file:
+      - apps/server/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 1001
+      LOCAL_BACKUP_PATH: /app/data/state-backup-latest.json
+    ports:
+      - "${BEATSYNC_PORT:-1001}:1001"
+    volumes:
+      - beatsync-data:/app/data
+      - beatsync-tmp:/tmp
+    read_only: true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    mem_limit: 420m
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  beatsync-data:
+  beatsync-tmp:
