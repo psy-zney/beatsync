@@ -58,18 +58,14 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 	// resolving a fresh, short-lived Googlevideo URL; cache hits should not pay
 	// the extractor's cold-start and network cost.
 	if cachedVideoID := youtube.ParseVideoID(trackID); a.Store != nil && cachedVideoID != "" {
-		for _, extension := range []string{"webm", "m4a", "mp3", "ogg"} {
-			key := "youtube-cache/" + cachedVideoID + "." + extension
-			exists, headErr := a.Store.Head(ctx, key)
-			if headErr == nil && exists {
-				if trackName == "" {
-					trackName = "YouTube Audio"
-				}
-				sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
-				a.broadcastSources(roomID, sources)
-				log.Printf("stream cache hit: room=%s video=%s", roomID, cachedVideoID)
-				return nil
+		if key := a.cachedYouTubeKey(ctx, cachedVideoID); key != "" {
+			if trackName == "" {
+				trackName = "YouTube Audio"
 			}
+			sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
+			a.broadcastSources(roomID, sources)
+			log.Printf("stream cache hit: room=%s video=%s", roomID, cachedVideoID)
+			return nil
 		}
 	}
 	streamURL, videoID, resolvedTitle, err := a.resolveProviderStream(ctx, trackID)
@@ -126,6 +122,28 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 	sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
 	a.broadcastSources(roomID, sources)
 	return nil
+}
+
+func (a *App) cachedYouTubeKey(ctx context.Context, videoID string) string {
+	extensions := []string{"webm", "m4a", "mp3", "ogg"}
+	exists := make([]bool, len(extensions))
+	var wait sync.WaitGroup
+	for index, extension := range extensions {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			key := "youtube-cache/" + videoID + "." + extension
+			found, err := a.Store.Head(ctx, key)
+			exists[index] = err == nil && found
+		}()
+	}
+	wait.Wait()
+	for index, found := range exists {
+		if found {
+			return "youtube-cache/" + videoID + "." + extensions[index]
+		}
+	}
+	return ""
 }
 
 func (a *App) resolveProviderStream(ctx context.Context, trackID string) (streamURL, videoID, title string, err error) {

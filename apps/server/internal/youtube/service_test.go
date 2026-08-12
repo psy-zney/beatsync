@@ -36,6 +36,49 @@ func TestTrustedMediaURL(t *testing.T) {
 	}
 }
 
+func TestCachedVideoIDAndTitleHealing(t *testing.T) {
+	t.Parallel()
+	url := "https://cdn.test/youtube-cache/dQw4w9WgXcQ.webm"
+	if got := CachedVideoID(url); got != "dQw4w9WgXcQ" {
+		t.Fatalf("CachedVideoID=%q", got)
+	}
+	if !NeedsTitleHeal(url, "YouTube Audio") || NeedsTitleHeal(url, "Resolved title") {
+		t.Fatal("unexpected title healing decision")
+	}
+}
+
+func TestParseSearchPageFiltersAndPreservesMetadata(t *testing.T) {
+	t.Parallel()
+	page := []byte(`<html><script>var ytInitialData = {"contents":[
+		{"videoRenderer":{"videoId":"dQw4w9WgXcQ","title":{"runs":[{"text":"Song &amp; Mix"}]},"lengthText":{"simpleText":"3:32"},"ownerText":{"runs":[{"text":"Artist"}]},"thumbnail":{"thumbnails":[{"url":"small"},{"url":"large"}]}}},
+		{"videoRenderer":{"videoId":"aaaaaaaaaaa","title":{"simpleText":"Too long"},"lengthText":{"simpleText":"8:01"}}},
+		{"videoRenderer":{"videoId":"dQw4w9WgXcQ","title":{"simpleText":"Duplicate"},"lengthText":{"simpleText":"3:32"}}}
+	]};</script></html>`)
+	items, err := parseSearchPage(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%d", len(items))
+	}
+	item := items[0]
+	if item.ID != "dQw4w9WgXcQ" || item.Title != "Song & Mix" || item.Duration != 212 || item.Performer != "Artist" {
+		t.Fatalf("unexpected item: %+v", item)
+	}
+	if item.SmallThumbnail != "small" || item.LargeThumbnail != "large" {
+		t.Fatalf("unexpected thumbnails: %+v", item)
+	}
+}
+
+func TestParseDurationText(t *testing.T) {
+	t.Parallel()
+	for input, want := range map[string]float64{"3:05": 185, "1:02:03": 3723, "LIVE": 0, "3:99": 0} {
+		if got := parseDurationText(input); got != want {
+			t.Fatalf("parseDurationText(%q)=%v, want %v", input, got, want)
+		}
+	}
+}
+
 func TestSnapshotCookiesCreatesWritablePrivateCopy(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()

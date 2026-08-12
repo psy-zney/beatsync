@@ -276,17 +276,18 @@ func (a *App) handleYouTubeUpload(writer http.ResponseWriter, request *http.Requ
 		jsonError(writer, "Room not found", http.StatusNotFound)
 		return
 	}
-	ctx, cancel := context.WithTimeout(request.Context(), a.Config.ExtractorTimeout)
+	ctx, cancel := context.WithTimeout(request.Context(), a.Config.HTTPTimeout)
 	defer cancel()
-	resolved, err := a.YouTube.Resolve(ctx, payload.URL)
+	title, videoID, err := a.YouTube.Metadata(ctx, payload.URL)
 	if err != nil {
 		jsonError(writer, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	proxy := youtube.ProxyURL(resolved.VideoID)
-	sources := room.AddAudioSource(model.AudioSource{URL: proxy, Title: resolved.Title})
-	a.broadcastSources(payload.RoomID, sources)
-	writeJSON(writer, http.StatusOK, map[string]any{"success": true, "title": resolved.Title, "publicUrl": proxy})
+	// Use the same durable cache pipeline as search results. Adding the proxy
+	// URL directly made clients download from Googlevideo at throttled playback
+	// speed; a 5 MiB track could therefore appear to need many minutes.
+	a.queueStream(payload.RoomID, room, videoID, title)
+	writeJSON(writer, http.StatusAccepted, map[string]any{"success": true, "title": title, "publicUrl": youtube.ProxyURL(videoID)})
 }
 
 func (a *App) handleYouTubeProxy(writer http.ResponseWriter, request *http.Request) {

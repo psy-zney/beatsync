@@ -17,6 +17,7 @@ import (
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
 	"github.com/psy-zney/beatsync/apps/server/internal/realtime"
 	"github.com/psy-zney/beatsync/apps/server/internal/room"
+	"github.com/psy-zney/beatsync/apps/server/internal/youtube"
 )
 
 func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request) {
@@ -79,6 +80,7 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 			event["currentAudioSource"] = playback.AudioSource
 		}
 		client.Send(roomEvent(event))
+		go a.healSourceTitles(client.RoomID, state, sources)
 	}
 	now := nowMS()
 	client.Send(scheduled(now, map[string]any{"type": "GLOBAL_VOLUME_CONFIG", "volume": volume, "rampTime": 0.1}))
@@ -110,6 +112,29 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 		if executeAt, ok := state.PlayImmediate(action); ok {
 			a.Hub.Broadcast(client.RoomID, scheduled(executeAt, action))
 		}
+	}
+}
+
+func (a *App) healSourceTitles(roomID string, state *room.Room, sources []model.AudioSource) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	changed := false
+	for _, source := range sources {
+		if ctx.Err() != nil {
+			break
+		}
+		if !youtube.NeedsTitleHeal(source.URL, source.Title) {
+			continue
+		}
+		title, _, err := a.YouTube.Metadata(ctx, youtube.CachedVideoID(source.URL))
+		if err == nil && strings.TrimSpace(title) != "" {
+			state.AddAudioSource(model.AudioSource{URL: source.URL, Title: title})
+			changed = true
+		}
+	}
+	if changed {
+		current, _, _, _, _, _, _ := state.State()
+		a.broadcastSources(roomID, current)
 	}
 }
 

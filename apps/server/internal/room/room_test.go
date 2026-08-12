@@ -71,6 +71,24 @@ func TestReorderValidationStateIsCopyOnWrite(t *testing.T) {
 	}
 }
 
+func TestAddAudioSourceUpdatesMetadataForStableURL(t *testing.T) {
+	t.Parallel()
+	state := New("090624")
+	url := "https://audio.test/youtube-cache/video.webm"
+	state.AddAudioSource(model.AudioSource{URL: url})
+
+	sources := state.AddAudioSource(model.AudioSource{URL: url, Title: "Resolved title"})
+	if len(sources) != 1 {
+		t.Fatalf("sources=%d, want one de-duplicated source", len(sources))
+	}
+	if sources[0].Title != "Resolved title" {
+		t.Fatalf("title=%q", sources[0].Title)
+	}
+	if !state.PlaylistDirty() {
+		t.Fatal("metadata update must mark playlist dirty")
+	}
+}
+
 func TestPruneDisconnectedKeepsActiveClients(t *testing.T) {
 	t.Parallel()
 	state := New("090624")

@@ -20,6 +20,33 @@ import { toast } from "sonner";
 const DEAFENED_ATTRIBUTE = "beatsync.deafened";
 const MAX_VOICE_RECONNECT_DELAY_MS = 10_000;
 
+const isMicrophonePermissionDenied = (error: unknown) => {
+  const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
+  return name === "NotAllowedError" || name === "PermissionDeniedError";
+};
+
+/**
+ * iOS Safari is most reliable when getUserMedia is started directly from the
+ * button gesture. LiveKit only touches the mic after token/network awaits, by
+ * which point Safari may no longer show its permission prompt.
+ */
+const requestMicrophonePermission = async (deviceId?: string) => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Trình duyệt này không hỗ trợ microphone.");
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+      deviceId: deviceId && deviceId !== "default" ? { ideal: deviceId } : undefined,
+    },
+  });
+  stream.getTracks().forEach((track) => track.stop());
+};
+
 interface VoiceChatContextType {
   isConnected: boolean;
   isConnecting: boolean;
@@ -411,8 +438,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         room?.disconnect(true);
         resetTransientVoiceState();
 
-        const permissionDenied =
-          error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError");
+        const permissionDenied = isMicrophonePermissionDenied(error);
         if (permissionDenied) shouldStayConnectedRef.current = false;
 
         if (shouldStayConnectedRef.current && isRecovery) {
@@ -455,6 +481,25 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
   const connect = useCallback(async () => {
     if (connectionInFlightRef.current || shouldStayConnectedRef.current) return;
+
+    const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
+    if (audioInputDeviceId !== "none") {
+      try {
+        // Start before fetching a token so iPhone/iPad Safari associates the
+        // permission prompt with this tap.
+        await requestMicrophonePermission(audioInputDeviceId);
+      } catch (error) {
+        toast.error(
+          isMicrophonePermissionDenied(error)
+            ? "Safari chưa được cấp quyền microphone. Hãy bật Microphone trong cài đặt trang web rồi thử lại."
+            : error instanceof Error
+              ? error.message
+              : "Không thể truy cập microphone."
+        );
+        return;
+      }
+    }
+
     shouldStayConnectedRef.current = true;
     desiredMutedRef.current = true; // Default to muted to prevent Bluetooth HFP drop
     await connectInternalRef.current(false);

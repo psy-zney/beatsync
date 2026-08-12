@@ -16,13 +16,33 @@ const baseAxios = axios.create({
   },
 });
 
+const audioContentType = (file: File) => {
+  if (file.type.startsWith("audio/") || file.type === "video/webm") return file.type;
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return (
+    {
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+      m4a: "audio/mp4",
+      aac: "audio/aac",
+      ogg: "audio/ogg",
+      webm: "audio/webm",
+      flac: "audio/flac",
+    }[extension ?? ""] ?? "audio/mpeg"
+  );
+};
+
 export const uploadAudioFile = async (data: { file: File; roomId: string }) => {
   try {
+    // Safari on iOS can return an empty or generic MIME type for files picked
+    // from iCloud Drive. Infer it from the extension so the signed PUT and the
+    // backend validation use a stable audio Content-Type.
+    const contentType = audioContentType(data.file);
     // Step 1: Get presigned upload URL from server
     const uploadUrlRequest: GetUploadUrlType = {
       roomId: data.roomId,
       fileName: data.file.name,
-      contentType: data.file.type,
+      contentType,
     };
 
     const presignedURLResponse = await baseAxios.post<UploadUrlResponseType>(
@@ -37,7 +57,7 @@ export const uploadAudioFile = async (data: { file: File; roomId: string }) => {
       method: "PUT",
       body: data.file,
       headers: {
-        "Content-Type": data.file.type,
+        "Content-Type": contentType,
       },
     });
 

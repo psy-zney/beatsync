@@ -519,14 +519,36 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       }));
 
       let lastReportedBytes = 0;
+      let transferStartedAt: number | null = null;
+      let previousSampleAt = 0;
+      let previousSampleBytes = 0;
+      let smoothedTransferRate = 0;
       const PROGRESS_THRESHOLD = 100 * 1024; // Report every ~100KB
       const { audioBuffer } = await downloadBufferFromURL({
         url,
         onProgress: (loaded, total) => {
+          const now = Date.now();
+          // Start throughput timing only after response headers arrive. Proxy
+          // tracks may spend seconds resolving upstream before the first byte;
+          // including that wait produced wildly pessimistic ETAs such as 26m
+          // for a 5 MiB file even when the transfer itself was healthy.
+          if (transferStartedAt === null) {
+            transferStartedAt = now;
+            previousSampleAt = now;
+            previousSampleBytes = loaded;
+          }
           if (loaded - lastReportedBytes < PROGRESS_THRESHOLD && loaded < total) return;
           lastReportedBytes = loaded;
-          const elapsedMs = Math.max(Date.now() - loadStartedAt, 1);
-          const transferRateBytesPerSecond = (loaded / elapsedMs) * 1000;
+          const sampleElapsedMs = now - previousSampleAt;
+          if (sampleElapsedMs >= 250 && loaded > previousSampleBytes) {
+            const sampleRate = ((loaded - previousSampleBytes) / sampleElapsedMs) * 1000;
+            smoothedTransferRate =
+              smoothedTransferRate === 0 ? sampleRate : smoothedTransferRate * 0.7 + sampleRate * 0.3;
+            previousSampleAt = now;
+            previousSampleBytes = loaded;
+          }
+          const transferElapsedMs = Math.max(now - transferStartedAt, 1);
+          const transferRateBytesPerSecond = smoothedTransferRate || (loaded / transferElapsedMs) * 1000;
           const estimatedRemainingMs =
             total > loaded && transferRateBytesPerSecond > 0
               ? ((total - loaded) / transferRateBytesPerSecond) * 1000
@@ -1666,7 +1688,16 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       const newAudioSources: AudioSourceState[] = sources.map((source) => {
         const existing = existingByUrl.get(source.url);
         if (existing) {
-          return existing;
+          // Preserve the decoded buffer/load state while accepting metadata
+          // that the backend resolved after this URL first reached the client.
+          return {
+            ...existing,
+            source: {
+              ...existing.source,
+              ...source,
+              title: source.title?.trim() || existing.source.title,
+            },
+          };
         }
         return {
           source,

@@ -196,8 +196,15 @@ func (r *Room) State() ([]model.AudioSource, model.PlaybackState, float64, float
 func (r *Room) AddAudioSource(source model.AudioSource) []model.AudioSource {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, existing := range r.audioSources {
+	source.Title = strings.TrimSpace(source.Title)
+	for index, existing := range r.audioSources {
 		if existing.URL == source.URL {
+			// Cached objects keep a stable URL. Let later resolution heal their
+			// title so reconnecting and late-joining clients receive fresh metadata.
+			if source.Title != "" && source.Title != existing.Title {
+				r.audioSources[index].Title = source.Title
+				r.playlistDirty = true
+			}
 			return append([]model.AudioSource(nil), r.audioSources...)
 		}
 	}

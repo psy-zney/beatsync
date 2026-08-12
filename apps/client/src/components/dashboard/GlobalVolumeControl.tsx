@@ -209,6 +209,19 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
               className={cn("flex-1", !canMutate && "opacity-50")}
             />
           </div>
+
+          <div className="mt-4 border-t border-neutral-800/70 pt-3">
+            <VolumeControl
+              icon={<Music className="h-3.5 w-3.5" />}
+              label="Your Music Volume"
+              value={personalVolume}
+              onChange={setPersonalVolume}
+            />
+          </div>
+
+          <div className="mt-4 border-t border-neutral-800/70 pt-3">
+            <AudioDeviceSelector />
+          </div>
         </div>
       </div>
     );

@@ -25,10 +25,13 @@ const (
 	cacheTTL        = 10 * time.Minute
 	refreshBuffer   = time.Minute
 	maxCacheItems   = 128
+	maxSearchItems  = 64
+	searchCacheTTL  = 2 * time.Minute
 	maxProcessBytes = 2 << 20
 )
 
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+var cachedVideoIDPattern = regexp.MustCompile(`/youtube-cache/([A-Za-z0-9_-]{11})\.`)
 
 type Resolved struct {
 	VideoID   string
@@ -41,11 +44,22 @@ type cachedStream struct {
 	expires time.Time
 }
 
+type searchItem struct {
+	ID, Title, Performer, SmallThumbnail, LargeThumbnail string
+	Duration                                             float64
+}
+
+type cachedSearch struct {
+	items   []searchItem
+	expires time.Time
+}
+
 type Service struct {
 	cfg    config.Config
 	http   *http.Client
 	mu     sync.Mutex
 	cache  map[string]cachedStream
+	search map[string]cachedSearch
 	flight map[string]*flight
 }
 
@@ -60,6 +74,7 @@ func New(cfg config.Config) *Service {
 		cfg:    cfg,
 		http:   &http.Client{Timeout: cfg.HTTPTimeout},
 		cache:  make(map[string]cachedStream),
+		search: make(map[string]cachedSearch),
 		flight: make(map[string]*flight),
 	}
 }
@@ -96,6 +111,23 @@ func ParseVideoID(input string) string {
 }
 
 func ProxyURL(videoID string) string { return "/youtube/proxy?videoId=" + url.QueryEscape(videoID) }
+
+func CachedVideoID(raw string) string {
+	match := cachedVideoIDPattern.FindStringSubmatch(raw)
+	if len(match) == 2 {
+		return match[1]
+	}
+	return ""
+}
+
+func NeedsTitleHeal(rawURL, title string) bool {
+	videoID := CachedVideoID(rawURL)
+	if videoID == "" {
+		return false
+	}
+	title = strings.TrimSpace(title)
+	return title == "" || title == "YouTube" || title == "YouTube Audio" || title == videoID || strings.HasPrefix(title, "track-")
+}
 
 func TrustedMediaURL(raw string) bool {
 	u, err := url.Parse(raw)
@@ -182,6 +214,22 @@ func (s *Service) Search(ctx context.Context, query string, offset int) (map[str
 	if query == "" || offset < 0 || offset > 1000 {
 		return nil, errors.New("invalid search parameters")
 	}
+
+	// The TypeScript backend used a lightweight YouTube page request. Spawning
+	// yt-dlp for every query adds noticeable process/network latency, especially
+	// on a small VPS, so use the page data first and keep yt-dlp as the robust
+	// fallback for layout changes, direct URLs, and deep pagination.
+	if ParseVideoID(query) == "" {
+		items, err := s.searchPage(ctx, query)
+		if err == nil && offset < len(items) {
+			return searchResponse(items, offset, 10), nil
+		}
+	}
+
+	return s.searchWithYTDLP(ctx, query, offset)
+}
+
+func (s *Service) searchWithYTDLP(ctx context.Context, query string, offset int) (map[string]any, error) {
 	limit := 10
 	want := offset + limit + 10
 	if want > 50 {
@@ -197,7 +245,7 @@ func (s *Service) Search(ctx context.Context, query string, offset int) (map[str
 		return nil, fmt.Errorf("YouTube search failed: %w", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(output))
-	items := make([]map[string]any, 0, limit)
+	items := make([]searchItem, 0, limit)
 	total := 0
 	for {
 		var item struct {
@@ -237,19 +285,195 @@ func (s *Service) Search(ctx context.Context, query string, offset int) (map[str
 			small = item.Thumbnails[0].URL
 			large = item.Thumbnails[len(item.Thumbnails)-1].URL
 		}
-		items = append(items, map[string]any{
-			"id": item.ID, "title": html.UnescapeString(item.Title), "duration": item.Duration,
+		items = append(items, searchItem{
+			ID: item.ID, Title: html.UnescapeString(item.Title), Duration: item.Duration, Performer: performer,
+			SmallThumbnail: small, LargeThumbnail: large,
+		})
+	}
+	return searchResponseWithTotal(items, offset, limit, total), nil
+}
+
+func (s *Service) searchPage(ctx context.Context, query string) ([]searchItem, error) {
+	cacheKey := strings.ToLower(strings.Join(strings.Fields(query), " "))
+	now := time.Now()
+	s.mu.Lock()
+	if cached, ok := s.search[cacheKey]; ok && cached.expires.After(now) {
+		items := append([]searchItem(nil), cached.items...)
+		s.mu.Unlock()
+		return items, nil
+	}
+	s.mu.Unlock()
+
+	endpoint := "https://www.youtube.com/results?hl=en&search_query=" + url.QueryEscape(query)
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	request.Header.Set("User-Agent", browserAgent)
+	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	request.Header.Set("Cookie", "CONSENT=YES+cb")
+	response, err := s.http.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("YouTube search page returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	items, err := parseSearchPage(body)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	if len(s.search) >= maxSearchItems {
+		for key := range s.search {
+			delete(s.search, key)
+			break
+		}
+	}
+	s.search[cacheKey] = cachedSearch{items: append([]searchItem(nil), items...), expires: now.Add(searchCacheTTL)}
+	s.mu.Unlock()
+	return items, nil
+}
+
+func parseSearchPage(body []byte) ([]searchItem, error) {
+	markers := [][]byte{[]byte("var ytInitialData ="), []byte("ytInitialData ="), []byte(`window["ytInitialData"] =`)}
+	start := -1
+	for _, marker := range markers {
+		if index := bytes.Index(body, marker); index >= 0 {
+			if objectStart := bytes.IndexByte(body[index+len(marker):], '{'); objectStart >= 0 {
+				start = index + len(marker) + objectStart
+				break
+			}
+		}
+	}
+	if start < 0 {
+		return nil, errors.New("YouTube search data was not found")
+	}
+
+	var initial any
+	if err := json.NewDecoder(bytes.NewReader(body[start:])).Decode(&initial); err != nil {
+		return nil, fmt.Errorf("decode YouTube search data: %w", err)
+	}
+	items := make([]searchItem, 0, 20)
+	seen := make(map[string]bool)
+	var walk func(any)
+	walk = func(value any) {
+		switch node := value.(type) {
+		case map[string]any:
+			if raw, ok := node["videoRenderer"].(map[string]any); ok {
+				if item, ok := searchItemFromRenderer(raw); ok && !seen[item.ID] {
+					seen[item.ID] = true
+					items = append(items, item)
+				}
+			}
+			for _, child := range node {
+				walk(child)
+			}
+		case []any:
+			for _, child := range node {
+				walk(child)
+			}
+		}
+	}
+	walk(initial)
+	if len(items) == 0 {
+		return nil, errors.New("YouTube search returned no playable videos")
+	}
+	return items, nil
+}
+
+func searchItemFromRenderer(renderer map[string]any) (searchItem, bool) {
+	id, _ := renderer["videoId"].(string)
+	duration := parseDurationText(textValue(renderer["lengthText"]))
+	if !videoIDPattern.MatchString(id) || duration <= 0 || duration > 360 {
+		return searchItem{}, false
+	}
+	title := html.UnescapeString(strings.TrimSpace(textValue(renderer["title"])))
+	if title == "" {
+		return searchItem{}, false
+	}
+	performer := strings.TrimSpace(textValue(renderer["ownerText"]))
+	if performer == "" {
+		performer = strings.TrimSpace(textValue(renderer["longBylineText"]))
+	}
+	if performer == "" {
+		performer = "YouTube User"
+	}
+	thumbnails := thumbnailURLs(renderer["thumbnail"])
+	small, large := "", ""
+	if len(thumbnails) > 0 {
+		small, large = thumbnails[0], thumbnails[len(thumbnails)-1]
+	}
+	return searchItem{ID: id, Title: title, Duration: duration, Performer: performer, SmallThumbnail: small, LargeThumbnail: large}, true
+}
+
+func textValue(value any) string {
+	node, _ := value.(map[string]any)
+	if text, _ := node["simpleText"].(string); text != "" {
+		return text
+	}
+	runs, _ := node["runs"].([]any)
+	var builder strings.Builder
+	for _, raw := range runs {
+		run, _ := raw.(map[string]any)
+		text, _ := run["text"].(string)
+		builder.WriteString(text)
+	}
+	return builder.String()
+}
+
+func thumbnailURLs(value any) []string {
+	node, _ := value.(map[string]any)
+	rawItems, _ := node["thumbnails"].([]any)
+	items := make([]string, 0, len(rawItems))
+	for _, raw := range rawItems {
+		thumbnail, _ := raw.(map[string]any)
+		if value, _ := thumbnail["url"].(string); value != "" {
+			items = append(items, value)
+		}
+	}
+	return items
+}
+
+func parseDurationText(value string) float64 {
+	parts := strings.Split(strings.TrimSpace(value), ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0
+	}
+	total := 0
+	for _, part := range parts {
+		number, err := strconv.Atoi(part)
+		if err != nil || number < 0 || number > 59 {
+			return 0
+		}
+		total = total*60 + number
+	}
+	return float64(total)
+}
+
+func searchResponse(items []searchItem, offset, limit int) map[string]any {
+	return searchResponseWithTotal(items[offset:min(offset+limit, len(items))], offset, limit, len(items))
+}
+
+func searchResponseWithTotal(items []searchItem, offset, limit, total int) map[string]any {
+	serialized := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		serialized = append(serialized, map[string]any{
+			"id": item.ID, "title": item.Title, "duration": item.Duration,
 			"parental_warning": false, "track_number": 1, "isrc": nil, "version": nil,
-			"performer": map[string]any{"id": 0, "name": performer},
+			"performer": map[string]any{"id": 0, "name": item.Performer},
 			"album": map[string]any{
 				"id": "yt_album", "title": "YouTube", "duration": item.Duration,
 				"parental_warning": false, "release_date_original": "Unknown",
-				"image":   map[string]any{"small": small, "thumbnail": small, "large": large, "back": nil},
-				"artists": []any{map[string]any{"id": 0, "name": performer, "roles": []string{"Main Artist"}}},
+				"image":   map[string]any{"small": item.SmallThumbnail, "thumbnail": item.SmallThumbnail, "large": item.LargeThumbnail, "back": nil},
+				"artists": []any{map[string]any{"id": 0, "name": item.Performer, "roles": []string{"Main Artist"}}},
 			},
 		})
 	}
-	return map[string]any{"data": map[string]any{"tracks": map[string]any{"limit": limit, "offset": offset, "total": total, "items": items}}}, nil
+	return map[string]any{"data": map[string]any{"tracks": map[string]any{"limit": limit, "offset": offset, "total": total, "items": serialized}}}
 }
 
 func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
