@@ -1,0 +1,51 @@
+{
+  "build": {
+    "bunStandaloneCompileSeconds": [0.7707631, 0.7299458, 0.7352653, 0.6947997, 0.6829293],
+    "goColdReleaseSeconds": [8.326952, 8.3714778, 8.3443287, 8.4656252, 8.3795196],
+    "goWarmReleaseSeconds": [0.2371888, 0.2063453, 0.2057877, 0.1974837, 0.2002724],
+    "bunStandaloneArtifactBytes": 100706304,
+    "goReleaseArtifactBytes": 7976960,
+    "commands": {
+      "bun": "bun build src/index.ts --compile --target=bun-windows-x64",
+      "go": "go build -trimpath -ldflags='-s -w' ./cmd/beatsync"
+    }
+  },
+  "tests": {
+    "bun": {
+      "command": "bun test --timeout 30000",
+      "passed": 112,
+      "failed": 2,
+      "wallSeconds": 0.7403716,
+      "failedCases": [
+        "GlobalManager.getActiveRooms excludes paused rooms",
+        "GlobalManager.getActiveRooms excludes rooms whose playing track no longer exists"
+      ]
+    },
+    "go": {
+      "command": "go test ./...",
+      "packageSuitePassed": true,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "wallSeconds": 12.5818724,
+      "note": "First uncached package-suite run; all packages passed."
+    }
+  },
+  "staticInventory": {
+    "bun": {
+      "productionFiles": 64,
+      "productionLines": 5713,
+      "testFiles": 20,
+      "testLines": 2131,
+      "directProductionDependencies": 14
+    },
+    "go": {
+      "productionFiles": 17,
+      "productionLines": 3809,
+      "testFiles": 8,
+      "testLines": 323,
+      "directProductionDependencies": 1
+    },
+    "method": "Physical line count; Bun excludes __tests__ and __benchmarks__, Go excludes *_test.go. Generated and Rust extractor sources are excluded."
+  }
+}

@@ -273,6 +273,23 @@ func (r *Room) MarkAudioLoaded(id, sourceURL string) (uint64, bool) {
 	return r.pending.Token, true
 }
 
+// PendingReady reports whether every client that is still connected has
+// loaded the pending source. A room with no connected clients is deliberately
+// not ready: a disconnect storm must not start playback in an empty room.
+func (r *Room) PendingReady() (uint64, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.pending == nil || len(r.connected) == 0 {
+		return 0, false
+	}
+	for clientID := range r.connected {
+		if !r.pending.Loaded[clientID] {
+			return r.pending.Token, false
+		}
+	}
+	return r.pending.Token, true
+}
+
 func (r *Room) ExecutePending(token uint64) (map[string]any, float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

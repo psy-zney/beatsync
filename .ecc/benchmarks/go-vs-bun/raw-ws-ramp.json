@@ -1,0 +1,96 @@
+{
+  "generatedAt": "2026-08-22T08:13:17.585Z",
+  "environment": {
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12450HX",
+    "logicalCpus": 12,
+    "bunVersion": "1.3.14",
+    "goVersion": "go1.26.5"
+  },
+  "protocol": "200 WebSocket handshakes ramped uniformly over 5 seconds; settle 1 second; one NTP probe per surviving socket",
+  "runs": [
+    {
+      "target": "bun",
+      "round": 1,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 8113.5686000000005,
+      "probeP50Ms": 2.32970000000023,
+      "idleRssBytes": 94294016,
+      "connectedRssBytes": 95911936,
+      "rssDeltaBytes": 1617920,
+      "peakRssBytes": 96210944
+    },
+    {
+      "target": "go",
+      "round": 1,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 7942.523300000001,
+      "probeP50Ms": 1.9799000000020897,
+      "idleRssBytes": 10350592,
+      "connectedRssBytes": 25436160,
+      "rssDeltaBytes": 15085568,
+      "peakRssBytes": 25436160
+    },
+    {
+      "target": "go",
+      "round": 2,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 7715.4884999999995,
+      "probeP50Ms": 2.0401999999994587,
+      "idleRssBytes": 10256384,
+      "connectedRssBytes": 25374720,
+      "rssDeltaBytes": 15118336,
+      "peakRssBytes": 25374720
+    },
+    {
+      "target": "bun",
+      "round": 2,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 7847.2225,
+      "probeP50Ms": 3.019799999994575,
+      "idleRssBytes": 95363072,
+      "connectedRssBytes": 95866880,
+      "rssDeltaBytes": 503808,
+      "peakRssBytes": 96735232
+    },
+    {
+      "target": "bun",
+      "round": 3,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 7855.617200000001,
+      "probeP50Ms": 2.5922999999966123,
+      "idleRssBytes": 94490624,
+      "connectedRssBytes": 95735808,
+      "rssDeltaBytes": 1245184,
+      "peakRssBytes": 96378880
+    },
+    {
+      "target": "go",
+      "round": 3,
+      "attempted": 200,
+      "opened": 200,
+      "survivingAfterOneSecond": 200,
+      "successfulProbes": 200,
+      "rampElapsedMs": 8083.172900000005,
+      "probeP50Ms": 2.0587000000014086,
+      "idleRssBytes": 10272768,
+      "connectedRssBytes": 25567232,
+      "rssDeltaBytes": 15294464,
+      "peakRssBytes": 25567232
+    }
+  ]
+}

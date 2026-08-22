@@ -34,9 +34,9 @@ var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 var cachedVideoIDPattern = regexp.MustCompile(`/youtube-cache/([A-Za-z0-9_-]{11})\.`)
 
 type Resolved struct {
-	VideoID   string
-	Title     string
-	StreamURL string
+	VideoID   string `json:"videoId"`
+	Title     string `json:"title"`
+	StreamURL string `json:"streamUrl"`
 }
 
 type cachedStream struct {

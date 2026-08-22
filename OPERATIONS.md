@@ -12,6 +12,24 @@
 
 Snapshot được ghi nguyên tử vào `apps/server/data/state-backup-latest.json` trước khi upload R2. Khi khởi động, server chọn snapshot local/remote mới hơn. Playlist riêng vẫn được lưu tại `room-<id>/playlist.json`.
 
+## Hybrid worker local
+
+VPS luôn là control plane và giữ toàn bộ kết nối user. Máy local kết nối outbound
+tới `/internal/worker`, nhận Spotify/YouTube job khi còn capacity và không cần
+CNAME riêng. Nếu heartbeat/WebSocket local mất, lease đang chạy được trả về để
+VPS fallback; queue stream chưa chạy vẫn ở VPS.
+
+Kiểm tra nhanh:
+
+```bash
+curl -fsS http://127.0.0.1:3001/health | jq .hybridWorker
+journalctl -u beatsync.service -n 100 --no-pager | grep -i hybrid
+```
+
+`workers: 0` là trạng thái hợp lệ, không phải backend down. Chỉ rotate
+`HYBRID_WORKER_SECRET` khi có thể cập nhật VPS và local gần nhau; trong khoảng
+hai phía lệch secret, VPS tự fallback và user vẫn đi qua endpoint cũ.
+
 ## Deploy tự động
 
 Mỗi push lên `main` chạy `.github/workflows/deploy.yml`:

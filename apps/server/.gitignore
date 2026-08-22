@@ -1,5 +1,6 @@
 .env*
 !.env.example
+!.env.worker.example
 dist/
 data/
 demo-audio/

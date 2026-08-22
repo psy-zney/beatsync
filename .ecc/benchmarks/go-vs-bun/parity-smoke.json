@@ -1,0 +1,258 @@
+{
+  "generatedAt": "2026-08-22T08:16:01.349Z",
+  "mode": "DEMO=1 with empty audio directory and no external credentials",
+  "results": [
+    {
+      "target": "bun",
+      "endpoints": {
+        "root": {
+          "status": 200,
+          "elapsedMs": 3.160299999999978,
+          "shape": "string",
+          "bodyPreview": "Hello Hono!"
+        },
+        "health": {
+          "status": 200,
+          "elapsedMs": 0.4193000000000211,
+          "shape": {
+            "memory": {
+              "hardLimitMb": "number",
+              "level": "string",
+              "softLimitMb": "number"
+            },
+            "rooms": "number",
+            "startedAt": "string",
+            "status": "string",
+            "streamQueue": {
+              "active": "number",
+              "paused": "boolean",
+              "pausedReason": "object",
+              "pending": "number"
+            },
+            "uptimeMs": "number"
+          },
+          "bodyPreview": "{\"status\":\"ok\",\"uptimeMs\":21,\"startedAt\":\"2026-08-22T08:16:00.191Z\",\"rooms\":0,\"memory\":{\"level\":\"normal\",\"softLimitMb\":600,\"hardLimitMb\":750},\"streamQueue\":{\"ac"
+        },
+        "stats": {
+          "status": 200,
+          "elapsedMs": 18.84790000000001,
+          "shape": {
+            "memory": {
+              "free": "string",
+              "pressure": {
+                "hardLimitMb": "number",
+                "level": "string",
+                "softLimitMb": "number"
+              },
+              "process": {
+                "arrayBuffers": "string",
+                "external": "string",
+                "heapTotal": "string",
+                "heapUsed": "string",
+                "rss": "string"
+              },
+              "total": "string",
+              "used": "string"
+            },
+            "status": {
+              "activeRooms": {
+                "rooms": "object",
+                "total": "number",
+                "totalFiles": "number",
+                "totalSize": "string",
+                "totalSizeBytes": "number"
+              },
+              "orphanedRooms": {
+                "rooms": "object",
+                "total": "number",
+                "totalFiles": "number",
+                "totalSize": "string",
+                "totalSizeBytes": "number"
+              },
+              "totalObjects": "number",
+              "totalSize": "string",
+              "totalSizeBytes": "number"
+            },
+            "streamQueue": {
+              "active": "number",
+              "paused": "boolean",
+              "pausedReason": "object",
+              "pending": "number"
+            }
+          },
+          "bodyPreview": "{\"memory\":{\"total\":\"23.78 GB\",\"free\":\"11.93 GB\",\"used\":\"11.85 GB\",\"process\":{\"rss\":\"92.18 MB\",\"heapTotal\":\"10.17 MB\",\"heapUsed\":\"11.65 MB\",\"external\":\"4.31 MB\","
+        },
+        "activeRooms": {
+          "status": 200,
+          "elapsedMs": 0.6048999999999864,
+          "shape": "number",
+          "bodyPreview": "0"
+        },
+        "discover": {
+          "status": 200,
+          "elapsedMs": 0.45769999999998845,
+          "shape": [],
+          "bodyPreview": "[]"
+        },
+        "defaults": {
+          "status": 200,
+          "elapsedMs": 0.3877000000000237,
+          "shape": [],
+          "bodyPreview": "[]"
+        },
+        "corsPreflight": {
+          "status": 200,
+          "elapsedMs": 0.3995999999999924,
+          "shape": "string",
+          "bodyPreview": ""
+        },
+        "voiceUnconfigured": {
+          "status": 503,
+          "elapsedMs": 2.110500000000002,
+          "shape": "string",
+          "bodyPreview": "Voice chat is not configured"
+        },
+        "uploadInDemo": {
+          "status": 403,
+          "elapsedMs": 0.2483000000000004,
+          "shape": "string",
+          "bodyPreview": "Uploads disabled in demo mode"
+        }
+      },
+      "websocket": {
+        "state": 1,
+        "messageTypes": [
+          "SCHEDULED_ACTION",
+          "SCHEDULED_ACTION",
+          "SCHEDULED_ACTION",
+          "ROOM_EVENT",
+          "DEMO_AUDIO_READY_COUNT",
+          "NTP_RESPONSE",
+          "DEMO_USER_COUNT"
+        ],
+        "hasNtpResponse": true
+      }
+    },
+    {
+      "target": "go",
+      "endpoints": {
+        "root": {
+          "status": 200,
+          "elapsedMs": 0.2398999999999205,
+          "shape": "string",
+          "bodyPreview": "BeatSync Go backend"
+        },
+        "health": {
+          "status": 200,
+          "elapsedMs": 0.16480000000001382,
+          "shape": {
+            "memory": {
+              "hardLimitBytes": "number",
+              "heapBytes": "number",
+              "lastCheckedAt": "string",
+              "level": "string",
+              "rssBytes": "number",
+              "softLimitBytes": "number"
+            },
+            "rooms": "number",
+            "startedAt": "string",
+            "status": "string",
+            "streamQueue": {
+              "active": "number",
+              "paused": "boolean",
+              "pending": "number"
+            },
+            "uptimeMs": "number"
+          },
+          "bodyPreview": "{\"memory\":{\"level\":\"normal\",\"rssBytes\":11030528,\"heapBytes\":569296,\"softLimitBytes\":230686720,\"hardLimitBytes\":335544320,\"lastCheckedAt\":\"2026-08-22T08:16:00Z\"}"
+        },
+        "stats": {
+          "status": 200,
+          "elapsedMs": 0.33160000000009404,
+          "shape": {
+            "memory": {
+              "pressure": {
+                "hardLimitBytes": "number",
+                "heapBytes": "number",
+                "lastCheckedAt": "string",
+                "level": "string",
+                "rssBytes": "number",
+                "softLimitBytes": "number"
+              },
+              "process": {
+                "heapTotal": "string",
+                "heapUsed": "string",
+                "rss": "string"
+              }
+            },
+            "status": {
+              "activeRooms": {
+                "rooms": "object",
+                "total": "number"
+              }
+            },
+            "streamQueue": {
+              "active": "number",
+              "paused": "boolean",
+              "pending": "number"
+            }
+          },
+          "bodyPreview": "{\"memory\":{\"pressure\":{\"level\":\"normal\",\"rssBytes\":11030528,\"heapBytes\":569296,\"softLimitBytes\":230686720,\"hardLimitBytes\":335544320,\"lastCheckedAt\":\"2026-08-22"
+        },
+        "activeRooms": {
+          "status": 200,
+          "elapsedMs": 0.1714999999999236,
+          "shape": "number",
+          "bodyPreview": "0\n"
+        },
+        "discover": {
+          "status": 200,
+          "elapsedMs": 0.08600000000001273,
+          "shape": [],
+          "bodyPreview": "[]\n"
+        },
+        "defaults": {
+          "status": 200,
+          "elapsedMs": 0.13570000000004256,
+          "shape": [],
+          "bodyPreview": "[]\n"
+        },
+        "corsPreflight": {
+          "status": 204,
+          "elapsedMs": 0.13800000000003365,
+          "shape": "string",
+          "bodyPreview": ""
+        },
+        "voiceUnconfigured": {
+          "status": 503,
+          "elapsedMs": 0.17980000000000018,
+          "shape": {
+            "error": "string"
+          },
+          "bodyPreview": "{\"error\":\"Voice chat is not configured\"}\n"
+        },
+        "uploadInDemo": {
+          "status": 403,
+          "elapsedMs": 0.11530000000004748,
+          "shape": {
+            "error": "string"
+          },
+          "bodyPreview": "{\"error\":\"Uploads disabled in demo mode\"}\n"
+        }
+      },
+      "websocket": {
+        "state": 1,
+        "messageTypes": [
+          "SCHEDULED_ACTION",
+          "SCHEDULED_ACTION",
+          "SCHEDULED_ACTION",
+          "ROOM_EVENT",
+          "DEMO_USER_COUNT",
+          "DEMO_AUDIO_READY_COUNT",
+          "NTP_RESPONSE"
+        ],
+        "hasNtpResponse": true
+      }
+    }
+  ]
+}

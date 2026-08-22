@@ -15,6 +15,7 @@ const (
 	pingInterval       = 45 * time.Second
 	ntpTokenCapacity   = 4.0
 	ntpTokensPerSecond = 4.0
+	sendQueueCapacity  = 64
 )
 
 type Client struct {
@@ -37,7 +38,7 @@ func NewClient(roomID, clientID, username string, creator bool, conn *websocket.
 	now := time.Now()
 	return &Client{
 		RoomID: roomID, ClientID: clientID, Username: username, IsCreator: creator,
-		Conn: conn, send: make(chan []byte, 8), done: make(chan struct{}),
+		Conn: conn, send: make(chan []byte, sendQueueCapacity), done: make(chan struct{}),
 		ntpTokens: ntpTokenCapacity, ntpLastRefill: now,
 	}
 }
@@ -104,7 +105,14 @@ func (c *Client) SendBytes(payload []byte) bool {
 	}
 }
 
-func (c *Client) Close() { c.once.Do(func() { close(c.done); _ = c.Conn.Close() }) }
+func (c *Client) Close() {
+	c.once.Do(func() {
+		close(c.done)
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+	})
+}
 
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingInterval)

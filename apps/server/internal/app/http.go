@@ -20,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
+	"github.com/psy-zney/beatsync/apps/server/internal/spotify"
 	"github.com/psy-zney/beatsync/apps/server/internal/youtube"
 )
 
@@ -51,6 +53,8 @@ func (a *App) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 		_, _ = io.WriteString(writer, "BeatSync Go backend")
 	case "/ws":
 		a.handleWebSocket(writer, request)
+	case "/internal/worker":
+		a.Hybrid.ServeHTTP(writer, request)
 	case "/health":
 		a.handleHealth(writer)
 	case "/stats":
@@ -97,7 +101,8 @@ func (a *App) handleHealth(writer http.ResponseWriter) {
 	if memoryStatus.Level != "normal" {
 		status = "degraded"
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"status": status, "uptimeMs": time.Since(a.startedAt).Milliseconds(), "startedAt": a.startedAt.UTC().Format(time.RFC3339), "rooms": a.Rooms.Count(), "memory": memoryStatus, "streamQueue": a.Queue.Stats()})
+	queueStats := a.Queue.Stats()
+	writeJSON(writer, http.StatusOK, map[string]any{"status": status, "uptimeMs": time.Since(a.startedAt).Milliseconds(), "startedAt": a.startedAt.UTC().Format(time.RFC3339), "rooms": a.Rooms.Count(), "memory": memoryStatus, "streamQueue": queueStats, "hybridWorker": a.Hybrid.Stats(queueStats.Pending)})
 }
 
 func (a *App) handleStats(writer http.ResponseWriter) {
@@ -113,7 +118,8 @@ func (a *App) handleStats(writer http.ResponseWriter) {
 		roomStats["clients"] = clients
 		rooms = append(rooms, roomStats)
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"memory": map[string]any{"process": map[string]any{"rss": formatBytes(a.Memory.Status().RSSBytes), "heapUsed": formatBytes(stats.HeapAlloc), "heapTotal": formatBytes(stats.HeapSys)}, "pressure": a.Memory.Status()}, "streamQueue": a.Queue.Stats(), "status": map[string]any{"activeRooms": map[string]any{"total": len(rooms), "rooms": rooms}}})
+	queueStats := a.Queue.Stats()
+	writeJSON(writer, http.StatusOK, map[string]any{"memory": map[string]any{"process": map[string]any{"rss": formatBytes(a.Memory.Status().RSSBytes), "heapUsed": formatBytes(stats.HeapAlloc), "heapTotal": formatBytes(stats.HeapSys)}, "pressure": a.Memory.Status()}, "streamQueue": queueStats, "hybridWorker": a.Hybrid.Stats(queueStats.Pending), "status": map[string]any{"activeRooms": map[string]any{"total": len(rooms), "rooms": rooms}}})
 }
 
 func (a *App) handleDefault(writer http.ResponseWriter, _ *http.Request) {
@@ -181,7 +187,11 @@ func (a *App) handleSpotify(writer http.ResponseWriter, request *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), 45*time.Second)
 	defer cancel()
-	result, err := a.Spotify.Resolve(ctx, payload.URL, payload.MaxTracks)
+	var result spotify.Result
+	err := a.dispatchHybrid(ctx, hybrid.KindSpotifyResolve, hybrid.SpotifyResolveInput{URL: payload.URL, MaxTracks: payload.MaxTracks}, &result)
+	if err != nil {
+		result, err = a.Spotify.Resolve(ctx, payload.URL, payload.MaxTracks)
+	}
 	if err != nil {
 		jsonError(writer, err.Error(), http.StatusInternalServerError)
 		return
@@ -278,7 +288,7 @@ func (a *App) handleYouTubeUpload(writer http.ResponseWriter, request *http.Requ
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), a.Config.HTTPTimeout)
 	defer cancel()
-	title, videoID, err := a.YouTube.Metadata(ctx, payload.URL)
+	title, videoID, err := a.youtubeMetadata(ctx, payload.URL)
 	if err != nil {
 		jsonError(writer, err.Error(), http.StatusInternalServerError)
 		return

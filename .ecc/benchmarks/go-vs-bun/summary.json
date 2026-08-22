@@ -1,0 +1,769 @@
+{
+  "generatedAt": "2026-08-22T08:16:53.348Z",
+  "statisticalConvention": "median and MAD across independent fresh-process runs; ranges retained",
+  "environment": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "architecture": "x64",
+    "cpuModel": "12th Gen Intel(R) Core(TM) i5-12450HX",
+    "logicalCpus": 12,
+    "totalMemoryBytes": 25534783488,
+    "freeMemoryBytesAtStart": 13040787456,
+    "bunVersion": "1.3.14",
+    "goVersion": "go1.26.5"
+  },
+  "protocol": {
+    "order": "alternating Bun/Go per round",
+    "warmup": "400 ms at concurrency 8 per fresh server process",
+    "allCoreRounds": 5,
+    "singleCoreRounds": 3,
+    "httpSequential": "closed-loop GET /health, concurrency 1, 2 seconds",
+    "httpConcurrent": "closed-loop GET /health, concurrency 32, 3 seconds",
+    "websocket": "200 connections, then 5 NTP probes per connection"
+  },
+  "runtime": {
+    "allCores": {
+      "bun": {
+        "startupMs": {
+          "n": 5,
+          "median": 175.608,
+          "mad": 4.698,
+          "min": 168.673,
+          "max": 191.397
+        },
+        "idleRssMiB": {
+          "n": 5,
+          "median": 91.168,
+          "mad": 0.305,
+          "min": 89.129,
+          "max": 91.473
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 103.434,
+          "mad": 0.375,
+          "min": 102.746,
+          "max": 103.969
+        },
+        "httpSequential": {
+          "requestsPerSecond": {
+            "n": 5,
+            "median": 11615.01,
+            "mad": 124.91,
+            "min": 11332.368,
+            "max": 12398.778
+          },
+          "p50Ms": {
+            "n": 5,
+            "median": 0.062,
+            "mad": 0.001,
+            "min": 0.061,
+            "max": 0.064
+          },
+          "p95Ms": {
+            "n": 5,
+            "median": 0.153,
+            "mad": 0.006,
+            "min": 0.135,
+            "max": 0.164
+          },
+          "p99Ms": {
+            "n": 5,
+            "median": 0.823,
+            "mad": 0.009,
+            "min": 0.754,
+            "max": 0.832
+          },
+          "cpuSeconds": {
+            "n": 5,
+            "median": 0.969,
+            "mad": 0.031,
+            "min": 0.938,
+            "max": 1.063
+          },
+          "requestsPerCpuSecond": {
+            "n": 5,
+            "median": 23974.2,
+            "mad": 1659.24,
+            "min": 21619.003,
+            "max": 26447.761
+          },
+          "totalErrors": 0
+        },
+        "httpConcurrent": {
+          "requestsPerSecond": {
+            "n": 5,
+            "median": 45704.173,
+            "mad": 513.085,
+            "min": 39803.296,
+            "max": 46754.642
+          },
+          "p50Ms": {
+            "n": 5,
+            "median": 0.569,
+            "mad": 0.004,
+            "min": 0.551,
+            "max": 0.655
+          },
+          "p95Ms": {
+            "n": 5,
+            "median": 1.497,
+            "mad": 0.02,
+            "min": 1.464,
+            "max": 1.756
+          },
+          "p99Ms": {
+            "n": 5,
+            "median": 2.049,
+            "mad": 0.012,
+            "min": 2.037,
+            "max": 2.358
+          },
+          "cpuSeconds": {
+            "n": 5,
+            "median": 3.047,
+            "mad": 0.063,
+            "min": 2.781,
+            "max": 3.172
+          },
+          "requestsPerCpuSecond": {
+            "n": 5,
+            "median": 45023.63,
+            "mad": 1186.849,
+            "min": 37658.575,
+            "max": 50451.996
+          },
+          "totalErrors": 0
+        },
+        "websocketBurst": {
+          "handshakesPerSecond": {
+            "n": 5,
+            "median": 4715.535,
+            "mad": 168.124,
+            "min": 4545.816,
+            "max": 5218.512
+          },
+          "successfulProbes": {
+            "n": 5,
+            "median": 1000,
+            "mad": 0,
+            "min": 1000,
+            "max": 1000
+          },
+          "errors": {
+            "n": 5,
+            "median": 0,
+            "mad": 0,
+            "min": 0,
+            "max": 0
+          },
+          "p50MsForSuccessfulProbes": {
+            "n": 5,
+            "median": 2.563,
+            "mad": 0.195,
+            "min": 2.27,
+            "max": 3.334
+          }
+        }
+      },
+      "go": {
+        "startupMs": {
+          "n": 5,
+          "median": 22.002,
+          "mad": 2.842,
+          "min": 19.16,
+          "max": 30.127
+        },
+        "idleRssMiB": {
+          "n": 5,
+          "median": 9.793,
+          "mad": 0.016,
+          "min": 9.777,
+          "max": 9.813
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 26.18,
+          "mad": 0.254,
+          "min": 25.41,
+          "max": 26.754
+        },
+        "httpSequential": {
+          "requestsPerSecond": {
+            "n": 5,
+            "median": 11145.672,
+            "mad": 95.39,
+            "min": 11050.282,
+            "max": 11687.987
+          },
+          "p50Ms": {
+            "n": 5,
+            "median": 0.071,
+            "mad": 0,
+            "min": 0.069,
+            "max": 0.071
+          },
+          "p95Ms": {
+            "n": 5,
+            "median": 0.158,
+            "mad": 0.003,
+            "min": 0.145,
+            "max": 0.161
+          },
+          "p99Ms": {
+            "n": 5,
+            "median": 0.271,
+            "mad": 0.002,
+            "min": 0.264,
+            "max": 0.288
+          },
+          "cpuSeconds": {
+            "n": 5,
+            "median": 1.641,
+            "mad": 0.078,
+            "min": 1.563,
+            "max": 1.969
+          },
+          "requestsPerCpuSecond": {
+            "n": 5,
+            "median": 13984.944,
+            "mad": 265.514,
+            "min": 11633.824,
+            "max": 14250.457
+          },
+          "totalErrors": 0
+        },
+        "httpConcurrent": {
+          "requestsPerSecond": {
+            "n": 5,
+            "median": 54314.177,
+            "mad": 230.413,
+            "min": 54011.565,
+            "max": 55106.926
+          },
+          "p50Ms": {
+            "n": 5,
+            "median": 0.485,
+            "mad": 0.004,
+            "min": 0.481,
+            "max": 0.489
+          },
+          "p95Ms": {
+            "n": 5,
+            "median": 1.232,
+            "mad": 0.011,
+            "min": 1.208,
+            "max": 1.243
+          },
+          "p99Ms": {
+            "n": 5,
+            "median": 1.903,
+            "mad": 0.014,
+            "min": 1.889,
+            "max": 1.944
+          },
+          "cpuSeconds": {
+            "n": 5,
+            "median": 12.938,
+            "mad": 0.718,
+            "min": 11.953,
+            "max": 13.672
+          },
+          "requestsPerCpuSecond": {
+            "n": 5,
+            "median": 12579.533,
+            "mad": 603.378,
+            "min": 11872.73,
+            "max": 13833.347
+          },
+          "totalErrors": 0
+        },
+        "websocketBurst": {
+          "handshakesPerSecond": {
+            "n": 5,
+            "median": 4834.246,
+            "mad": 555.759,
+            "min": 3772.119,
+            "max": 5990.463
+          },
+          "successfulProbes": {
+            "n": 5,
+            "median": 0,
+            "mad": 0,
+            "min": 0,
+            "max": 0
+          },
+          "errors": {
+            "n": 5,
+            "median": 1000,
+            "mad": 0,
+            "min": 1000,
+            "max": 1000
+          },
+          "p50MsForSuccessfulProbes": {
+            "n": 5,
+            "median": 0,
+            "mad": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      }
+    },
+    "singleCore": {
+      "bun": {
+        "startupMs": {
+          "n": 3,
+          "median": 166.619,
+          "mad": 0.659,
+          "min": 165.96,
+          "max": 167.349
+        },
+        "idleRssMiB": {
+          "n": 3,
+          "median": 91.219,
+          "mad": 0.016,
+          "min": 88.555,
+          "max": 91.234
+        },
+        "peakRssMiB": {
+          "n": 3,
+          "median": 107.039,
+          "mad": 0.699,
+          "min": 106.34,
+          "max": 111.004
+        },
+        "httpSequential": {
+          "requestsPerSecond": {
+            "n": 3,
+            "median": 10731.477,
+            "mad": 336.105,
+            "min": 10395.372,
+            "max": 11805.282
+          },
+          "p50Ms": {
+            "n": 3,
+            "median": 0.057,
+            "mad": 0.001,
+            "min": 0.056,
+            "max": 0.06
+          },
+          "p95Ms": {
+            "n": 3,
+            "median": 0.158,
+            "mad": 0.016,
+            "min": 0.138,
+            "max": 0.174
+          },
+          "p99Ms": {
+            "n": 3,
+            "median": 0.898,
+            "mad": 0.009,
+            "min": 0.839,
+            "max": 0.907
+          },
+          "cpuSeconds": {
+            "n": 3,
+            "median": 0.797,
+            "mad": 0.031,
+            "min": 0.766,
+            "max": 0.891
+          },
+          "requestsPerCpuSecond": {
+            "n": 3,
+            "median": 26086.575,
+            "mad": 1948.528,
+            "min": 24138.047,
+            "max": 30825.065
+          },
+          "totalErrors": 0
+        },
+        "httpConcurrent": {
+          "requestsPerSecond": {
+            "n": 3,
+            "median": 41952.936,
+            "mad": 751.14,
+            "min": 41128.941,
+            "max": 42704.076
+          },
+          "p50Ms": {
+            "n": 3,
+            "median": 0.573,
+            "mad": 0.002,
+            "min": 0.558,
+            "max": 0.575
+          },
+          "p95Ms": {
+            "n": 3,
+            "median": 1.594,
+            "mad": 0.07,
+            "min": 1.524,
+            "max": 1.702
+          },
+          "p99Ms": {
+            "n": 3,
+            "median": 3.031,
+            "mad": 0.083,
+            "min": 2.805,
+            "max": 3.114
+          },
+          "cpuSeconds": {
+            "n": 3,
+            "median": 2.438,
+            "mad": 0.032,
+            "min": 2.406,
+            "max": 2.719
+          },
+          "requestsPerCpuSecond": {
+            "n": 3,
+            "median": 51306.733,
+            "mad": 1261.355,
+            "min": 46328.43,
+            "max": 52568.089
+          },
+          "totalErrors": 0
+        },
+        "websocketBurst": {
+          "handshakesPerSecond": {
+            "n": 3,
+            "median": 2446.019,
+            "mad": 295.306,
+            "min": 2150.713,
+            "max": 3150.956
+          },
+          "successfulProbes": {
+            "n": 3,
+            "median": 1000,
+            "mad": 0,
+            "min": 1000,
+            "max": 1000
+          },
+          "errors": {
+            "n": 3,
+            "median": 0,
+            "mad": 0,
+            "min": 0,
+            "max": 0
+          },
+          "p50MsForSuccessfulProbes": {
+            "n": 3,
+            "median": 2.199,
+            "mad": 0.559,
+            "min": 1.64,
+            "max": 2.902
+          }
+        }
+      },
+      "go": {
+        "startupMs": {
+          "n": 3,
+          "median": 15.331,
+          "mad": 0.57,
+          "min": 14.187,
+          "max": 15.901
+        },
+        "idleRssMiB": {
+          "n": 3,
+          "median": 9.754,
+          "mad": 0.027,
+          "min": 9.688,
+          "max": 9.781
+        },
+        "peakRssMiB": {
+          "n": 3,
+          "median": 21.758,
+          "mad": 1.637,
+          "min": 19.848,
+          "max": 23.395
+        },
+        "httpSequential": {
+          "requestsPerSecond": {
+            "n": 3,
+            "median": 11998.153,
+            "mad": 101.745,
+            "min": 11896.408,
+            "max": 12237.227
+          },
+          "p50Ms": {
+            "n": 3,
+            "median": 0.056,
+            "mad": 0.001,
+            "min": 0.055,
+            "max": 0.06
+          },
+          "p95Ms": {
+            "n": 3,
+            "median": 0.151,
+            "mad": 0.002,
+            "min": 0.149,
+            "max": 0.161
+          },
+          "p99Ms": {
+            "n": 3,
+            "median": 0.527,
+            "mad": 0.035,
+            "min": 0.492,
+            "max": 0.654
+          },
+          "cpuSeconds": {
+            "n": 3,
+            "median": 0.828,
+            "mad": 0.031,
+            "min": 0.734,
+            "max": 0.859
+          },
+          "requestsPerCpuSecond": {
+            "n": 3,
+            "median": 28736.715,
+            "mad": 800.743,
+            "min": 27935.972,
+            "max": 33346.049
+          },
+          "totalErrors": 0
+        },
+        "httpConcurrent": {
+          "requestsPerSecond": {
+            "n": 3,
+            "median": 39462.548,
+            "mad": 146.691,
+            "min": 39315.857,
+            "max": 39853.306
+          },
+          "p50Ms": {
+            "n": 3,
+            "median": 0.68,
+            "mad": 0,
+            "min": 0.673,
+            "max": 0.68
+          },
+          "p95Ms": {
+            "n": 3,
+            "median": 1.848,
+            "mad": 0.047,
+            "min": 1.801,
+            "max": 1.921
+          },
+          "p99Ms": {
+            "n": 3,
+            "median": 3.393,
+            "mad": 0.029,
+            "min": 3.081,
+            "max": 3.422
+          },
+          "cpuSeconds": {
+            "n": 3,
+            "median": 2.344,
+            "mad": 0.094,
+            "min": 1.969,
+            "max": 2.438
+          },
+          "requestsPerCpuSecond": {
+            "n": 3,
+            "median": 50334.471,
+            "mad": 1281.969,
+            "min": 49052.502,
+            "max": 60144.236
+          },
+          "totalErrors": 0
+        },
+        "websocketBurst": {
+          "handshakesPerSecond": {
+            "n": 3,
+            "median": 2227.695,
+            "mad": 100.388,
+            "min": 2127.307,
+            "max": 3278.097
+          },
+          "successfulProbes": {
+            "n": 3,
+            "median": 40,
+            "mad": 40,
+            "min": 0,
+            "max": 220
+          },
+          "errors": {
+            "n": 3,
+            "median": 960,
+            "mad": 40,
+            "min": 780,
+            "max": 1000
+          },
+          "p50MsForSuccessfulProbes": {
+            "n": 3,
+            "median": 0.374,
+            "mad": 0.374,
+            "min": 0,
+            "max": 0.918
+          }
+        }
+      }
+    },
+    "websocketRamp": {
+      "bun": {
+        "opened": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "survivingAfterOneSecond": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "successfulProbes": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "idleRssMiB": {
+          "n": 3,
+          "median": 90.113,
+          "mad": 0.188,
+          "min": 89.926,
+          "max": 90.945
+        },
+        "connectedRssMiB": {
+          "n": 3,
+          "median": 91.426,
+          "mad": 0.043,
+          "min": 91.301,
+          "max": 91.469
+        },
+        "rssDeltaMiB": {
+          "n": 3,
+          "median": 1.188,
+          "mad": 0.355,
+          "min": 0.48,
+          "max": 1.543
+        },
+        "probeP50Ms": {
+          "n": 3,
+          "median": 2.592,
+          "mad": 0.263,
+          "min": 2.33,
+          "max": 3.02
+        }
+      },
+      "go": {
+        "opened": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "survivingAfterOneSecond": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "successfulProbes": {
+          "n": 3,
+          "median": 200,
+          "mad": 0,
+          "min": 200,
+          "max": 200
+        },
+        "idleRssMiB": {
+          "n": 3,
+          "median": 9.797,
+          "mad": 0.016,
+          "min": 9.781,
+          "max": 9.871
+        },
+        "connectedRssMiB": {
+          "n": 3,
+          "median": 24.258,
+          "mad": 0.059,
+          "min": 24.199,
+          "max": 24.383
+        },
+        "rssDeltaMiB": {
+          "n": 3,
+          "median": 14.418,
+          "mad": 0.031,
+          "min": 14.387,
+          "max": 14.586
+        },
+        "probeP50Ms": {
+          "n": 3,
+          "median": 2.04,
+          "mad": 0.019,
+          "min": 1.98,
+          "max": 2.059
+        }
+      }
+    }
+  },
+  "build": {
+    "bunCompileSeconds": {
+      "n": 5,
+      "median": 0.73,
+      "mad": 0.035,
+      "min": 0.683,
+      "max": 0.771
+    },
+    "goColdSeconds": {
+      "n": 5,
+      "median": 8.371,
+      "mad": 0.027,
+      "min": 8.327,
+      "max": 8.466
+    },
+    "goWarmSeconds": {
+      "n": 5,
+      "median": 0.206,
+      "mad": 0.006,
+      "min": 0.197,
+      "max": 0.237
+    },
+    "bunArtifactMiB": 96.041,
+    "goArtifactMiB": 7.607
+  },
+  "tests": {
+    "bun": {
+      "command": "bun test --timeout 30000",
+      "passed": 112,
+      "failed": 2,
+      "wallSeconds": 0.7403716,
+      "failedCases": [
+        "GlobalManager.getActiveRooms excludes paused rooms",
+        "GlobalManager.getActiveRooms excludes rooms whose playing track no longer exists"
+      ]
+    },
+    "go": {
+      "command": "go test ./...",
+      "packageSuitePassed": true,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "wallSeconds": 12.5818724,
+      "note": "First uncached package-suite run; all packages passed."
+    }
+  },
+  "staticInventory": {
+    "bun": {
+      "productionFiles": 64,
+      "productionLines": 5713,
+      "testFiles": 20,
+      "testLines": 2131,
+      "directProductionDependencies": 14
+    },
+    "go": {
+      "productionFiles": 17,
+      "productionLines": 3809,
+      "testFiles": 8,
+      "testLines": 323,
+      "directProductionDependencies": 1
+    },
+    "method": "Physical line count; Bun excludes __tests__ and __benchmarks__, Go excludes *_test.go. Generated and Rust extractor sources are excluded."
+  }
+}

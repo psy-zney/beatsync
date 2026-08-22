@@ -13,25 +13,37 @@ import (
 
 	"github.com/psy-zney/beatsync/apps/server/internal/app"
 	"github.com/psy-zney/beatsync/apps/server/internal/config"
+	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
 )
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.LUTC | log.Lmicroseconds)
-	if err := config.LoadEnvFile(".env"); err != nil {
-		log.Fatalf("load .env: %v", err)
+	envFile := os.Getenv("BEATSYNC_ENV_FILE")
+	if envFile == "" {
+		envFile = ".env"
+	}
+	if err := config.LoadEnvFile(envFile); err != nil {
+		log.Fatalf("load %s: %v", envFile, err)
 	}
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("configuration: %v", err)
 	}
 	debug.SetMemoryLimit(int64(cfg.MemorySoftLimitBytes))
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if cfg.WorkerServerURL != "" {
+		log.Printf("BeatSync hybrid worker starting: server=%s id=%s", cfg.WorkerServerURL, cfg.WorkerID)
+		if err := hybrid.NewAgent(cfg).Run(rootCtx); err != nil {
+			log.Fatalf("hybrid worker: %v", err)
+		}
+		return
+	}
 	application, err := app.New(cfg)
 	if err != nil {
 		log.Fatalf("initialize backend: %v", err)
 	}
 
-	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	restoreCtx, cancelRestore := context.WithTimeout(rootCtx, 30*time.Second)
 	application.Restore(restoreCtx)
 	cancelRestore()

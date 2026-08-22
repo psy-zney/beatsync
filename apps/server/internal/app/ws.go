@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
 	"github.com/psy-zney/beatsync/apps/server/internal/realtime"
 	"github.com/psy-zney/beatsync/apps/server/internal/room"
@@ -60,6 +61,9 @@ func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request)
 	client.ReadPump(a.Config.MaxWebSocketMessageSize, func(payload []byte) { a.handleWSMessage(client, roomState, payload) })
 	if a.Hub.Unregister(client) {
 		clients = roomState.RemoveClient(clientID)
+		if token, ready := roomState.PendingReady(); ready {
+			a.executePlay(roomID, roomState, token)
+		}
 		if a.Config.Demo {
 			a.Hub.Broadcast(roomID, map[string]any{"type": "DEMO_USER_COUNT", "count": roomState.ConnectionCount()})
 			a.Hub.Broadcast(roomID, map[string]any{"type": "DEMO_AUDIO_READY_COUNT", "count": roomState.DemoReadyCount()})
@@ -126,7 +130,7 @@ func (a *App) healSourceTitles(roomID string, state *room.Room, sources []model.
 		if !youtube.NeedsTitleHeal(source.URL, source.Title) {
 			continue
 		}
-		title, _, err := a.YouTube.Metadata(ctx, youtube.CachedVideoID(source.URL))
+		title, _, err := a.youtubeMetadata(ctx, youtube.CachedVideoID(source.URL))
 		if err == nil && strings.TrimSpace(title) != "" {
 			state.AddAudioSource(model.AudioSource{URL: source.URL, Title: title})
 			changed = true
@@ -255,7 +259,7 @@ func (a *App) beginPlay(client *realtime.Client, state *room.Room, message model
 		return
 	}
 	a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "LOAD_AUDIO_SOURCE", "audioSourceToPlay": source}))
-	time.AfterFunc(3*time.Second, func() { a.executePlay(client.RoomID, state, token) })
+	a.schedule(3*time.Second, func() { a.executePlay(client.RoomID, state, token) })
 }
 func (a *App) executePlay(roomID string, state *room.Room, token uint64) {
 	action, executeAt, ok := state.ExecutePending(token)
@@ -267,7 +271,11 @@ func (a *App) executePlay(roomID string, state *room.Room, token uint64) {
 func (a *App) searchMusic(client *realtime.Client, query string, offset int) {
 	ctx, cancel := context.WithTimeout(context.Background(), a.Config.ExtractorTimeout)
 	defer cancel()
-	data, err := a.YouTube.Search(ctx, query, offset)
+	var data map[string]any
+	err := a.dispatchHybrid(ctx, hybrid.KindYouTubeSearch, hybrid.YouTubeSearchInput{Query: query, Offset: offset}, &data)
+	if err != nil {
+		data, err = a.YouTube.Search(ctx, query, offset)
+	}
 	if err != nil {
 		client.Send(map[string]any{"type": "SEARCH_RESPONSE", "response": map[string]any{"type": "error", "message": "An error occurred while searching"}})
 		return
@@ -376,7 +384,11 @@ func (a *App) importSpotify(roomID string, state *room.Room, tracks []model.Spot
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), a.Config.ExtractorTimeout)
-		result, err := a.YouTube.Search(ctx, track.Title+" "+track.Artist, 0)
+		var result map[string]any
+		err := a.dispatchHybrid(ctx, hybrid.KindYouTubeSearch, hybrid.YouTubeSearchInput{Query: track.Title + " " + track.Artist, Offset: 0}, &result)
+		if err != nil {
+			result, err = a.YouTube.Search(ctx, track.Title+" "+track.Artist, 0)
+		}
 		cancel()
 		if err == nil {
 			if id, title := firstSearchTrack(result); id != "" {

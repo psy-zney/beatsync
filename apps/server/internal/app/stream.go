@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
 	"github.com/psy-zney/beatsync/apps/server/internal/queue"
 	"github.com/psy-zney/beatsync/apps/server/internal/room"
@@ -148,7 +149,11 @@ func (a *App) cachedYouTubeKey(ctx context.Context, videoID string) string {
 
 func (a *App) resolveProviderStream(ctx context.Context, trackID string) (streamURL, videoID, title string, err error) {
 	if id := youtube.ParseVideoID(trackID); id != "" {
-		resolved, resolveErr := a.YouTube.Resolve(ctx, id)
+		var resolved youtube.Resolved
+		resolveErr := a.dispatchHybrid(ctx, hybrid.KindYouTubeResolve, hybrid.YouTubeInput{Input: id}, &resolved)
+		if resolveErr != nil {
+			resolved, resolveErr = a.YouTube.Resolve(ctx, id)
+		}
 		if resolveErr != nil {
 			return "", "", "", resolveErr
 		}

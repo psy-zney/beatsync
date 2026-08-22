@@ -1,0 +1,1300 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T08:10:45.934Z",
+  "branches": {
+    "bun": {
+      "ref": "backup/bun-backend",
+      "commit": "a282e6bdba776ff33c3797d5fd85b1c8837566fa"
+    },
+    "go": {
+      "ref": "migration/go-backend",
+      "commit": "0987e39"
+    }
+  },
+  "environment": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "architecture": "x64",
+    "cpuModel": "12th Gen Intel(R) Core(TM) i5-12450HX",
+    "logicalCpus": 12,
+    "totalMemoryBytes": 25534783488,
+    "freeMemoryBytesAtStart": 13040787456,
+    "bunVersion": "1.3.14",
+    "goVersion": "go1.26.5"
+  },
+  "protocol": {
+    "order": "alternating Bun/Go per round",
+    "warmup": "400 ms at concurrency 8 per fresh server process",
+    "allCoreRounds": 5,
+    "singleCoreRounds": 3,
+    "httpSequential": "closed-loop GET /health, concurrency 1, 2 seconds",
+    "httpConcurrent": "closed-loop GET /health, concurrency 32, 3 seconds",
+    "websocket": "200 connections, then 5 NTP probes per connection"
+  },
+  "runs": [
+    {
+      "target": "bun",
+      "mode": "all_cores",
+      "round": 1,
+      "healthReadyMs": 161.249,
+      "startupMs": 170.91,
+      "idle": {
+        "cpuSeconds": 0.1875,
+        "rssBytes": 95596544,
+        "peakRssBytes": 96866304,
+        "handles": 175,
+        "threads": 21
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.842,
+        "requestsPerSecond": 12398.778,
+        "successes": 24808,
+        "errors": 0,
+        "latency": {
+          "count": 24808,
+          "minMs": 0.051,
+          "p50Ms": 0.061,
+          "p95Ms": 0.135,
+          "p99Ms": 0.754,
+          "maxMs": 2.102,
+          "meanMs": 0.08
+        },
+        "cpuSeconds": 0.938
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.921,
+        "requestsPerSecond": 46754.642,
+        "successes": 140307,
+        "errors": 0,
+        "latency": {
+          "count": 140307,
+          "minMs": 0.124,
+          "p50Ms": 0.551,
+          "p95Ms": 1.464,
+          "p99Ms": 2.108,
+          "maxMs": 5.522,
+          "meanMs": 0.684
+        },
+        "cpuSeconds": 2.781
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 40.953,
+        "connectionsPerSecond": 4883.659,
+        "rssBeforeBytes": 95440896,
+        "rssConnectedBytes": 103518208,
+        "rssDeltaBytes": 8077312,
+        "approximateBytesPerConnection": 40386.56,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 26.693,
+        "probesPerSecond": 37462.444,
+        "latency": {
+          "count": 1000,
+          "minMs": 1.237,
+          "p50Ms": 2.368,
+          "p95Ms": 4.488,
+          "p99Ms": 4.752,
+          "maxMs": 4.985,
+          "meanMs": 2.59
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 106012672
+      },
+      "final": {
+        "cpuSeconds": 4.421875,
+        "rssBytes": 103223296,
+        "peakRssBytes": 109019136,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "all_cores",
+      "round": 1,
+      "healthReadyMs": 13.959,
+      "startupMs": 20.218,
+      "idle": {
+        "cpuSeconds": 0,
+        "rssBytes": 10268672,
+        "peakRssBytes": 10268672,
+        "handles": 117,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.338,
+        "requestsPerSecond": 11451.562,
+        "successes": 22907,
+        "errors": 0,
+        "latency": {
+          "count": 22907,
+          "minMs": 0.051,
+          "p50Ms": 0.069,
+          "p95Ms": 0.151,
+          "p99Ms": 0.271,
+          "maxMs": 1.9,
+          "meanMs": 0.087
+        },
+        "cpuSeconds": 1.969
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.911,
+        "requestsPerSecond": 54544.59,
+        "successes": 163738,
+        "errors": 0,
+        "latency": {
+          "count": 163738,
+          "minMs": 0.071,
+          "p50Ms": 0.481,
+          "p95Ms": 1.232,
+          "p99Ms": 1.944,
+          "maxMs": 9.309,
+          "meanMs": 0.587
+        },
+        "cpuSeconds": 13.672
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 39.088,
+        "connectionsPerSecond": 5116.673,
+        "rssBeforeBytes": 10268672,
+        "rssConnectedBytes": 26173440,
+        "rssDeltaBytes": 15904768,
+        "approximateBytesPerConnection": 79523.84,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25049.056,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 27385856
+      },
+      "final": {
+        "cpuSeconds": 17.3125,
+        "rssBytes": 21422080,
+        "peakRssBytes": 27385856,
+        "handles": 270,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "all_cores",
+      "round": 2,
+      "healthReadyMs": 18.585,
+      "startupMs": 22.002,
+      "idle": {
+        "cpuSeconds": 0.015625,
+        "rssBytes": 10289152,
+        "peakRssBytes": 10289152,
+        "handles": 117,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.063,
+        "requestsPerSecond": 11062.154,
+        "successes": 22125,
+        "errors": 0,
+        "latency": {
+          "count": 22125,
+          "minMs": 0.047,
+          "p50Ms": 0.071,
+          "p95Ms": 0.161,
+          "p99Ms": 0.288,
+          "maxMs": 5.06,
+          "meanMs": 0.09
+        },
+        "cpuSeconds": 1.859
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.839,
+        "requestsPerSecond": 54011.565,
+        "successes": 162134,
+        "errors": 0,
+        "latency": {
+          "count": 162134,
+          "minMs": 0.076,
+          "p50Ms": 0.489,
+          "p95Ms": 1.238,
+          "p99Ms": 1.919,
+          "maxMs": 3.932,
+          "meanMs": 0.592
+        },
+        "cpuSeconds": 13.656
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 41.372,
+        "connectionsPerSecond": 4834.246,
+        "rssBeforeBytes": 10289152,
+        "rssConnectedBytes": 27123712,
+        "rssDeltaBytes": 16834560,
+        "approximateBytesPerConnection": 84172.8,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25037.839,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 27717632
+      },
+      "final": {
+        "cpuSeconds": 16.65625,
+        "rssBytes": 21549056,
+        "peakRssBytes": 27717632,
+        "handles": 302,
+        "threads": 25
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "all_cores",
+      "round": 2,
+      "healthReadyMs": 173.347,
+      "startupMs": 175.608,
+      "idle": {
+        "cpuSeconds": 0.203125,
+        "rssBytes": 95916032,
+        "peakRssBytes": 97202176,
+        "handles": 176,
+        "threads": 22
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.869,
+        "requestsPerSecond": 11701.415,
+        "successes": 23413,
+        "errors": 0,
+        "latency": {
+          "count": 23413,
+          "minMs": 0.051,
+          "p50Ms": 0.062,
+          "p95Ms": 0.147,
+          "p99Ms": 0.81,
+          "maxMs": 2.283,
+          "meanMs": 0.085
+        },
+        "cpuSeconds": 0.969
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.039,
+        "requestsPerSecond": 45704.173,
+        "successes": 137160,
+        "errors": 0,
+        "latency": {
+          "count": 137160,
+          "minMs": 0.115,
+          "p50Ms": 0.566,
+          "p95Ms": 1.506,
+          "p99Ms": 2.049,
+          "maxMs": 6.459,
+          "meanMs": 0.7
+        },
+        "cpuSeconds": 2.984
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 43.264,
+        "connectionsPerSecond": 4622.738,
+        "rssBeforeBytes": 95662080,
+        "rssConnectedBytes": 103858176,
+        "rssDeltaBytes": 8196096,
+        "approximateBytesPerConnection": 40980.48,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 25.179,
+        "probesPerSecond": 39715.478,
+        "latency": {
+          "count": 1000,
+          "minMs": 1.331,
+          "p50Ms": 2.27,
+          "p95Ms": 3.589,
+          "p99Ms": 3.872,
+          "maxMs": 4.053,
+          "meanMs": 2.375
+        },
+        "cpuSeconds": 0.016,
+        "peakRssBytes": 105656320
+      },
+      "final": {
+        "cpuSeconds": 4.671875,
+        "rssBytes": 102965248,
+        "peakRssBytes": 107737088,
+        "handles": 207,
+        "threads": 22
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "all_cores",
+      "round": 3,
+      "healthReadyMs": 175.71,
+      "startupMs": 178.119,
+      "idle": {
+        "cpuSeconds": 0.296875,
+        "rssBytes": 93458432,
+        "peakRssBytes": 96980992,
+        "handles": 175,
+        "threads": 21
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.641,
+        "requestsPerSecond": 11332.368,
+        "successes": 22672,
+        "errors": 0,
+        "latency": {
+          "count": 22672,
+          "minMs": 0.05,
+          "p50Ms": 0.063,
+          "p95Ms": 0.164,
+          "p99Ms": 0.83,
+          "maxMs": 2.398,
+          "meanMs": 0.088
+        },
+        "cpuSeconds": 1.016
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.083,
+        "requestsPerSecond": 39803.296,
+        "successes": 119453,
+        "errors": 0,
+        "latency": {
+          "count": 119453,
+          "minMs": 0.125,
+          "p50Ms": 0.655,
+          "p95Ms": 1.756,
+          "p99Ms": 2.358,
+          "maxMs": 8.45,
+          "meanMs": 0.804
+        },
+        "cpuSeconds": 3.172
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 42.413,
+        "connectionsPerSecond": 4715.535,
+        "rssBeforeBytes": 93130752,
+        "rssConnectedBytes": 103727104,
+        "rssDeltaBytes": 10596352,
+        "approximateBytesPerConnection": 52981.76,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 26.174,
+        "probesPerSecond": 38206.583,
+        "latency": {
+          "count": 1000,
+          "minMs": 0.884,
+          "p50Ms": 2.563,
+          "p95Ms": 3.579,
+          "p99Ms": 3.709,
+          "maxMs": 3.84,
+          "meanMs": 2.528
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 104243200
+      },
+      "final": {
+        "cpuSeconds": 4.953125,
+        "rssBytes": 102010880,
+        "peakRssBytes": 108077056,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "all_cores",
+      "round": 3,
+      "healthReadyMs": 16.523,
+      "startupMs": 19.16,
+      "idle": {
+        "cpuSeconds": 0,
+        "rssBytes": 10252288,
+        "peakRssBytes": 10252288,
+        "handles": 115,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.059,
+        "requestsPerSecond": 11145.672,
+        "successes": 22292,
+        "errors": 0,
+        "latency": {
+          "count": 22292,
+          "minMs": 0.052,
+          "p50Ms": 0.071,
+          "p95Ms": 0.158,
+          "p99Ms": 0.269,
+          "maxMs": 1.915,
+          "meanMs": 0.09
+        },
+        "cpuSeconds": 1.594
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.53,
+        "requestsPerSecond": 55106.926,
+        "successes": 165350,
+        "errors": 0,
+        "latency": {
+          "count": 165350,
+          "minMs": 0.09,
+          "p50Ms": 0.481,
+          "p95Ms": 1.208,
+          "p99Ms": 1.902,
+          "maxMs": 3.695,
+          "meanMs": 0.581
+        },
+        "cpuSeconds": 11.953
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 53.021,
+        "connectionsPerSecond": 3772.119,
+        "rssBeforeBytes": 10252288,
+        "rssConnectedBytes": 26361856,
+        "rssDeltaBytes": 16109568,
+        "approximateBytesPerConnection": 80547.84,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25039.074,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0.016,
+        "peakRssBytes": 26644480
+      },
+      "final": {
+        "cpuSeconds": 14.890625,
+        "rssBytes": 21712896,
+        "peakRssBytes": 26644480,
+        "handles": 332,
+        "threads": 29
+      }
+    },
+    {
+      "target": "go",
+      "mode": "all_cores",
+      "round": 4,
+      "healthReadyMs": 27.957,
+      "startupMs": 30.127,
+      "idle": {
+        "cpuSeconds": 0.015625,
+        "rssBytes": 10252288,
+        "peakRssBytes": 10252288,
+        "handles": 117,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.772,
+        "requestsPerSecond": 11687.987,
+        "successes": 23385,
+        "errors": 0,
+        "latency": {
+          "count": 23385,
+          "minMs": 0.05,
+          "p50Ms": 0.069,
+          "p95Ms": 0.145,
+          "p99Ms": 0.264,
+          "maxMs": 1.978,
+          "meanMs": 0.085
+        },
+        "cpuSeconds": 1.641
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.4,
+        "requestsPerSecond": 54244.099,
+        "successes": 162754,
+        "errors": 0,
+        "latency": {
+          "count": 162754,
+          "minMs": 0.084,
+          "p50Ms": 0.485,
+          "p95Ms": 1.219,
+          "p99Ms": 1.889,
+          "maxMs": 5.988,
+          "meanMs": 0.59
+        },
+        "cpuSeconds": 12.938
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 46.746,
+        "connectionsPerSecond": 4278.487,
+        "rssBeforeBytes": 10252288,
+        "rssConnectedBytes": 25923584,
+        "rssDeltaBytes": 15671296,
+        "approximateBytesPerConnection": 78356.48,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25067.193,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 28053504
+      },
+      "final": {
+        "cpuSeconds": 15.953125,
+        "rssBytes": 21151744,
+        "peakRssBytes": 28053504,
+        "handles": 302,
+        "threads": 25
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "all_cores",
+      "round": 4,
+      "healthReadyMs": 163.241,
+      "startupMs": 168.673,
+      "idle": {
+        "cpuSeconds": 0.1875,
+        "rssBytes": 95752192,
+        "peakRssBytes": 96657408,
+        "handles": 176,
+        "threads": 22
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.07,
+        "requestsPerSecond": 11490.1,
+        "successes": 22981,
+        "errors": 0,
+        "latency": {
+          "count": 22981,
+          "minMs": 0.051,
+          "p50Ms": 0.064,
+          "p95Ms": 0.153,
+          "p99Ms": 0.832,
+          "maxMs": 2.987,
+          "meanMs": 0.087
+        },
+        "cpuSeconds": 1.063
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.982,
+        "requestsPerSecond": 45714.035,
+        "successes": 137187,
+        "errors": 0,
+        "latency": {
+          "count": 137187,
+          "minMs": 0.129,
+          "p50Ms": 0.569,
+          "p95Ms": 1.477,
+          "p99Ms": 2.043,
+          "maxMs": 5.364,
+          "meanMs": 0.7
+        },
+        "cpuSeconds": 3.047
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 43.996,
+        "connectionsPerSecond": 4545.816,
+        "rssBeforeBytes": 95752192,
+        "rssConnectedBytes": 98639872,
+        "rssDeltaBytes": 2887680,
+        "approximateBytesPerConnection": 14438.4,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 30.967,
+        "probesPerSecond": 32292.44,
+        "latency": {
+          "count": 1000,
+          "minMs": 1.231,
+          "p50Ms": 2.71,
+          "p95Ms": 3.998,
+          "p99Ms": 4.508,
+          "maxMs": 4.88,
+          "meanMs": 2.842
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 104599552
+      },
+      "final": {
+        "cpuSeconds": 4.921875,
+        "rssBytes": 102240256,
+        "peakRssBytes": 108457984,
+        "handles": 207,
+        "threads": 22
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "all_cores",
+      "round": 5,
+      "healthReadyMs": 189.024,
+      "startupMs": 191.397,
+      "idle": {
+        "cpuSeconds": 0.203125,
+        "rssBytes": 94183424,
+        "peakRssBytes": 96759808,
+        "handles": 175,
+        "threads": 21
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.084,
+        "requestsPerSecond": 11615.01,
+        "successes": 23231,
+        "errors": 0,
+        "latency": {
+          "count": 23231,
+          "minMs": 0.049,
+          "p50Ms": 0.062,
+          "p95Ms": 0.156,
+          "p99Ms": 0.823,
+          "maxMs": 3.148,
+          "meanMs": 0.086
+        },
+        "cpuSeconds": 0.969
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.278,
+        "requestsPerSecond": 45191.088,
+        "successes": 135631,
+        "errors": 0,
+        "latency": {
+          "count": 135631,
+          "minMs": 0.13,
+          "p50Ms": 0.573,
+          "p95Ms": 1.497,
+          "p99Ms": 2.037,
+          "maxMs": 8.699,
+          "meanMs": 0.708
+        },
+        "cpuSeconds": 3.094
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 38.325,
+        "connectionsPerSecond": 5218.512,
+        "rssBeforeBytes": 92033024,
+        "rssConnectedBytes": 103481344,
+        "rssDeltaBytes": 11448320,
+        "approximateBytesPerConnection": 57241.6,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 32.822,
+        "probesPerSecond": 30467.277,
+        "latency": {
+          "count": 1000,
+          "minMs": 1.574,
+          "p50Ms": 3.334,
+          "p95Ms": 4.997,
+          "p99Ms": 5.306,
+          "maxMs": 5.445,
+          "meanMs": 3.35
+        },
+        "cpuSeconds": 0.016,
+        "peakRssBytes": 104341504
+      },
+      "final": {
+        "cpuSeconds": 4.828125,
+        "rssBytes": 102412288,
+        "peakRssBytes": 108851200,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "all_cores",
+      "round": 5,
+      "healthReadyMs": 23.981,
+      "startupMs": 27.222,
+      "idle": {
+        "cpuSeconds": 0,
+        "rssBytes": 10285056,
+        "peakRssBytes": 10285056,
+        "handles": 123,
+        "threads": 8
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.039,
+        "requestsPerSecond": 11050.282,
+        "successes": 22101,
+        "errors": 0,
+        "latency": {
+          "count": 22101,
+          "minMs": 0.05,
+          "p50Ms": 0.071,
+          "p95Ms": 0.159,
+          "p99Ms": 0.272,
+          "maxMs": 1.826,
+          "meanMs": 0.09
+        },
+        "cpuSeconds": 1.563
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.426,
+        "requestsPerSecond": 54314.177,
+        "successes": 163020,
+        "errors": 0,
+        "latency": {
+          "count": 163020,
+          "minMs": 0.089,
+          "p50Ms": 0.486,
+          "p95Ms": 1.243,
+          "p99Ms": 1.903,
+          "maxMs": 4.863,
+          "meanMs": 0.589
+        },
+        "cpuSeconds": 12.703
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 33.386,
+        "connectionsPerSecond": 5990.463,
+        "rssBeforeBytes": 10285056,
+        "rssConnectedBytes": 26861568,
+        "rssDeltaBytes": 16576512,
+        "approximateBytesPerConnection": 82882.56,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25041.841,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 27451392
+      },
+      "final": {
+        "cpuSeconds": 15.875,
+        "rssBytes": 20869120,
+        "peakRssBytes": 27451392,
+        "handles": 246,
+        "threads": 18
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "single_core",
+      "round": 1,
+      "healthReadyMs": 164.212,
+      "startupMs": 166.619,
+      "idle": {
+        "cpuSeconds": 0.203125,
+        "rssBytes": 92856320,
+        "peakRssBytes": 96112640,
+        "handles": 175,
+        "threads": 21
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2004.104,
+        "requestsPerSecond": 10731.477,
+        "successes": 21507,
+        "errors": 0,
+        "latency": {
+          "count": 21507,
+          "minMs": 0.047,
+          "p50Ms": 0.057,
+          "p95Ms": 0.174,
+          "p99Ms": 0.898,
+          "maxMs": 25.597,
+          "meanMs": 0.093
+        },
+        "cpuSeconds": 0.891
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.39,
+        "requestsPerSecond": 41128.941,
+        "successes": 123444,
+        "errors": 0,
+        "latency": {
+          "count": 123444,
+          "minMs": 0.114,
+          "p50Ms": 0.573,
+          "p95Ms": 1.702,
+          "p99Ms": 3.031,
+          "maxMs": 11.349,
+          "meanMs": 0.778
+        },
+        "cpuSeconds": 2.406
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 81.766,
+        "connectionsPerSecond": 2446.019,
+        "rssBeforeBytes": 92856320,
+        "rssConnectedBytes": 93704192,
+        "rssDeltaBytes": 847872,
+        "approximateBytesPerConnection": 4239.36,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 20.204,
+        "probesPerSecond": 49494.415,
+        "latency": {
+          "count": 1000,
+          "minMs": 0.867,
+          "p50Ms": 1.64,
+          "p95Ms": 2.866,
+          "p99Ms": 3.171,
+          "maxMs": 3.494,
+          "meanMs": 1.766
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 97583104
+      },
+      "final": {
+        "cpuSeconds": 4.015625,
+        "rssBytes": 104972288,
+        "peakRssBytes": 111505408,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "single_core",
+      "round": 1,
+      "healthReadyMs": 12.01,
+      "startupMs": 14.187,
+      "idle": {
+        "cpuSeconds": 0.015625,
+        "rssBytes": 10227712,
+        "peakRssBytes": 10227712,
+        "handles": 117,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.126,
+        "requestsPerSecond": 12237.227,
+        "successes": 24476,
+        "errors": 0,
+        "latency": {
+          "count": 24476,
+          "minMs": 0.044,
+          "p50Ms": 0.055,
+          "p95Ms": 0.161,
+          "p99Ms": 0.654,
+          "maxMs": 5.24,
+          "meanMs": 0.082
+        },
+        "cpuSeconds": 0.734
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.927,
+        "requestsPerSecond": 39315.857,
+        "successes": 117984,
+        "errors": 0,
+        "latency": {
+          "count": 117984,
+          "minMs": 0.044,
+          "p50Ms": 0.68,
+          "p95Ms": 1.921,
+          "p99Ms": 3.081,
+          "maxMs": 22.145,
+          "meanMs": 0.814
+        },
+        "cpuSeconds": 2.344
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 94.016,
+        "connectionsPerSecond": 2127.307,
+        "rssBeforeBytes": 10227712,
+        "rssConnectedBytes": 22720512,
+        "rssDeltaBytes": 12492800,
+        "approximateBytesPerConnection": 62464,
+        "probes": 40,
+        "errors": 960,
+        "probeElapsedMs": 25060.929,
+        "probesPerSecond": 1.596,
+        "latency": {
+          "count": 40,
+          "minMs": 0.157,
+          "p50Ms": 0.374,
+          "p95Ms": 0.626,
+          "p99Ms": 0.71,
+          "maxMs": 0.733,
+          "meanMs": 0.392
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 22814720
+      },
+      "final": {
+        "cpuSeconds": 3.484375,
+        "rssBytes": 16953344,
+        "peakRssBytes": 22814720,
+        "handles": 148,
+        "threads": 6
+      }
+    },
+    {
+      "target": "go",
+      "mode": "single_core",
+      "round": 2,
+      "healthReadyMs": 12.708,
+      "startupMs": 15.331,
+      "idle": {
+        "cpuSeconds": 0.015625,
+        "rssBytes": 10256384,
+        "peakRssBytes": 10256384,
+        "handles": 115,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.058,
+        "requestsPerSecond": 11998.153,
+        "successes": 23997,
+        "errors": 0,
+        "latency": {
+          "count": 23997,
+          "minMs": 0.047,
+          "p50Ms": 0.06,
+          "p95Ms": 0.149,
+          "p99Ms": 0.527,
+          "maxMs": 12.821,
+          "meanMs": 0.083
+        },
+        "cpuSeconds": 0.859
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.921,
+        "requestsPerSecond": 39462.548,
+        "successes": 118424,
+        "errors": 0,
+        "latency": {
+          "count": 118424,
+          "minMs": 0.041,
+          "p50Ms": 0.68,
+          "p95Ms": 1.848,
+          "p99Ms": 3.393,
+          "maxMs": 14.609,
+          "meanMs": 0.811
+        },
+        "cpuSeconds": 1.969
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 89.779,
+        "connectionsPerSecond": 2227.695,
+        "rssBeforeBytes": 10256384,
+        "rssConnectedBytes": 20414464,
+        "rssDeltaBytes": 10158080,
+        "approximateBytesPerConnection": 50790.4,
+        "probes": 220,
+        "errors": 780,
+        "probeElapsedMs": 25066.432,
+        "probesPerSecond": 8.777,
+        "latency": {
+          "count": 220,
+          "minMs": 0.185,
+          "p50Ms": 0.918,
+          "p95Ms": 3.986,
+          "p99Ms": 4.779,
+          "maxMs": 5.207,
+          "meanMs": 1.313
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 20811776
+      },
+      "final": {
+        "cpuSeconds": 3.296875,
+        "rssBytes": 17346560,
+        "peakRssBytes": 20811776,
+        "handles": 148,
+        "threads": 6
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "single_core",
+      "round": 2,
+      "healthReadyMs": 164.166,
+      "startupMs": 167.349,
+      "idle": {
+        "cpuSeconds": 0.171875,
+        "rssBytes": 95666176,
+        "peakRssBytes": 96604160,
+        "handles": 176,
+        "threads": 22
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.122,
+        "requestsPerSecond": 11805.282,
+        "successes": 23612,
+        "errors": 0,
+        "latency": {
+          "count": 23612,
+          "minMs": 0.048,
+          "p50Ms": 0.056,
+          "p95Ms": 0.138,
+          "p99Ms": 0.839,
+          "maxMs": 12.993,
+          "meanMs": 0.085
+        },
+        "cpuSeconds": 0.766
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3001.142,
+        "requestsPerSecond": 42704.076,
+        "successes": 128161,
+        "errors": 0,
+        "latency": {
+          "count": 128161,
+          "minMs": 0.107,
+          "p50Ms": 0.558,
+          "p95Ms": 1.524,
+          "p99Ms": 3.114,
+          "maxMs": 18.64,
+          "meanMs": 0.749
+        },
+        "cpuSeconds": 2.438
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 63.473,
+        "connectionsPerSecond": 3150.956,
+        "rssBeforeBytes": 95666176,
+        "rssConnectedBytes": 95625216,
+        "rssDeltaBytes": -40960,
+        "approximateBytesPerConnection": -204.8,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 36.966,
+        "probesPerSecond": 27051.812,
+        "latency": {
+          "count": 1000,
+          "minMs": 1.502,
+          "p50Ms": 2.902,
+          "p95Ms": 7.186,
+          "p99Ms": 7.534,
+          "maxMs": 7.602,
+          "meanMs": 3.218
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 99540992
+      },
+      "final": {
+        "cpuSeconds": 3.859375,
+        "rssBytes": 105984000,
+        "peakRssBytes": 112238592,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "bun",
+      "mode": "single_core",
+      "round": 3,
+      "healthReadyMs": 161,
+      "startupMs": 165.96,
+      "idle": {
+        "cpuSeconds": 0.265625,
+        "rssBytes": 95649792,
+        "peakRssBytes": 96616448,
+        "handles": 175,
+        "threads": 21
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.025,
+        "requestsPerSecond": 10395.372,
+        "successes": 20791,
+        "errors": 0,
+        "latency": {
+          "count": 20791,
+          "minMs": 0.05,
+          "p50Ms": 0.06,
+          "p95Ms": 0.158,
+          "p99Ms": 0.907,
+          "maxMs": 13.934,
+          "meanMs": 0.096
+        },
+        "cpuSeconds": 0.797
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3002.579,
+        "requestsPerSecond": 41952.936,
+        "successes": 125967,
+        "errors": 0,
+        "latency": {
+          "count": 125967,
+          "minMs": 0.117,
+          "p50Ms": 0.575,
+          "p95Ms": 1.594,
+          "p99Ms": 2.805,
+          "maxMs": 39.596,
+          "meanMs": 0.762
+        },
+        "cpuSeconds": 2.719
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 92.992,
+        "connectionsPerSecond": 2150.713,
+        "rssBeforeBytes": 95649792,
+        "rssConnectedBytes": 94359552,
+        "rssDeltaBytes": -1290240,
+        "approximateBytesPerConnection": -6451.2,
+        "probes": 1000,
+        "errors": 0,
+        "probeElapsedMs": 21.883,
+        "probesPerSecond": 45698.2,
+        "latency": {
+          "count": 1000,
+          "minMs": 0.938,
+          "p50Ms": 2.199,
+          "p95Ms": 3.699,
+          "p99Ms": 4.029,
+          "maxMs": 4.428,
+          "meanMs": 2.299
+        },
+        "cpuSeconds": 0.031,
+        "peakRssBytes": 99848192
+      },
+      "final": {
+        "cpuSeconds": 4.25,
+        "rssBytes": 106950656,
+        "peakRssBytes": 116396032,
+        "handles": 206,
+        "threads": 21
+      }
+    },
+    {
+      "target": "go",
+      "mode": "single_core",
+      "round": 3,
+      "healthReadyMs": 12.44,
+      "startupMs": 15.901,
+      "idle": {
+        "cpuSeconds": 0.015625,
+        "rssBytes": 10158080,
+        "peakRssBytes": 10158080,
+        "handles": 117,
+        "threads": 7
+      },
+      "httpSequential": {
+        "concurrency": 1,
+        "elapsedMs": 2000.1,
+        "requestsPerSecond": 11896.408,
+        "successes": 23794,
+        "errors": 0,
+        "latency": {
+          "count": 23794,
+          "minMs": 0.046,
+          "p50Ms": 0.056,
+          "p95Ms": 0.151,
+          "p99Ms": 0.492,
+          "maxMs": 13.718,
+          "meanMs": 0.084
+        },
+        "cpuSeconds": 0.828
+      },
+      "httpConcurrent": {
+        "concurrency": 32,
+        "elapsedMs": 3000.755,
+        "requestsPerSecond": 39853.306,
+        "successes": 119590,
+        "errors": 0,
+        "latency": {
+          "count": 119590,
+          "minMs": 0.041,
+          "p50Ms": 0.673,
+          "p95Ms": 1.801,
+          "p99Ms": 3.422,
+          "maxMs": 27.682,
+          "meanMs": 0.803
+        },
+        "cpuSeconds": 2.438
+      },
+      "websocket": {
+        "clients": 200,
+        "connectElapsedMs": 61.011,
+        "connectionsPerSecond": 3278.097,
+        "rssBeforeBytes": 10158080,
+        "rssConnectedBytes": 24104960,
+        "rssDeltaBytes": 13946880,
+        "approximateBytesPerConnection": 69734.4,
+        "probes": 0,
+        "errors": 1000,
+        "probeElapsedMs": 25036.335,
+        "probesPerSecond": 0,
+        "latency": {
+          "count": 0,
+          "minMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "maxMs": 0,
+          "meanMs": 0
+        },
+        "cpuSeconds": 0,
+        "peakRssBytes": 24170496
+      },
+      "final": {
+        "cpuSeconds": 3.640625,
+        "rssBytes": 18010112,
+        "peakRssBytes": 24530944,
+        "handles": 150,
+        "threads": 6
+      }
+    }
+  ]
+}

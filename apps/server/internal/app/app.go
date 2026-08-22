@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/psy-zney/beatsync/apps/server/internal/backup"
 	"github.com/psy-zney/beatsync/apps/server/internal/config"
+	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
 	"github.com/psy-zney/beatsync/apps/server/internal/memory"
 	"github.com/psy-zney/beatsync/apps/server/internal/queue"
 	"github.com/psy-zney/beatsync/apps/server/internal/realtime"
@@ -30,9 +31,11 @@ type App struct {
 	Spotify    *spotify.Service
 	Backup     *backup.Manager
 	Memory     *memory.Monitor
+	Hybrid     *hybrid.Broker
 	HTTP       *http.Client
 	startedAt  time.Time
 	upgrader   websocket.Upgrader
+	schedule   func(time.Duration, func())
 	background sync.WaitGroup
 }
 
@@ -51,8 +54,10 @@ func New(cfg config.Config) (*App, error) {
 	application := &App{
 		Config: cfg, Rooms: rooms, Hub: realtime.NewHub(), Queue: jobs, Store: store,
 		YouTube: youtube.New(cfg), Spotify: spotify.New(cfg), Backup: backups,
+		Hybrid:    hybrid.NewBroker(cfg.HybridWorkerSecret),
 		HTTP:      &http.Client{Transport: &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 20 * time.Second}},
 		startedAt: time.Now(),
+		schedule:  func(delay time.Duration, callback func()) { time.AfterFunc(delay, callback) },
 	}
 	application.Memory = memory.New(cfg, jobs, func(context.Context) error { return backups.SaveLocal() })
 	application.upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 2048, CheckOrigin: func(*http.Request) bool { return true }}
@@ -118,6 +123,7 @@ func (a *App) RunBackground(ctx context.Context) {
 func (a *App) Shutdown(ctx context.Context) {
 	a.Queue.Close()
 	a.Hub.Close()
+	a.Hybrid.Close()
 	if !a.Config.Demo {
 		done := make(chan struct{})
 		go func() {

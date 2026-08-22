@@ -46,84 +46,107 @@ func LoadEnvFile(name string) error {
 }
 
 type Config struct {
-	Host                    string
-	Port                    int
-	Demo                    bool
-	DemoRoomID              string
-	DemoAudioDir            string
-	CreatorSecret           string
-	ProviderURL             string
-	SpotifyClientID         string
-	SpotifyClientSecret     string
-	LiveKitURL              string
-	LiveKitAPIKey           string
-	LiveKitAPISecret        string
-	S3Bucket                string
-	S3PublicURL             string
-	S3Endpoint              string
-	S3AccessKey             string
-	S3SecretKey             string
-	S3Region                string
-	LocalBackupPath         string
-	ExtractorPath           string
-	YTDLPPath               string
-	CookiesPath             string
-	StreamConcurrency       int
-	StreamQueueSize         int
-	MaxAudioDownloadBytes   int64
-	MemorySoftLimitBytes    uint64
-	MemoryHardLimitBytes    uint64
-	MemoryCheckInterval     time.Duration
-	RoomIdleTTL             time.Duration
-	BackupInterval          time.Duration
-	HTTPTimeout             time.Duration
-	ExtractorTimeout        time.Duration
-	MaxConnectionsPerRoom   int
-	MaxWebSocketMessageSize int64
+	Host                     string
+	Port                     int
+	Demo                     bool
+	DemoRoomID               string
+	DemoAudioDir             string
+	CreatorSecret            string
+	ProviderURL              string
+	SpotifyClientID          string
+	SpotifyClientSecret      string
+	LiveKitURL               string
+	LiveKitAPIKey            string
+	LiveKitAPISecret         string
+	S3Bucket                 string
+	S3PublicURL              string
+	S3Endpoint               string
+	S3AccessKey              string
+	S3SecretKey              string
+	S3Region                 string
+	LocalBackupPath          string
+	ExtractorPath            string
+	YTDLPPath                string
+	CookiesPath              string
+	StreamConcurrency        int
+	StreamQueueSize          int
+	MaxAudioDownloadBytes    int64
+	MemorySoftLimitBytes     uint64
+	MemoryHardLimitBytes     uint64
+	MemoryCheckInterval      time.Duration
+	RoomIdleTTL              time.Duration
+	BackupInterval           time.Duration
+	HTTPTimeout              time.Duration
+	ExtractorTimeout         time.Duration
+	MaxConnectionsPerRoom    int
+	MaxWebSocketMessageSize  int64
+	HybridWorkerSecret       string
+	HybridJobLease           time.Duration
+	WorkerServerURL          string
+	WorkerID                 string
+	WorkerConcurrency        int
+	WorkerAccessClientID     string
+	WorkerAccessClientSecret string
 }
 
 func Load() (Config, error) {
 	c := Config{
-		Host:                    env("HOST", "127.0.0.1"),
-		Port:                    envInt("PORT", 1001),
-		Demo:                    envBool("DEMO", false),
-		DemoRoomID:              env("DEMO_ROOM_ID", "000000"),
-		DemoAudioDir:            env("DEMO_AUDIO_DIR", "./demo-audio"),
-		CreatorSecret:           os.Getenv("CREATOR_SECRET"),
-		ProviderURL:             os.Getenv("PROVIDER_URL"),
-		SpotifyClientID:         os.Getenv("SPOTIFY_CLIENT_ID"),
-		SpotifyClientSecret:     os.Getenv("SPOTIFY_CLIENT_SECRET"),
-		LiveKitURL:              os.Getenv("LIVEKIT_URL"),
-		LiveKitAPIKey:           os.Getenv("LIVEKIT_API_KEY"),
-		LiveKitAPISecret:        os.Getenv("LIVEKIT_API_SECRET"),
-		S3Bucket:                os.Getenv("S3_BUCKET_NAME"),
-		S3PublicURL:             strings.TrimRight(os.Getenv("S3_PUBLIC_URL"), "/"),
-		S3Endpoint:              strings.TrimRight(os.Getenv("S3_ENDPOINT"), "/"),
-		S3AccessKey:             os.Getenv("S3_ACCESS_KEY_ID"),
-		S3SecretKey:             os.Getenv("S3_SECRET_ACCESS_KEY"),
-		S3Region:                env("S3_REGION", "auto"),
-		LocalBackupPath:         env("LOCAL_BACKUP_PATH", "./data/state-backup-latest.json"),
-		ExtractorPath:           env("YT_EXTRACTOR_PATH", executableSibling("yt-rust-extractor")),
-		YTDLPPath:               env("YTDLP_PATH", executableSibling("yt-dlp")),
-		CookiesPath:             env("YOUTUBE_COOKIES_PATH", "../../cookies.txt"),
-		StreamConcurrency:       envInt("STREAM_MAX_CONCURRENCY", 1),
-		StreamQueueSize:         envInt("STREAM_MAX_QUEUE", 12),
-		MaxAudioDownloadBytes:   int64(envInt("MAX_AUDIO_DOWNLOAD_MB", 120)) * 1024 * 1024,
-		MemorySoftLimitBytes:    uint64(envInt("MEMORY_SOFT_LIMIT_MB", 220)) * 1024 * 1024,
-		MemoryHardLimitBytes:    uint64(envInt("MEMORY_HARD_LIMIT_MB", 320)) * 1024 * 1024,
-		MemoryCheckInterval:     envDuration("MEMORY_CHECK_INTERVAL", 5*time.Second),
-		RoomIdleTTL:             envDuration("ROOM_IDLE_TTL", 2*time.Minute),
-		BackupInterval:          envDuration("BACKUP_INTERVAL", 2*time.Minute),
-		HTTPTimeout:             envDuration("UPSTREAM_TIMEOUT", 15*time.Second),
-		ExtractorTimeout:        envDuration("EXTRACTOR_TIMEOUT", 30*time.Second),
-		MaxConnectionsPerRoom:   envInt("MAX_CONNECTIONS_PER_ROOM", 100),
-		MaxWebSocketMessageSize: int64(envInt("MAX_WS_MESSAGE_KB", 256)) * 1024,
+		Host:                     env("HOST", "127.0.0.1"),
+		Port:                     envInt("PORT", 1001),
+		Demo:                     envBool("DEMO", false),
+		DemoRoomID:               env("DEMO_ROOM_ID", "000000"),
+		DemoAudioDir:             env("DEMO_AUDIO_DIR", "./demo-audio"),
+		CreatorSecret:            os.Getenv("CREATOR_SECRET"),
+		ProviderURL:              os.Getenv("PROVIDER_URL"),
+		SpotifyClientID:          os.Getenv("SPOTIFY_CLIENT_ID"),
+		SpotifyClientSecret:      os.Getenv("SPOTIFY_CLIENT_SECRET"),
+		LiveKitURL:               os.Getenv("LIVEKIT_URL"),
+		LiveKitAPIKey:            os.Getenv("LIVEKIT_API_KEY"),
+		LiveKitAPISecret:         os.Getenv("LIVEKIT_API_SECRET"),
+		S3Bucket:                 os.Getenv("S3_BUCKET_NAME"),
+		S3PublicURL:              strings.TrimRight(os.Getenv("S3_PUBLIC_URL"), "/"),
+		S3Endpoint:               strings.TrimRight(os.Getenv("S3_ENDPOINT"), "/"),
+		S3AccessKey:              os.Getenv("S3_ACCESS_KEY_ID"),
+		S3SecretKey:              os.Getenv("S3_SECRET_ACCESS_KEY"),
+		S3Region:                 env("S3_REGION", "auto"),
+		LocalBackupPath:          env("LOCAL_BACKUP_PATH", "./data/state-backup-latest.json"),
+		ExtractorPath:            env("YT_EXTRACTOR_PATH", executableSibling("yt-rust-extractor")),
+		YTDLPPath:                env("YTDLP_PATH", executableSibling("yt-dlp")),
+		CookiesPath:              env("YOUTUBE_COOKIES_PATH", "../../cookies.txt"),
+		StreamConcurrency:        envInt("STREAM_MAX_CONCURRENCY", 1),
+		StreamQueueSize:          envInt("STREAM_MAX_QUEUE", 12),
+		MaxAudioDownloadBytes:    int64(envInt("MAX_AUDIO_DOWNLOAD_MB", 120)) * 1024 * 1024,
+		MemorySoftLimitBytes:     uint64(envInt("MEMORY_SOFT_LIMIT_MB", 220)) * 1024 * 1024,
+		MemoryHardLimitBytes:     uint64(envInt("MEMORY_HARD_LIMIT_MB", 320)) * 1024 * 1024,
+		MemoryCheckInterval:      envDuration("MEMORY_CHECK_INTERVAL", 5*time.Second),
+		RoomIdleTTL:              envDuration("ROOM_IDLE_TTL", 2*time.Minute),
+		BackupInterval:           envDuration("BACKUP_INTERVAL", 2*time.Minute),
+		HTTPTimeout:              envDuration("UPSTREAM_TIMEOUT", 15*time.Second),
+		ExtractorTimeout:         envDuration("EXTRACTOR_TIMEOUT", 30*time.Second),
+		MaxConnectionsPerRoom:    envInt("MAX_CONNECTIONS_PER_ROOM", 100),
+		MaxWebSocketMessageSize:  int64(envInt("MAX_WS_MESSAGE_KB", 256)) * 1024,
+		HybridWorkerSecret:       os.Getenv("HYBRID_WORKER_SECRET"),
+		HybridJobLease:           envDuration("HYBRID_JOB_LEASE", 20*time.Second),
+		WorkerServerURL:          os.Getenv("WORKER_SERVER_URL"),
+		WorkerID:                 env("WORKER_ID", "local-primary"),
+		WorkerConcurrency:        envInt("WORKER_CONCURRENCY", 2),
+		WorkerAccessClientID:     os.Getenv("CF_ACCESS_CLIENT_ID"),
+		WorkerAccessClientSecret: os.Getenv("CF_ACCESS_CLIENT_SECRET"),
 	}
 	if c.Port < 1 || c.Port > 65535 {
 		return Config{}, fmt.Errorf("invalid PORT %d", c.Port)
 	}
 	if c.MemoryHardLimitBytes <= c.MemorySoftLimitBytes {
 		return Config{}, fmt.Errorf("MEMORY_HARD_LIMIT_MB must exceed MEMORY_SOFT_LIMIT_MB")
+	}
+	if c.WorkerServerURL != "" && strings.TrimSpace(c.HybridWorkerSecret) == "" {
+		return Config{}, fmt.Errorf("HYBRID_WORKER_SECRET is required in worker mode")
+	}
+	if c.WorkerConcurrency < 1 || c.WorkerConcurrency > 32 {
+		return Config{}, fmt.Errorf("WORKER_CONCURRENCY must be between 1 and 32")
+	}
+	if (c.WorkerAccessClientID == "") != (c.WorkerAccessClientSecret == "") {
+		return Config{}, fmt.Errorf("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together")
 	}
 	return c, nil
 }
