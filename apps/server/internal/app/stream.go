@@ -92,9 +92,9 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 		return err
 	}
 	request.Header.Set("User-Agent", browserAgent)
-	if videoID != "" {
-		request.Header.Set("Range", "bytes=0-")
-	}
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Origin", "https://www.youtube.com")
+	request.Header.Set("Referer", "https://www.youtube.com/")
 	response, err := a.HTTP.Do(request)
 	if err != nil {
 		return err
