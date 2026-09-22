@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -338,20 +337,17 @@ func (a *App) deleteSources(roomID string, state *room.Room, urls []string) {
 		if !allowed[raw] {
 			continue
 		}
+		remove[raw] = true
 		key, ok := a.storageKey(raw)
-		if !ok || a.Config.Demo {
-			remove[raw] = true
+		if !ok || a.Config.Demo || (strings.Contains(key, "youtube-cache/") && a.usedByOtherRoom(roomID, raw)) {
 			continue
 		}
-		if strings.Contains(key, "youtube-cache/") && a.usedByOtherRoom(roomID, raw) {
-			remove[raw] = true
-			continue
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		err := a.Store.Delete(ctx, key)
-		cancel()
-		if err == nil || errors.Is(err, os.ErrNotExist) {
-			remove[raw] = true
+		if a.Store != nil {
+			go func(k string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				_ = a.Store.Delete(ctx, k)
+			}(key)
 		}
 	}
 	if len(remove) > 0 {

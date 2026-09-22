@@ -87,37 +87,58 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 		a.broadcastSources(roomID, sources)
 		return nil
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
-	if err != nil {
-		return err
+	var (
+		body        io.ReadCloser
+		contentType string
+		key         string
+	)
+
+	if videoID != "" && a.YouTube != nil {
+		reader, cType, cleanup, dlErr := a.YouTube.DownloadAudio(ctx, videoID)
+		if dlErr != nil {
+			log.Printf("yt-dlp direct download failed for %s: %v, falling back to HTTP GET", videoID, dlErr)
+		} else {
+			defer cleanup()
+			body = reader
+			contentType = cType
+			key = "youtube-cache/" + videoID + extensionFor(contentType)
+		}
 	}
-	request.Header.Set("User-Agent", browserAgent)
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Origin", "https://www.youtube.com")
-	request.Header.Set("Referer", "https://www.youtube.com/")
-	response, err := a.HTTP.Do(request)
-	if err != nil {
-		return err
+
+	if body == nil {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+		if err != nil {
+			return err
+		}
+		request.Header.Set("User-Agent", browserAgent)
+		request.Header.Set("Accept", "*/*")
+		request.Header.Set("Origin", "https://www.youtube.com")
+		request.Header.Set("Referer", "https://www.youtube.com/")
+		response, err := a.HTTP.Do(request)
+		if err != nil {
+			return err
+		}
+		defer response.Body.Close()
+		if response.StatusCode/100 != 2 {
+			return fmt.Errorf("audio download returned HTTP %d", response.StatusCode)
+		}
+		if response.ContentLength > a.Config.MaxAudioDownloadBytes {
+			return fmt.Errorf("audio exceeds %d MiB limit", a.Config.MaxAudioDownloadBytes>>20)
+		}
+		body = response.Body
+		contentType = response.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "audio/mpeg"
+		}
+		contentType = strings.Split(contentType, ";")[0]
+		if videoID != "" {
+			key = "youtube-cache/" + videoID + extensionFor(contentType)
+		} else {
+			key = "room-" + roomID + "/" + uniqueFileName(trackName+extensionFor(contentType))
+		}
 	}
-	defer response.Body.Close()
-	if response.StatusCode/100 != 2 {
-		return fmt.Errorf("audio download returned HTTP %d", response.StatusCode)
-	}
-	if response.ContentLength > a.Config.MaxAudioDownloadBytes {
-		return fmt.Errorf("audio exceeds %d MiB limit", a.Config.MaxAudioDownloadBytes>>20)
-	}
-	contentType := response.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "audio/mpeg"
-	}
-	contentType = strings.Split(contentType, ";")[0]
-	var key string
-	if videoID != "" {
-		key = "youtube-cache/" + videoID + extensionFor(contentType)
-	} else {
-		key = "room-" + roomID + "/" + uniqueFileName(trackName+extensionFor(contentType))
-	}
-	if err := a.Store.UploadStream(ctx, key, contentType, response.Body, a.Config.MaxAudioDownloadBytes); err != nil {
+
+	if err := a.Store.UploadStream(ctx, key, contentType, body, a.Config.MaxAudioDownloadBytes); err != nil {
 		return err
 	}
 	sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})

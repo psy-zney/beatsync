@@ -600,6 +600,92 @@ func (s *Service) snapshotCookies() (string, func(), error) {
 	return name, cleanup, nil
 }
 
+type CleanupReader struct {
+	*os.File
+	cleanup func()
+	once    sync.Once
+}
+
+func (r *CleanupReader) Close() error {
+	err := r.File.Close()
+	r.once.Do(r.cleanup)
+	return err
+}
+
+// DownloadAudio downloads audio for the given YouTube videoID using yt-dlp to a temporary file,
+// avoiding bot/IP verification blocks that reject direct HTTP requests.
+func (s *Service) DownloadAudio(ctx context.Context, videoID string) (io.ReadCloser, string, func(), error) {
+	cookiesPath, cleanupCookies, err := s.snapshotCookies()
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("prepare YouTube cookies: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "beatsync-yt-download-*.webm")
+	if err != nil {
+		cleanupCookies()
+		return nil, "", nil, err
+	}
+	tmpPath := tmpFile.Name()
+	_ = tmpFile.Close()
+
+	cleanup := func() {
+		_ = os.Remove(tmpPath)
+		cleanupCookies()
+	}
+
+	watch := "https://www.youtube.com/watch?v=" + videoID
+	args := []string{
+		"--no-playlist",
+		"--no-warnings",
+		"--no-progress",
+		"--no-cache-dir",
+		"--force-overwrites",
+		"-f", "bestaudio/best",
+	}
+	if cookiesPath != "" {
+		args = append(args, "--cookies", cookiesPath)
+	}
+	args = append(args, "-o", tmpPath, watch)
+
+	downloadCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(downloadCtx, s.cfg.YTDLPPath, args...)
+	cmd.Env = append(os.Environ(), "YTDLP_PATH="+s.cfg.YTDLPPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if runErr := cmd.Run(); runErr != nil {
+		cleanup()
+		return nil, "", nil, fmt.Errorf("yt-dlp download failed: %w: %s", runErr, strings.TrimSpace(stderr.String()))
+	}
+
+	file, err := os.Open(tmpPath)
+	if err != nil {
+		cleanup()
+		return nil, "", nil, err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		cleanup()
+		return nil, "", nil, err
+	}
+	if stat.Size() == 0 {
+		_ = file.Close()
+		cleanup()
+		return nil, "", nil, errors.New("downloaded audio file is empty")
+	}
+
+	wrapped := &CleanupReader{
+		File:    file,
+		cleanup: cleanup,
+	}
+
+	return wrapped, "audio/webm", func() { _ = wrapped.Close() }, nil
+}
+
 type cappedBuffer struct {
 	bytes.Buffer
 	max      int

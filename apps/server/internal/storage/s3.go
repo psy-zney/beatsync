@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,6 +135,9 @@ func (c *Client) UploadStream(ctx context.Context, key, contentType string, sour
 	if copyErr != nil {
 		return copyErr
 	}
+	if written <= 0 {
+		return errors.New("cannot upload empty stream to object storage")
+	}
 	if written > maxBytes {
 		return fmt.Errorf("audio exceeds %d byte limit", maxBytes)
 	}
@@ -236,6 +240,9 @@ func (c *Client) signedRequest(ctx context.Context, method, key string, query ur
 		if info, statErr := file.Stat(); statErr == nil {
 			request.ContentLength = info.Size()
 		}
+	}
+	if request.ContentLength > 0 {
+		request.Header.Set("Content-Length", strconv.FormatInt(request.ContentLength, 10))
 	}
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
