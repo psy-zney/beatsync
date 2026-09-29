@@ -67,7 +67,16 @@ export const Join = () => {
           <InputOTP
             maxLength={6}
             value={roomId}
-            onChange={(value) => setRoomId(value.replace(/\D/g, ""))}
+            onChange={(value) => {
+              const val = value.replace(/\D/g, "");
+              setRoomId(val);
+              if (val.length === 6) {
+                setTimeout(() => {
+                  const form = document.getElementById("profile-setup-form") as HTMLFormElement | null;
+                  if (form) form.requestSubmit();
+                }, 100);
+              }
+            }}
             inputMode="numeric"
             pattern="[0-9]*"
             aria-label="Room code"

@@ -208,6 +208,7 @@ export const ProfileSetup = ({
   return (
     <main className="min-h-dvh bg-neutral-950 text-white flex flex-col items-center justify-center px-4 py-8">
       <form
+        id="profile-setup-form"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
