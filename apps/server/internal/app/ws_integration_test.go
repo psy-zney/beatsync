@@ -29,8 +29,12 @@ func newWebSocketTestServer(t *testing.T) (*App, *httptest.Server) {
 }
 
 func dialTestClient(t *testing.T, server *httptest.Server, clientID string) *websocket.Conn {
+	return dialTestRoomClient(t, server, "090624", clientID)
+}
+
+func dialTestRoomClient(t *testing.T, server *httptest.Server, roomID, clientID string) *websocket.Conn {
 	t.Helper()
-	endpoint := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?roomId=090624&username=Tester&clientId=" + clientID
+	endpoint := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?roomId=" + roomID + "&username=Tester&clientId=" + clientID
 	connection, response, err := websocket.DefaultDialer.Dial(endpoint, nil)
 	if err != nil {
 		status := 0
@@ -42,6 +46,55 @@ func dialTestClient(t *testing.T, server *httptest.Server, clientID string) *web
 	t.Cleanup(func() { connection.Close() })
 	_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 	return connection
+}
+
+func TestMultipleRoomsKeepPlaylistsSeparateAndReportNewRoom(t *testing.T) {
+	t.Parallel()
+	application, server := newWebSocketTestServer(t)
+	first := dialTestRoomClient(t, server, "123456", "first-room-client")
+	joined := readUntil(t, first, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	if joined["isNewRoom"] != true {
+		t.Fatalf("first room join = %#v", joined)
+	}
+	if err := first.WriteJSON(map[string]any{"type": "IMPORT_PLAYLIST", "sources": []model.AudioSource{
+		{URL: "/youtube/proxy?videoId=dQw4w9WgXcQ", Title: "Saved track"},
+		{URL: "javascript:alert(1)", Title: "Invalid"},
+		{URL: "https://untrusted.test/track.mp3", Title: "Invalid host"},
+		{URL: "/youtube/proxy?videoId=dQw4w9WgXcQ", Title: "Saved track"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, first, func(message map[string]any) bool {
+		event, _ := message["event"].(map[string]any)
+		return event["type"] == "SET_AUDIO_SOURCES"
+	})
+	state, _ := application.Rooms.Get("123456")
+	sources, _, _, _, _, _, _ := state.State()
+	if len(sources) != 1 || sources[0].Title != "Saved track" {
+		t.Fatalf("imported sources = %#v", sources)
+	}
+	second := dialTestRoomClient(t, server, "654321", "second-room-client")
+	joined = readUntil(t, second, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	if joined["isNewRoom"] != true {
+		t.Fatalf("second room join = %#v", joined)
+	}
+	secondState, _ := application.Rooms.Get("654321")
+	secondSources, _, _, _, _, _, _ := secondState.State()
+	if len(secondSources) != 0 {
+		t.Fatalf("sources leaked to second room: %#v", secondSources)
+	}
+	late := dialTestRoomClient(t, server, "123456", "late-room-client")
+	joined = readUntil(t, late, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	if joined["isNewRoom"] != false {
+		t.Fatalf("existing room must not suggest an import: %#v", joined)
+	}
+	if err := first.WriteJSON(map[string]any{"type": "SAVE_PLAYLIST"}); err != nil {
+		t.Fatal(err)
+	}
+	save := readUntil(t, first, func(message map[string]any) bool { return message["type"] == "SAVE_PLAYLIST_RESPONSE" })
+	if save["success"] != false {
+		t.Fatalf("normal room must not save to object storage: %#v", save)
+	}
 }
 
 func readUntil(t *testing.T, connection *websocket.Conn, match func(map[string]any) bool) map[string]any {

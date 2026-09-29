@@ -7,6 +7,7 @@ interface RoomStateValues {
   username: string;
   avatar: string;
   isLoadingRoom: boolean;
+  playlistImportOpen: boolean;
 }
 
 interface RoomState extends RoomStateValues {
@@ -14,6 +15,7 @@ interface RoomState extends RoomStateValues {
   setUsername: (username: string) => void;
   setAvatar: (avatar: string) => void;
   setIsLoading: (isLoading: boolean) => void;
+  setPlaylistImportOpen: (open: boolean) => void;
   reset: () => void;
 }
 
@@ -23,6 +25,7 @@ const initialState: RoomStateValues = {
   username: "",
   avatar: "🎧",
   isLoadingRoom: false,
+  playlistImportOpen: false,
 };
 
 export const useRoomStore = create<RoomState>()((set) => ({
@@ -34,6 +37,7 @@ export const useRoomStore = create<RoomState>()((set) => ({
   setUsername: (username) => set({ username }),
   setAvatar: (avatar) => set({ avatar }),
   setIsLoading: (isLoading) => set({ isLoadingRoom: isLoading }),
+  setPlaylistImportOpen: (playlistImportOpen) => set({ playlistImportOpen }),
 
   // Reset to initial state
   reset: () =>

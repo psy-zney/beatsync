@@ -78,7 +78,7 @@ export const AudioDeviceSelector = () => {
           type="button"
           onClick={() => void fetchDevices()}
           className="text-neutral-500 hover:text-white"
-          title="Quét lại thiết bị"
+          title="Refresh devices"
         >
           <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
         </button>
@@ -94,12 +94,12 @@ export const AudioDeviceSelector = () => {
             onChange={(event) => void switchAudioInputDevice(event.target.value)}
             className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
           >
-            <option value="none">Tắt microphone</option>
-            <option value="default">Mặc định hệ thống</option>
+            <option value="none">Microphone off</option>
+            <option value="default">System default</option>
             {audioInputDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
                 {device.label || `Microphone ${device.deviceId.substring(0, 5)}…`}
-                {device.deviceId === preferredMacMic?.deviceId ? " · khuyên dùng" : ""}
+                {device.deviceId === preferredMacMic?.deviceId ? " · recommended" : ""}
               </option>
             ))}
           </select>
@@ -114,7 +114,7 @@ export const AudioDeviceSelector = () => {
             onChange={(event) => void switchAudioOutputDevice(event.target.value)}
             className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
           >
-            <option value="default">Mặc định hệ thống</option>
+            <option value="default">System default</option>
             {audioOutputDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
                 {device.label || `Speaker ${device.deviceId.substring(0, 5)}…`}
@@ -127,9 +127,7 @@ export const AudioDeviceSelector = () => {
           <div className="space-y-2 rounded-md border border-amber-400/25 bg-amber-400/10 p-2 text-[11px] leading-4 text-amber-100">
             <div className="flex gap-2">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                Mic tai nghe Bluetooth có thể buộc macOS chuyển sang chế độ đàm thoại và làm giảm chất lượng nhạc.
-              </span>
+              <span>A Bluetooth headset microphone can switch macOS to call mode and reduce music quality.</span>
             </div>
             {preferredMacMic && (
               <button
@@ -137,14 +135,14 @@ export const AudioDeviceSelector = () => {
                 onClick={() => void switchAudioInputDevice(preferredMacMic.deviceId)}
                 className="flex w-full items-center justify-center gap-1.5 rounded bg-white px-2 py-1.5 font-semibold text-black hover:bg-neutral-200"
               >
-                <Laptop className="size-3.5" /> Dùng mic của Mac
+                <Laptop className="size-3.5" /> Use Mac microphone
               </button>
             )}
           </div>
         )}
 
         <p className="text-[10px] leading-4 text-neutral-600">
-          Đổi Speaker áp dụng cho cả nhạc và voice trên trình duyệt có hỗ trợ. Safari có thể vẫn theo đầu ra của macOS.
+          Changing the speaker affects music and calls in supported browsers. Safari may follow the macOS output device.
         </p>
       </div>
     </div>

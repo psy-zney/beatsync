@@ -303,6 +303,14 @@ func (a *App) handleYouTubeUpload(writer http.ResponseWriter, request *http.Requ
 func (a *App) handleYouTubeProxy(writer http.ResponseWriter, request *http.Request) {
 	videoID, target := request.URL.Query().Get("videoId"), request.URL.Query().Get("url")
 	if videoID != "" {
+		// Saved browser playlists use stable video IDs. Reuse any existing R2
+		// cache before resolving a fresh stream, without uploading new objects.
+		if a.Store != nil && youtube.ParseVideoID(videoID) == videoID {
+			if key := a.cachedYouTubeKey(request.Context(), videoID); key != "" {
+				http.Redirect(writer, request, a.Store.PublicURL(key), http.StatusTemporaryRedirect)
+				return
+			}
+		}
 		resolved, err := a.YouTube.Resolve(request.Context(), videoID)
 		if err != nil {
 			jsonError(writer, err.Error(), http.StatusInternalServerError)

@@ -28,13 +28,13 @@ export const ConnectionStatusBanner = () => {
             <WifiOff className="mt-0.5 size-4 shrink-0 text-amber-400" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-xs font-semibold">
-                Mất kết nối tạm thời
+                Temporarily disconnected
                 <Loader2 className="size-3 animate-spin text-amber-400" />
               </div>
               <p className="mt-0.5 text-[11px] leading-relaxed text-neutral-300">
-                Đang tự kết nối lại (lần {reconnectionInfo.currentAttempt}). Giao diện và nhạc đã lưu trong RAM vẫn được
-                giữ nguyên.
-                {isWaitingForAudio && " Bài chưa tải xong sẽ tiếp tục loading khi có mạng."}
+                Reconnecting automatically (attempt {reconnectionInfo.currentAttempt}). Your session and cached music
+                stay available.
+                {isWaitingForAudio && " Pending tracks will resume loading when the connection returns."}
               </p>
             </div>
           </div>

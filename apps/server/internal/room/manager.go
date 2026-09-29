@@ -21,14 +21,18 @@ func (m *Manager) Get(id string) (*Room, bool) {
 	return room, ok
 }
 func (m *Manager) GetOrCreate(id string) *Room {
+	r, _ := m.GetOrCreateWithStatus(id)
+	return r
+}
+func (m *Manager) GetOrCreateWithStatus(id string) (*Room, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if r := m.rooms[id]; r != nil {
-		return r
+		return r, false
 	}
 	r := New(id)
 	m.rooms[id] = r
-	return r
+	return r, true
 }
 func (m *Manager) Delete(id string) { m.mu.Lock(); delete(m.rooms, id); m.mu.Unlock() }
 func (m *Manager) Rooms() []*Room {

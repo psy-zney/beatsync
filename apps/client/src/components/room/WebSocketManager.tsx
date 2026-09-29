@@ -3,6 +3,7 @@ import { useClientId } from "@/hooks/useClientId";
 import { useNtpHeartbeat } from "@/hooks/useNtpHeartbeat";
 import { useWebSocketReconnection } from "@/hooks/useWebSocketReconnection";
 import { getWsUrl } from "@/lib/urls";
+import { PERSISTENT_ROOM_ID, readSavedPlaylists, rememberRecentRoom } from "@/lib/browserLibrary";
 import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const setMessages = useChatStore((state) => state.setMessages);
   const handleLoadAudioSource = useGlobalStore((state) => state.handleLoadAudioSource);
   const hasConnectedOnceRef = useRef(false);
+  const hasReceivedRoomStateRef = useRef(false);
 
   // Use the NTP heartbeat hook
   const { startHeartbeat, stopHeartbeat } = useNtpHeartbeat();
@@ -88,7 +90,7 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const creatorParam = creatorSecret ? `&creator=${encodeURIComponent(creatorSecret)}` : "";
 
   const createConnection = () => {
-    const SOCKET_URL = `${getWsUrl()}?roomId=${roomId}&username=${username}&clientId=${clientId}${adminParam}${creatorParam}`;
+    const SOCKET_URL = `${getWsUrl()}?roomId=${roomId}&username=${encodeURIComponent(username)}&clientId=${clientId}${adminParam}${creatorParam}`;
     console.log("Creating new WS connection to", SOCKET_URL);
 
     // Clear the actual current connection, including sockets created by a
@@ -173,7 +175,18 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         useGlobalStore.setState({ lastMessageReceivedTime: Date.now() });
       }
 
-      if (response.type === "NTP_RESPONSE") {
+      if (response.type === "ROOM_JOINED") {
+        rememberRecentRoom(roomId);
+        if (
+          !hasReceivedRoomStateRef.current &&
+          response.isNewRoom &&
+          roomId !== PERSISTENT_ROOM_ID &&
+          readSavedPlaylists().length > 0
+        ) {
+          useRoomStore.getState().setPlaylistImportOpen(true);
+        }
+        hasReceivedRoomStateRef.current = true;
+      } else if (response.type === "NTP_RESPONSE") {
         const pairResult = handleNTPResponse(response);
         if (pairResult) {
           addProbePairResult(pairResult);
@@ -360,14 +373,19 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
       // Clean up reconnection state
       cleanupReconnection();
 
-      // Clear the onclose handler to prevent reconnection attempts - this is an intentional close
-      ws.onclose = () => {
-        console.log("Websocket closed by cleanup");
-      };
-
-      // Stop NTP heartbeat
       stopHeartbeat();
-      ws.close();
+      // A reconnect may have replaced the first socket. Close both so leaving
+      // a room cannot reconnect it over the connection for the next room.
+      const currentSocket = useGlobalStore.getState().socket;
+      for (const connection of new Set([ws, currentSocket])) {
+        if (!connection) continue;
+        connection.onclose = null;
+        connection.onerror = null;
+        connection.onmessage = null;
+        connection.onopen = null;
+        connection.close();
+      }
+      if (useGlobalStore.getState().socket === currentSocket) setSocket(null);
     };
     // Not including socket in the dependency array because it will trigger the close when it's set
     // eslint-disable-next-line react-hooks/exhaustive-deps

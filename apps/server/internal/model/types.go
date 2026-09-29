@@ -89,6 +89,7 @@ type WSRequest struct {
 	TargetClientID        string          `json:"targetClientId"`
 	Signal                any             `json:"signal"`
 	Tracks                []SpotifyTrack  `json:"tracks"`
+	Sources               []AudioSource   `json:"sources"`
 	Avatar                string          `json:"avatar"`
 }
 

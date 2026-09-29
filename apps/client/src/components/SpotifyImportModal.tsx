@@ -7,8 +7,10 @@ import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum } from "@beatsync/shared";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
-import { Check, CheckSquare, ListMusic, Loader2, Plus, Square, X } from "lucide-react";
+import { CheckSquare, ListMusic, Loader2, Plus, Square, X } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { SavedPlaylistPicker } from "./SavedPlaylistPicker";
+import { readSavedPlaylists } from "@/lib/browserLibrary";
 
 // Spotify Green Brand Color SVG Icon
 const SpotifyLogo = ({ className = "size-4" }: { className?: string }) => (
@@ -23,6 +25,7 @@ interface SpotifyImportModalProps {
 }
 
 export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps) {
+  const [tab, setTab] = useState<"saved" | "spotify">(() => (readSavedPlaylists().length ? "saved" : "spotify"));
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resolvedData, setResolvedData] = useState<SpotifyResolveResponse["data"] | null>(null);
@@ -33,7 +36,7 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
   const handleAnalyze = async () => {
     const cleanUrl = spotifyUrl.trim();
-    if (!cleanUrl) return toast.error("Vui lòng nhập đường link Spotify (Playlist, Album hoặc Track).");
+    if (!cleanUrl) return toast.error("Please enter a Spotify playlist, album, or track link.");
 
     setIsLoading(true);
     setResolvedData(null);
@@ -49,13 +52,13 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
         const allIndices = new Set<number>();
         res.data.tracks.forEach((_, index) => allIndices.add(index));
         setSelectedIndices(allIndices);
-        toast.success(`Đã lấy được ${res.data.tracks.length} bài hát từ ${res.data.title}`);
+        toast.success(`Found ${res.data.tracks.length} tracks in ${res.data.title}`);
       } else {
-        toast.error("Không thể phân tích danh sách phát Spotify.");
+        toast.error("Could not resolve this Spotify playlist.");
       }
     } catch (err) {
       console.error("Spotify resolve error:", err);
-      toast.error(err instanceof Error ? err.message : "Lỗi khi tải thông tin Spotify.");
+      toast.error(err instanceof Error ? err.message : "Failed to load Spotify details.");
     } finally {
       setIsLoading(false);
     }
@@ -84,8 +87,8 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
   // Add selected tracks to room playlist
   const handleAddSelectedToRoom = async () => {
-    if (!socket) return toast.error("Chưa kết nối tới Server.");
-    if (!resolvedData || selectedIndices.size === 0) return toast.error("Chưa chọn bài hát nào.");
+    if (!socket) return toast.error("Not connected to the server.");
+    if (!resolvedData || selectedIndices.size === 0) return toast.error("No tracks selected.");
 
     setIsAdding(true);
 
@@ -107,58 +110,76 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
         },
       });
 
-      toast.success(`Đang xử lý thêm ${itemsToAdd.length} bài hát vào hàng chờ...`);
+      toast.success(`Adding ${itemsToAdd.length} tracks to the queue...`);
       onClose();
       // Reset modal state
       setResolvedData(null);
       setSpotifyUrl("");
     } catch (err) {
       console.error("Error sending Spotify tracks to queue:", err);
-      toast.error("Lỗi khi thêm bài hát vào phòng.");
+      toast.error("Failed to add tracks to this room.");
     } finally {
       setIsAdding(false);
     }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className="w-full max-w-xl rounded-2xl bg-neutral-950 border border-emerald-900/40 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <SpotifyLogo className="size-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">Nhập Playlist từ Spotify</h2>
-                  <p className="text-xs text-neutral-400">
-                    Dán đường link Playlist, Album hoặc Track từ Spotify để thêm tự động vào phòng
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition-colors"
-              >
-                <X className="size-4" />
-              </button>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-xl rounded-2xl bg-neutral-950 border-emerald-900/40 p-0 gap-0 shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900/50">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <SpotifyLogo className="size-5" />
             </div>
+            <div>
+              <DialogTitle className="text-base font-bold text-white">Import playlist</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-neutral-400">
+                Reuse a saved playlist or import from Spotify
+              </DialogDescription>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close playlist import"
+            className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition-colors"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
 
-            {/* Modal Body */}
-            <div className="p-4 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
+        {/* Modal Body */}
+        <div className="p-4 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
+          <div className="grid grid-cols-2 gap-2" aria-label="Playlist source">
+            <button
+              type="button"
+              aria-pressed={tab === "saved"}
+              onClick={() => setTab("saved")}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${tab === "saved" ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-900 text-neutral-400"}`}
+            >
+              Saved playlists
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === "spotify"}
+              onClick={() => setTab("spotify")}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${tab === "spotify" ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-900 text-neutral-400"}`}
+            >
+              Spotify
+            </button>
+          </div>
+          {tab === "saved" ? (
+            <SavedPlaylistPicker onClose={onClose} />
+          ) : (
+            <>
               {/* Input Section */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -179,10 +200,10 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                   {isLoading ? (
                     <>
                       <Loader2 className="size-4 animate-spin mr-1.5" />
-                      Đang xử lý...
+                      Loading...
                     </>
                   ) : (
-                    "Phân tích"
+                    "Find tracks"
                   )}
                 </Button>
               </div>
@@ -207,7 +228,7 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                       <div className="min-w-0">
                         <h3 className="text-sm font-bold text-white truncate">{resolvedData.title}</h3>
                         <p className="text-[11px] text-neutral-400">
-                          {resolvedData.tracks.length} bài hát • {selectedIndices.size} đã chọn
+                          {resolvedData.tracks.length} tracks • {selectedIndices.size} selected
                         </p>
                       </div>
                     </div>
@@ -218,11 +239,11 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                     >
                       {selectedIndices.size === resolvedData.tracks.length ? (
                         <>
-                          <CheckSquare className="size-3.5 text-emerald-400" /> Bỏ chọn tất cả
+                          <CheckSquare className="size-3.5 text-emerald-400" /> Deselect all
                         </>
                       ) : (
                         <>
-                          <Square className="size-3.5 text-neutral-400" /> Chọn tất cả
+                          <Square className="size-3.5 text-neutral-400" /> Select all
                         </>
                       )}
                     </button>
@@ -270,43 +291,43 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                   </div>
                 </div>
               )}
-            </div>
+            </>
+          )}
+        </div>
 
-            {/* Modal Footer */}
-            {resolvedData && (
-              <div className="p-4 border-t border-neutral-800 bg-neutral-900/50 flex items-center justify-between gap-3">
-                <span className="text-xs text-neutral-400">
-                  {selectedIndices.size} / {resolvedData.tracks.length} bài sẵn sàng
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={onClose}
-                    className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 text-xs"
-                  >
-                    Đóng
-                  </Button>
-                  <Button
-                    onClick={handleAddSelectedToRoom}
-                    disabled={isAdding || selectedIndices.size === 0}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 shadow-lg shadow-emerald-600/20"
-                  >
-                    {isAdding ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin mr-1.5" /> Đang thêm...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="size-3.5 mr-1" /> Thêm vào Hàng chờ
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        {/* Modal Footer */}
+        {tab === "spotify" && resolvedData && (
+          <div className="p-4 border-t border-neutral-800 bg-neutral-900/50 flex items-center justify-between gap-3">
+            <span className="text-xs text-neutral-400">
+              {selectedIndices.size} / {resolvedData.tracks.length} tracks ready
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 text-xs"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={handleAddSelectedToRoom}
+                disabled={isAdding || selectedIndices.size === 0}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 shadow-lg shadow-emerald-600/20"
+              >
+                {isAdding ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" /> Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="size-3.5 mr-1" /> Add to queue
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

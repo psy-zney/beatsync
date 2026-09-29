@@ -172,8 +172,8 @@ export const Chat = () => {
         <button
           type="button"
           className="text-neutral-400 transition-colors hover:text-white"
-          title={notificationVolume === 0 ? "Bật âm báo chat" : "Tắt âm báo chat"}
-          aria-label={notificationVolume === 0 ? "Bật âm báo chat" : "Tắt âm báo chat"}
+          title={notificationVolume === 0 ? "Enable chat sounds" : "Mute chat sounds"}
+          aria-label={notificationVolume === 0 ? "Enable chat sounds" : "Mute chat sounds"}
           onClick={() => {
             if (notificationVolume > 0) {
               lastAudibleVolumeRef.current = notificationVolume;
@@ -185,13 +185,15 @@ export const Chat = () => {
         >
           {notificationVolume === 0 ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
         </button>
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-neutral-500">Âm báo</span>
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+          Notifications
+        </span>
         <Slider
           value={[notificationVolume * 100]}
           min={0}
           max={100}
           step={1}
-          aria-label="Âm lượng thông báo chat"
+          aria-label="Chat notification volume"
           onValueChange={(value) => {
             const nextVolume = value[0] / 100;
             if (nextVolume > 0) lastAudibleVolumeRef.current = nextVolume;

@@ -4,6 +4,8 @@ import { getClientId } from "@/lib/clientId";
 import { getKickBuffer } from "@/components/dashboard/Metronome";
 import { IS_DEMO_MODE } from "@/lib/demo";
 import { getApiUrl } from "@/lib/urls";
+import { PERSISTENT_ROOM_ID, saveBrowserPlaylist } from "@/lib/browserLibrary";
+import { useRoomStore } from "@/store/room";
 import { extractFileNameFromUrl } from "@/lib/utils";
 import {
   calculateOffsetEstimate,
@@ -181,7 +183,7 @@ interface GlobalState extends GlobalStateValues {
   findAudioIndexByUrl: (url: string) => number | null;
   schedulePlay: (data: { trackTimeSeconds: number; targetServerTime: number; audioSource: string }) => void;
   schedulePause: (data: { targetServerTime: number }) => void;
-  setSocket: (socket: WebSocket) => void;
+  setSocket: (socket: WebSocket | null) => void;
   broadcastPlay: (trackTimeSeconds?: number) => void;
   broadcastPause: () => void;
   startSpatialAudio: () => void;
@@ -604,7 +606,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           const audioIndex = refreshedState.findAudioIndexByUrl(url);
           if (audioIndex !== null) {
             refreshedState.playAudio({ offset: 0, when: 0, audioIndex });
-            toast.info("Đã tải xong. Đang phát cục bộ trong lúc chờ kết nối lại.", {
+            toast.info("Track loaded. Playing locally while reconnecting.", {
               id: "offline-local-playback",
             });
           }
@@ -635,7 +637,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       }));
 
       if (isConnectionUnavailable) {
-        toast.warning("Bài này chưa có trong RAM. Beatsync sẽ tải lại khi kết nối được khôi phục.", {
+        toast.warning("This track is not cached. Beatsync will load it once the connection is restored.", {
           id: "offline-audio-loading",
         });
       }
@@ -1065,13 +1067,13 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
         if (audioIndex !== null && audioSource?.status === "loaded" && audioSource.buffer) {
           state.playAudio({ offset, when: 0, audioIndex });
-          toast.info("Server đang mất kết nối — nhạc có trong RAM vẫn được phát cục bộ.", {
+          toast.info("Server disconnected. Cached music will continue playing locally.", {
             id: "offline-local-playback",
           });
         } else {
           set({ awaitingSyncAfterLoadUrl: audioId });
           if (audioSource?.status !== "loading") void loadAudioSource(audioId);
-          toast.warning("Đang chờ tải bài và kết nối lại với server…", {
+          toast.warning("Waiting for the track to load and the server to reconnect…", {
             id: "offline-audio-loading",
           });
         }
@@ -1094,7 +1096,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       if (socket.readyState !== WebSocket.OPEN) {
         if (state.isPlaying) state.pauseAudio({ when: 0 });
-        toast.info("Đã tạm dừng cục bộ trong lúc mất kết nối.", {
+        toast.info("Playback paused locally while disconnected.", {
           id: "offline-local-playback",
         });
         return;
@@ -1134,6 +1136,19 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     savePlaylist: () => {
       const state = get();
+      const { roomId } = useRoomStore.getState();
+      if (roomId !== PERSISTENT_ROOM_ID) {
+        try {
+          saveBrowserPlaylist(
+            roomId,
+            state.audioSources.map((entry) => entry.source)
+          );
+          toast.success("Playlist saved in this browser.");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Could not save this playlist in your browser.");
+        }
+        return;
+      }
       const { socket } = getSocket(state);
 
       sendWSRequest({
@@ -1197,7 +1212,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         },
       });
       if (!sent) {
-        toast.warning("Tin nhắn chưa gửi được vì đang mất kết nối.");
+        toast.warning("Your message could not be sent while disconnected.");
       }
     },
 

@@ -36,6 +36,7 @@ export const ClientActionEnum = z.enum([
   "WEBRTC_SIGNAL", // WebRTC signaling message (Offer, Answer, ICE Candidate)
   "SAVE_PLAYLIST", // Save room playlist to bucket and clean up unused files
   "IMPORT_SPOTIFY_TRACKS", // Sequentially import spotify tracks
+  "IMPORT_PLAYLIST", // Import references from a playlist saved in the browser
   "UPDATE_PROFILE", // Broadcast the local avatar to other room members
 ]);
 
@@ -179,6 +180,14 @@ export const UpdateProfileSchema = z.object({
   avatar: AvatarSchema,
 });
 
+export const ImportPlaylistSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.IMPORT_PLAYLIST),
+  sources: z
+    .array(AudioSourceSchema.extend({ url: z.string().max(2048), title: z.string().max(300).optional() }))
+    .min(1)
+    .max(500),
+});
+
 export const WSRequestSchema = z.discriminatedUnion("type", [
   PlayActionSchema,
   PauseActionSchema,
@@ -203,6 +212,7 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   WebRTCSignalSchema,
   SavePlaylistSchema,
   ImportSpotifyTracksSchema,
+  ImportPlaylistSchema,
   UpdateProfileSchema,
 ]);
 export type WSRequestType = z.infer<typeof WSRequestSchema>;

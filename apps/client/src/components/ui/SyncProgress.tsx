@@ -130,7 +130,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            Server Backend Chưa Được Bật
+            The server is offline
           </motion.h2>
 
           <motion.p
@@ -139,8 +139,8 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.25 }}
           >
-            Đây là web nghe nhạc đồng bộ chạy Backend local trên máy cá nhân. Server chỉ được bật giới hạn khi nghe nhạc
-            cùng bạn bè — hãy liên hệ với Admin / Chủ phòng để bật Server nhé!
+            This app syncs music through a server hosted on a personal computer. The server is available during shared
+            listening sessions. Contact the admin or room host to bring it online.
           </motion.p>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs z-10">
@@ -160,7 +160,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
               whileTap={{ scale: 0.97 }}
               transition={{ duration: 0.2 }}
             >
-              Thử lại kết nối
+              Retry connection
             </motion.button>
 
             <motion.a
@@ -172,7 +172,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
               whileTap={{ scale: 0.97 }}
               transition={{ duration: 0.2 }}
             >
-              Về trang chủ
+              Back to home
             </motion.a>
           </div>
 
@@ -182,7 +182,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
-            Liên hệ Host để mở Server local khi bạn sẵn sàng nghe nhạc cùng nhau!
+            Contact the host to start the server when you are ready to listen together.
           </motion.p>
         </motion.div>
       </OuterModal>
@@ -246,7 +246,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            Đang kết nối lại tới Backend...
+            Reconnecting to the server...
           </motion.h2>
 
           <motion.p
@@ -256,8 +256,8 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
             transition={{ duration: 0.3, delay: 0.25 }}
           >
             {reconnectionInfo.maxAttempts > 0
-              ? `Thử lần ${reconnectionInfo.currentAttempt} trên ${reconnectionInfo.maxAttempts}`
-              : `Lần thử ${reconnectionInfo.currentAttempt} • sẽ tự động tiếp tục`}
+              ? `Attempt ${reconnectionInfo.currentAttempt} of ${reconnectionInfo.maxAttempts}`
+              : `Attempt ${reconnectionInfo.currentAttempt} • retrying automatically`}
           </motion.p>
         </motion.div>
       </OuterModal>
@@ -448,7 +448,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           className="mt-4 px-4 py-1.5 text-[10px] text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-full transition-colors cursor-pointer"
           onClick={() => setIsInitingSystem(false)}
         >
-          Bỏ qua hiệu chuẩn (Skip Calibration)
+          Skip calibration
         </button>
       </motion.div>
     </OuterModal>

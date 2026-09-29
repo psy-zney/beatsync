@@ -46,9 +46,11 @@ export const Fly = () => {
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Radio className="size-4" /> Fly · 3D Music
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-neutral-500">Stereo motion dành riêng cho nhạc đang nghe.</p>
+          <p className="mt-1 text-[11px] leading-4 text-neutral-500">
+            Stereo motion for the music you are listening to.
+          </p>
         </div>
-        <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Bật hoặc tắt Fly 3D Music" />
+        <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Toggle Fly 3D Music" />
       </div>
 
       <div
@@ -100,7 +102,7 @@ export const Fly = () => {
         </div>
         <div className="space-y-2">
           <div className="flex justify-between text-[11px] text-neutral-400">
-            <span>Độ rộng stereo</span>
+            <span>Stereo width</span>
             <span>{Math.round(width * 100)}%</span>
           </div>
           <Slider value={[width * 100]} onValueChange={([value]) => setWidth(value / 100)} min={0} max={100} step={1} />
@@ -108,8 +110,8 @@ export const Fly = () => {
         {mode === "auto" ? (
           <div className="space-y-2">
             <div className="flex justify-between text-[11px] text-neutral-400">
-              <span>Tốc độ qua lại</span>
-              <span>{cycleSeconds.toFixed(1)}s / vòng</span>
+              <span>Motion speed</span>
+              <span>{cycleSeconds.toFixed(1)}s / cycle</span>
             </div>
             <Slider
               value={[cycleSeconds]}
@@ -122,7 +124,7 @@ export const Fly = () => {
         ) : (
           <div className="space-y-2">
             <div className="flex justify-between text-[11px] text-neutral-400">
-              <span>Cân bằng thủ công</span>
+              <span>Manual balance</span>
               <span>
                 {manualPan === 0
                   ? "C"

@@ -32,7 +32,7 @@ const isMicrophonePermissionDenied = (error: unknown) => {
  */
 const requestMicrophonePermission = async (deviceId?: string) => {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Trình duyệt này không hỗ trợ microphone.");
+    throw new Error("This browser does not support microphones.");
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -265,7 +265,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         });
         room.on(RoomEvent.Reconnecting, () => {
           setIsReconnecting(true);
-          toast.message("Cuộc gọi đang tự kết nối lại…", { id: "voice-reconnecting" });
+          toast.message("Reconnecting the call…", { id: "voice-reconnecting" });
         });
         room.on(RoomEvent.SignalReconnecting, () => {
           setIsReconnecting(true);
@@ -274,7 +274,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           reconnectAttemptsRef.current = 0;
           setIsReconnecting(false);
           setIsConnected(true);
-          toast.success("Cuộc gọi đã kết nối lại", { id: "voice-reconnecting" });
+          toast.success("Call reconnected", { id: "voice-reconnecting" });
         });
         room.on(RoomEvent.ParticipantConnected, (participant) => {
           updateIdentitySet(setVoiceParticipantIds, participant.identity, true);
@@ -322,9 +322,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             const stream = new MediaStream([track.mediaStreamTrack]);
             setRemoteStreams((previous) => ({ ...previous, [participant.identity]: stream }));
             syncRemoteVolume();
-            element
-              .play()
-              .catch(() => toast.message("Chạm màn hình để bật âm thanh cuộc gọi", { id: "voice-playback" }));
+            element.play().catch(() => toast.message("Tap the screen to enable call audio", { id: "voice-playback" }));
           }
         );
         room.on(
@@ -362,7 +360,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             setIsConnected(true);
             setIsConnecting(false);
             setIsReconnecting(true);
-            toast.message("Mất tín hiệu cuộc gọi, đang tự gọi lại…", { id: "voice-reconnecting" });
+            toast.message("Call connection lost. Reconnecting…", { id: "voice-reconnecting" });
             scheduleReconnect();
           } else {
             setIsConnected(false);
@@ -429,7 +427,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         clearReconnectTimer();
         await room.localParticipant.setAttributes({ [DEAFENED_ATTRIBUTE]: String(isDeafened) }).catch(() => {});
 
-        toast.success(isRecovery ? "Cuộc gọi đã tự kết nối lại" : "Đã tham gia cuộc gọi", {
+        toast.success(isRecovery ? "Call reconnected automatically" : "Joined the call", {
           id: "voice-reconnecting",
         });
       } catch (error) {
@@ -451,10 +449,10 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           setIsReconnecting(false);
           toast.error(
             permissionDenied
-              ? "Trình duyệt chưa được cấp quyền microphone."
+              ? "Microphone access has not been granted in your browser."
               : error instanceof Error
                 ? error.message
-                : "Không thể tham gia cuộc gọi"
+                : "Could not join the call"
           );
         }
       } finally {
@@ -491,10 +489,10 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         toast.error(
           isMicrophonePermissionDenied(error)
-            ? "Safari chưa được cấp quyền microphone. Hãy bật Microphone trong cài đặt trang web rồi thử lại."
+            ? "Safari does not have microphone access. Allow Microphone in website settings and try again."
             : error instanceof Error
               ? error.message
-              : "Không thể truy cập microphone."
+              : "Could not access the microphone."
         );
         return;
       }
@@ -508,7 +506,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const toggleMute = useCallback(() => {
     const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
     if (audioInputDeviceId === "none") {
-      toast.error("Vui lòng chọn Microphone trong phần Cài đặt để nói chuyện.");
+      toast.error("Select a microphone in Settings to speak.");
       return;
     }
 
@@ -534,13 +532,13 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         desiredMutedRef.current = !nextMuted;
         setIsMuted(!nextMuted);
         if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, !nextMuted);
-        toast.error("Không thể cập nhật microphone");
+        toast.error("Could not update the microphone");
       });
   }, [clientId, isAINoiseSuppressionEnabled]);
 
   const toggleAINoiseSuppression = useCallback(() => {
     setIsAINoiseSuppressionEnabled((value) => !value);
-    toast.message("Khử ồn sẽ được áp dụng ở lần bật microphone tiếp theo.");
+    toast.message("Noise suppression will apply the next time you enable your microphone.");
   }, []);
 
   const switchAudioInputDevice = useCallback(
@@ -578,14 +576,14 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           desiredMutedRef.current = true;
           setIsMuted(true);
           if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, true);
-          toast.error("Không thể đổi microphone. Mic đã được tắt để bảo vệ chất lượng nhạc.");
+          toast.error("Could not change microphones. The microphone was turned off to preserve music quality.");
           return;
         }
       }
 
       if (room && !isMuted) {
         await room.switchActiveDevice("audioinput", deviceId === "default" ? "" : deviceId).catch(() => {
-          toast.error("Không thể đổi thiết bị microphone");
+          toast.error("Could not change the microphone device");
         });
       }
     },
@@ -598,7 +596,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       const room = roomRef.current;
 
       void audioContextManager.setOutputDevice(deviceId).catch(() => {
-        toast.error("Trình duyệt này không cho đổi đầu ra của nhạc.");
+        toast.error("This browser does not support changing the music output device.");
       });
 
       // Update all current audio elements manually as fallback
@@ -613,7 +611,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
       if (room) {
         await room.switchActiveDevice("audiooutput", deviceId).catch(() => {
-          toast.error("Không thể đổi thiết bị loa");
+          toast.error("Could not change the speaker device");
         });
       }
     },

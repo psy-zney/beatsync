@@ -85,7 +85,7 @@ export const YoutubeInput = () => {
               <button
                 type="button"
                 onClick={() => setIsSpotifyOpen(true)}
-                title="Nhập Playlist từ Spotify"
+                title="Import a Spotify playlist"
                 className="flex items-center gap-1 text-xs font-medium bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded transition-colors cursor-pointer"
               >
                 <SpotifyLogo className="h-3.5 w-3.5" />

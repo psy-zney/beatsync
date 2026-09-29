@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_AVATAR, type LocalProfile } from "@/lib/profile";
 import { Camera, Check, ImagePlus, RotateCw, Sliders, X, ZoomIn, ZoomOut } from "lucide-react";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -59,17 +59,33 @@ function processAvatarImage(imageSrc: string, scale: number, rotation: number): 
 export interface ProfileSetupProps {
   initialProfile?: LocalProfile | null;
   onSave: (profile: LocalProfile) => void;
+  onCreate?: (profile: LocalProfile) => void;
+  children?: ReactNode;
+  footer?: ReactNode;
+  submitLabel?: string;
+  disabled?: boolean;
 }
 
-export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
+export const ProfileSetup = ({
+  initialProfile,
+  onSave,
+  onCreate,
+  children,
+  footer,
+  submitLabel = "Join room",
+  disabled = false,
+}: ProfileSetupProps) => {
   const [name, setName] = useState(initialProfile?.name || "");
   const [avatar, setAvatar] = useState(initialProfile?.avatar || DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
 
   useEffect(() => {
     if (initialProfile) {
-      if (initialProfile.name) setName(initialProfile.name);
-      if (initialProfile.avatar) setAvatar(initialProfile.avatar);
+      queueMicrotask(() => {
+        if (initialProfile.name) setName(initialProfile.name);
+        if (initialProfile.avatar) setAvatar(initialProfile.avatar);
+      });
     }
   }, [initialProfile]);
 
@@ -84,10 +100,17 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    },
+    []
+  );
+
   // File select handler
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return toast.error("Vui lòng chọn một file ảnh hợp lệ.");
+    if (!file || !file.type.startsWith("image/")) return toast.error("Please choose a valid image file.");
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -111,7 +134,7 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
       setIsCameraOpen(true);
     } catch (err) {
       console.error("Camera access error:", err);
-      toast.error("Không thể truy cập camera. Vui lòng cấp quyền camera trên trình duyệt.");
+      toast.error("Camera access failed. Please allow camera access in your browser.");
     }
   };
 
@@ -165,116 +188,137 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
       const compressedAvatar = await processAvatarImage(rawImage, zoom, rotation);
       setAvatar(compressedAvatar);
       setRawImage(null);
-      toast.success("Đã nén và lưu ảnh đại diện mới!");
+      toast.success("Your new avatar is ready.");
     } catch (err) {
       console.error("Error cropping image:", err);
-      toast.error("Lỗi khi xử lý ảnh đại diện.");
+      toast.error("Failed to process your avatar.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const submit = () => {
+  const submit = (create = false) => {
+    if (disabled) return;
     const cleanName = name.trim();
-    if (!cleanName) return toast.error("Hãy nhập tên của bạn.");
-    onSave({ name: cleanName.slice(0, 32), avatar });
+    if (!cleanName) return toast.error("Please enter your name.");
+    const handler = create && onCreate ? onCreate : onSave;
+    handler({ name: cleanName.slice(0, 32), avatar });
   };
 
   return (
-    <main className="min-h-dvh bg-neutral-950 text-white grid place-items-center p-4">
-      <section className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl relative">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-purple-200 via-white to-purple-400 bg-clip-text text-transparent">
-          Chào mừng đến Beatsync
-        </h1>
-        <p className="mt-1 text-xs text-neutral-400">Tên và ảnh đại diện được lưu riêng trên trình duyệt này.</p>
+    <main className="min-h-dvh bg-neutral-950 text-white flex flex-col items-center justify-center px-4 py-8">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+        className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-5 sm:p-6 shadow-2xl relative"
+      >
+        <h1 className="text-lg font-bold text-white">Beatsync</h1>
+        <p className="mt-1 text-xs text-neutral-500">Your music, together.</p>
 
         {/* Current Avatar Preview & Trigger Actions */}
-        <div className="mt-6 flex flex-col items-center gap-3">
+        <div className="mt-5 flex items-center gap-3">
           <div className="relative group">
-            <Avatar className="size-20 border-2 border-purple-500/40 shadow-lg shadow-purple-500/10">
-              {avatar.startsWith("data:") ? (
-                <AvatarImage src={avatar} alt="Ảnh đại diện" className="object-cover" />
-              ) : null}
-              <AvatarFallback className="bg-indigo-600 text-3xl font-normal select-none">
+            <Avatar className="size-11 border border-purple-500/40">
+              {avatar.startsWith("data:") ? <AvatarImage src={avatar} alt="Avatar" className="object-cover" /> : null}
+              <AvatarFallback className="bg-neutral-800 text-xl font-normal select-none">
                 {avatar.startsWith("data:") ? "" : avatar}
               </AvatarFallback>
             </Avatar>
 
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Tải ảnh lên"
-              className="absolute -bottom-1 -right-1 grid size-7 place-items-center rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-md transition-transform hover:scale-110"
+              onClick={() => setShowAvatarOptions((show) => !show)}
+              title="Change avatar"
+              aria-label="Change avatar"
+              aria-expanded={showAvatarOptions}
+              className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-md"
             >
               <ImagePlus className="size-3.5" />
             </button>
           </div>
 
-          {/* Action buttons: Upload File / Take Camera */}
-          <div className="flex gap-2 w-full mt-1">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
-            >
-              <ImagePlus className="size-3.5 text-purple-400" />
-              Tải ảnh lên
-            </button>
-            <button
-              type="button"
-              onClick={startCamera}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
-            >
-              <Camera className="size-3.5 text-indigo-400" />
-              Chụp camera
-            </button>
+          <div className="min-w-0 flex-1">
+            <label className="block text-[11px] text-neutral-400" htmlFor="profile-name">
+              Display name
+            </label>
+            <input
+              id="profile-name"
+              maxLength={32}
+              value={name}
+              disabled={disabled}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Enter your name"
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2 text-sm outline-none focus:border-purple-500"
+            />
           </div>
-
-          {/* Emoji Preset Selector */}
-          <div className="flex flex-wrap justify-center gap-1.5 mt-2">
-            {AVATARS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setAvatar(item)}
-                className={`rounded-lg px-2.5 py-1 text-base transition-all ${
-                  avatar === item
-                    ? "bg-purple-600/40 ring-1 ring-purple-500 scale-105"
-                    : "bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         </div>
 
-        {/* Username Input */}
-        <div className="mt-5">
-          <label className="block text-xs font-medium text-neutral-300" htmlFor="profile-name">
-            Tên hiển thị
-          </label>
-          <input
-            id="profile-name"
-            autoFocus
-            maxLength={32}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && submit()}
-            placeholder="Nhập biệt danh của bạn..."
-            className="mt-1.5 w-full rounded-xl border border-neutral-700/80 bg-neutral-800/90 px-3.5 py-2 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all placeholder:text-neutral-500"
-          />
-        </div>
+        {showAvatarOptions && (
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-2 w-full">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
+              >
+                <ImagePlus className="size-3.5 text-purple-400" />
+                Upload photo
+              </button>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
+              >
+                <Camera className="size-3.5 text-indigo-400" />
+                Use camera
+              </button>
+            </div>
+
+            {/* Emoji Preset Selector */}
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {AVATARS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setAvatar(item)}
+                  className={`rounded-lg px-2.5 py-1 text-base transition-all ${
+                    avatar === item
+                      ? "bg-purple-600/40 ring-1 ring-purple-500 scale-105"
+                      : "bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {children}
 
         <Button
           className="mt-5 w-full rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold py-2.5 shadow-lg shadow-purple-600/20"
-          onClick={submit}
+          type="submit"
+          disabled={disabled}
         >
-          Hoàn tất & Vào phòng
+          {submitLabel}
         </Button>
-      </section>
+        {onCreate && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => submit(true)}
+            className="mt-2 w-full rounded-xl border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800"
+          >
+            Create new room
+          </Button>
+        )}
+      </form>
+      {footer}
 
       {/* Camera Capture Modal */}
       <AnimatePresence>
@@ -289,7 +333,7 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
               <div className="flex items-center justify-between w-full mb-3">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Camera className="size-4 text-purple-400" />
-                  Chụp ảnh đại diện
+                  Take an avatar photo
                 </h3>
                 <button
                   onClick={stopCamera}
@@ -312,13 +356,13 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
                   onClick={stopCamera}
                   className="flex-1 border-neutral-700 text-neutral-300 hover:bg-neutral-800"
                 >
-                  Hủy
+                  Cancel
                 </Button>
                 <Button
                   onClick={capturePhoto}
                   className="flex-1 bg-purple-600 hover:bg-purple-500 font-semibold text-white"
                 >
-                  Chụp ảnh
+                  Take photo
                 </Button>
               </div>
             </div>
@@ -339,7 +383,7 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
               <div className="flex items-center justify-between w-full mb-3">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Sliders className="size-4 text-purple-400" />
-                  Cắt & Xoay ảnh đại diện
+                  Crop and rotate avatar
                 </h3>
                 <button
                   onClick={() => setRawImage(null)}
@@ -399,7 +443,7 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
                   onClick={() => setRawImage(null)}
                   className="flex-1 border-neutral-700 text-neutral-300 hover:bg-neutral-800"
                 >
-                  Hủy
+                  Cancel
                 </Button>
                 <Button
                   onClick={applyCropAndCompress}
@@ -407,11 +451,11 @@ export const ProfileSetup = ({ initialProfile, onSave }: ProfileSetupProps) => {
                   className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold text-white"
                 >
                   {isProcessing ? (
-                    "Đang nén..."
+                    "Processing..."
                   ) : (
                     <>
                       <Check className="size-4 mr-1" />
-                      Áp dụng & Nén
+                      Apply changes
                     </>
                   )}
                 </Button>

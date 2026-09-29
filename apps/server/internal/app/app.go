@@ -110,7 +110,11 @@ func (a *App) RunBackground(ctx context.Context) {
 				for _, state := range a.Rooms.Rooms() {
 					state.PruneDisconnected(time.Now().Add(-10 * time.Minute))
 				}
-				removed := a.Rooms.CleanupIdle(a.Config.RoomIdleTTL, func(room *room.Room) { a.savePlaylist(context.Background(), room) })
+				removed := a.Rooms.CleanupIdle(a.Config.RoomIdleTTL, func(room *room.Room) {
+					if room.ID == persistentRoomID {
+						a.savePlaylist(context.Background(), room)
+					}
+				})
 				if removed > 0 {
 					log.Printf("released %d idle room(s)", removed)
 					debug.FreeOSMemory()

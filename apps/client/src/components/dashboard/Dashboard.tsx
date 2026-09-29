@@ -3,6 +3,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingEtaOverlay } from "@/components/LoadingEtaOverlay";
 import { useGlobalStore } from "@/store/global";
+import { useRoomStore } from "@/store/room";
+import { SpotifyImportModal } from "../SpotifyImportModal";
 import { Library, ListMusic, PartyPopper } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { TopBar } from "../room/TopBar";
@@ -18,6 +20,8 @@ interface DashboardProps {
 }
 
 export const Dashboard = ({ roomId }: DashboardProps) => {
+  const playlistImportOpen = useRoomStore((state) => state.playlistImportOpen);
+  const setPlaylistImportOpen = useRoomStore((state) => state.setPlaylistImportOpen);
   const isSynced = useGlobalStore((state) => state.isSynced);
   const isLoadingAudio = useGlobalStore((state) => state.isInitingSystem);
   const hasUserStartedSystem = useGlobalStore((state) => state.hasUserStartedSystem);
@@ -45,6 +49,7 @@ export const Dashboard = ({ roomId }: DashboardProps) => {
       <ConnectionStatusBanner />
       {/* Top bar: Fixed height */}
       <TopBar roomId={roomId} />
+      {playlistImportOpen && <SpotifyImportModal isOpen onClose={() => setPlaylistImportOpen(false)} />}
 
       {isReady && (
         <motion.div

@@ -10,8 +10,10 @@ import (
 	"github.com/psy-zney/beatsync/apps/server/internal/room"
 )
 
+const persistentRoomID = "090624"
+
 func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
-	if a.Store == nil {
+	if state.ID != persistentRoomID || a.Store == nil {
 		return
 	}
 	sources, _, _, _, _, _, _ := state.State()
@@ -34,7 +36,7 @@ func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
 }
 
 func (a *App) savePlaylist(parent context.Context, state *room.Room) error {
-	if a.Config.Demo {
+	if a.Config.Demo || state.ID != persistentRoomID {
 		return nil
 	}
 	if a.Store == nil {
@@ -71,7 +73,8 @@ func (a *App) cleanupUnusedRoomFiles(parent context.Context, state *room.Room) (
 		if object.Key == prefix+"playlist.json" || object.Key == prefix {
 			continue
 		}
-		if !used[a.Store.PublicURL(object.Key)] {
+		publicURL := a.Store.PublicURL(object.Key)
+		if !used[publicURL] && !a.usedByOtherRoom(state.ID, publicURL) {
 			if err := a.Store.Delete(ctx, object.Key); err != nil {
 				return deleted, err
 			}

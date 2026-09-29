@@ -25,5 +25,5 @@ export default async function Page({ params }: { params: Promise<{ roomId: strin
     );
   }
 
-  return <NewSyncer roomId={roomId} />;
+  return <NewSyncer key={roomId} roomId={roomId} />;
 }

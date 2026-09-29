@@ -35,11 +35,17 @@ export const SavePlaylistResponseSchema = z.object({
 });
 export type SavePlaylistResponseType = z.infer<typeof SavePlaylistResponseSchema>;
 
+export const RoomJoinedSchema = z.object({
+  type: z.literal("ROOM_JOINED"),
+  isNewRoom: z.boolean(),
+});
+
 export const WSUnicastSchema = z.discriminatedUnion("type", [
   NTPResponseMessageSchema,
   ScheduledActionSchema,
   MusicSearchResponseSchema,
   WebRTCSignalUnicastSchema,
   SavePlaylistResponseSchema,
+  RoomJoinedSchema,
 ]);
 export type WSUnicastType = z.infer<typeof WSUnicastSchema>;

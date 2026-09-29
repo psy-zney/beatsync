@@ -6,11 +6,24 @@ BeatSync là ứng dụng nghe nhạc đồng bộ theo thời gian thực giữ
 
 - Đồng bộ play, pause, chuyển bài và vị trí phát qua WebSocket.
 - Hàng chờ dùng chung, tìm kiếm YouTube và nhập playlist Spotify.
+- Create multiple rooms with 6-digit codes, suggest recent rooms, and save personal playlists in the browser.
 - Chat, avatar, vị trí người nghe và voice chat qua LiveKit.
 - Fly/3D Audio với chuyển âm trái/phải và điều chỉnh thủ công.
 - Upload nhạc theo luồng lên S3/R2, không giữ toàn bộ file trong RAM.
 - Backend tự giới hạn hàng chờ, giảm tải khi thiếu RAM và khôi phục state từ backup.
 - Spotify API key là tùy chọn; khi không có key, backend dùng metadata public.
+
+## Rooms and saved playlists
+
+The home page lets listeners enter a room code or create a new room. The name and avatar sit in a compact row above the room code; avatar options open on demand. The browser suggests the six most recent rooms that were joined successfully.
+
+In regular rooms, **Save** stores track titles and references in the current browser's `localStorage`. Compact text records replace YouTube cache links with video IDs. The library supports up to 20 playlists, 500 tracks per playlist, and 1 MB in total. A full library asks the listener to delete an old playlist rather than overwrite another list. Long playlists use local storage because cookies have a small capacity and travel with requests.
+
+Creating a new room with saved playlists in the browser prompts the listener to reuse a list. Joining an existing room opens the import dialog only through **Import**. The dialog supports selecting saved playlists and individual tracks or importing from Spotify; importing adds tracks to the current queue.
+
+**Exception: room `090624` continues saving and restoring its playlist through R2**, including automatic saving when an idle room is released. Other rooms do not read or write `room-<code>/playlist.json` in R2.
+
+The browser library contains track metadata. Uploads, audio caches, and operational backups still use S3/R2; this change does not impose a storage limit on those files. Deleted uploads must be uploaded again. Clearing browser data removes locally saved playlists and room history.
 
 ## Kiến trúc
 

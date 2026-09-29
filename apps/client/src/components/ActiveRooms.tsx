@@ -9,7 +9,7 @@ import { ChevronRight, Users2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 
-export const ActiveRooms = () => {
+export const ActiveRooms = ({ onJoin }: { onJoin?: (roomId: string) => void }) => {
   const router = useRouter();
   const username = useRoomStore((state) => state.username);
   const setUsername = useRoomStore((state) => state.setUsername);
@@ -21,6 +21,10 @@ export const ActiveRooms = () => {
   });
 
   const handleJoinRoom = (roomId: string) => {
+    if (onJoin) {
+      onJoin(roomId);
+      return;
+    }
     // Ensure username is set
     if (!username) {
       const generatedName = generateName();
@@ -36,17 +40,19 @@ export const ActiveRooms = () => {
 
   return (
     <motion.div
-      className="mt-12 w-full max-w-[32rem] mb-32"
+      className="mt-6 w-full max-w-md"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
     >
-      <h3 className="text-xs font-medium text-neutral-500 mb-1.5 uppercase tracking-[0.1em]">Playing Now</h3>
+      <h3 className="text-xs font-medium text-neutral-500 mb-1.5 uppercase tracking-[0.1em]">Active rooms</h3>
       <div className="space-y-1">
         <AnimatePresence initial={true}>
           {discoverRooms.map((room, index) => (
-            <motion.div
+            <motion.button
               key={room.roomId}
+              type="button"
+              aria-label={`Select room ${room.roomId}`}
               layout
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -77,7 +83,7 @@ export const ActiveRooms = () => {
                 },
               }}
               className={cn(
-                "group relative rounded-md p-3 -mx-3",
+                "group relative w-full rounded-md p-3 text-left",
                 "hover:bg-white/[0.05] transition-colors duration-200 cursor-pointer"
               )}
               onClick={() => handleJoinRoom(room.roomId)}
@@ -182,7 +188,7 @@ export const ActiveRooms = () => {
                 {/* Arrow */}
                 <ChevronRight className="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 transition-colors flex-shrink-0" />
               </div>
-            </motion.div>
+            </motion.button>
           ))}
         </AnimatePresence>
       </div>

@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { SearchResults } from "./SearchResults";
-import { SpotifyImportModal } from "../SpotifyImportModal";
+import { useRoomStore } from "@/store/room";
 
 const SpotifyLogo = ({ className = "size-4" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -25,7 +25,7 @@ interface SearchForm {
 export function InlineSearch() {
   const [showResults, setShowResults] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
-  const [isSpotifyOpen, setIsSpotifyOpen] = React.useState(false);
+  const setPlaylistImportOpen = useRoomStore((state) => state.setPlaylistImportOpen);
   const [showCheckmark, setShowCheckmark] = React.useState(false);
   const isMobile = useIsMobile();
   const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -328,16 +328,15 @@ export function InlineSearch() {
         {/* Spotify Import Trigger Button */}
         <button
           type="button"
-          onClick={() => setIsSpotifyOpen(true)}
-          title="Nhập Playlist từ Spotify"
+          onClick={() => setPlaylistImportOpen(true)}
+          title="Import a saved playlist or Spotify playlist"
+          aria-label="Import a saved playlist or Spotify playlist"
           className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 border border-emerald-500/30 text-xs font-semibold shadow-lg hover:shadow-emerald-500/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"
         >
           <SpotifyLogo className="size-4" />
-          <span className="hidden sm:inline">Spotify</span>
+          <span>Import</span>
         </button>
       </div>
-
-      <SpotifyImportModal isOpen={isSpotifyOpen} onClose={() => setIsSpotifyOpen(false)} />
 
       {/* Beta Disclaimer */}
       <div className="mt-2 flex items-center gap-1 text-[10px] font-mono text-neutral-500 ml-0.5">

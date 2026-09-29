@@ -32,3 +32,6 @@ target/
 *.dll
 *.rlib
 *.rmeta
+
+# Sensitive documentation
+INFRASTRUCTURE_CONG_VPS.txt

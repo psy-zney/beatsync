@@ -2,6 +2,9 @@
 import { readLocalProfile, saveLocalProfile } from "@/lib/profile";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useRoomStore } from "@/store/room";
+import { useGlobalStore } from "@/store/global";
+import { useChatStore } from "@/store/chat";
+import Link from "next/link";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { IS_DEMO_MODE } from "@/lib/demo";
@@ -27,21 +30,32 @@ export const NewSyncer = ({ roomId }: NewSyncerProps) => {
   const username = useRoomStore((state) => state.username);
 
   const [isConfirmedProfile, setIsConfirmedProfile] = useState(false);
-  const [localProfile] = useState<LocalProfile | null>(() => {
-    if (typeof window !== "undefined") {
-      return readLocalProfile();
-    }
-    return null;
-  });
+  const [localProfile, setLocalProfile] = useState<LocalProfile | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Update document title based on playback state
   useDocumentTitle();
 
   useEffect(() => {
+    if (useRoomStore.getState().roomId !== roomId) {
+      useGlobalStore.getState().resetStore();
+      useChatStore.getState().reset();
+      useRoomStore.getState().reset();
+    }
     setRoomId(roomId);
-    queueMicrotask(() => setIsLoaded(true));
-  }, [roomId, setRoomId]);
+    const saved = readLocalProfile();
+    const current = useRoomStore.getState();
+    const profile = saved ?? (current.username ? { name: current.username, avatar: current.avatar } : null);
+    if (profile) {
+      setUsername(profile.name);
+      setAvatar(profile.avatar);
+    }
+    queueMicrotask(() => {
+      setLocalProfile(profile);
+      setIsConfirmedProfile(!!profile);
+      setIsLoaded(true);
+    });
+  }, [roomId, setRoomId, setUsername, setAvatar]);
 
   if (!isLoaded) return null;
 
@@ -50,12 +64,26 @@ export const NewSyncer = ({ roomId }: NewSyncerProps) => {
       <ProfileSetup
         initialProfile={localProfile}
         onSave={(profile) => {
-          saveLocalProfile(profile);
+          try {
+            saveLocalProfile(profile);
+          } catch {
+            /* Profile still works for this session. */
+          }
           setUsername(profile.name);
           setAvatar(profile.avatar);
           setIsConfirmedProfile(true);
         }}
-      />
+      >
+        <div className="my-6 text-center">
+          <p className="text-sm text-neutral-400">You are joining room</p>
+          <p className="mt-2 font-mono text-3xl tracking-[0.2em]">{roomId}</p>
+          {!IS_DEMO_MODE && (
+            <Link href="/" className="mt-3 inline-block text-xs text-neutral-400 hover:text-white">
+              Choose another room
+            </Link>
+          )}
+        </div>
+      </ProfileSetup>
     );
   }
 

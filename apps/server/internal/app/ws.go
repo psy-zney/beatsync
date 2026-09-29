@@ -31,10 +31,6 @@ func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request)
 		jsonError(writer, "Only room "+a.Config.DemoRoomID+" is available in demo mode", http.StatusBadRequest)
 		return
 	}
-	if !a.Config.Demo && roomID != "090624" {
-		jsonError(writer, "Only room 090624 is available", http.StatusBadRequest)
-		return
-	}
 	if a.Hub.Count(roomID) >= a.Config.MaxConnectionsPerRoom {
 		jsonError(writer, "Room is full", http.StatusServiceUnavailable)
 		return
@@ -47,7 +43,7 @@ func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request)
 	client := realtime.NewClient(roomID, clientID, username, creator, connection)
 	a.Hub.Register(client)
 	client.StartWriter()
-	roomState := a.Rooms.GetOrCreate(roomID)
+	roomState, isNewRoom := a.Rooms.GetOrCreateWithStatus(roomID)
 	if a.Config.Demo {
 		a.prepareDemoRoom(roomState)
 	} else {
@@ -55,6 +51,7 @@ func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request)
 	}
 	clients, _ := roomState.AddClient(model.Client{Username: username, ClientID: clientID, IsCreator: creator, JoinedAt: nowMS()})
 	a.sendInitialState(client, roomState, clients)
+	client.Send(map[string]any{"type": "ROOM_JOINED", "isNewRoom": isNewRoom && !a.Config.Demo})
 	log.Printf("WebSocket opened: room=%s client=%s user=%q", roomID, clientID, username)
 
 	client.ReadPump(a.Config.MaxWebSocketMessageSize, func(payload []byte) { a.handleWSMessage(client, roomState, payload) })
@@ -236,6 +233,10 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 		a.Hub.Send(client.RoomID, message.TargetClientID, map[string]any{"type": "WEBRTC_SIGNAL", "sourceClientId": client.ClientID, "signal": message.Signal})
 	case "SAVE_PLAYLIST":
 		go a.handleSavePlaylist(client, state)
+	case "IMPORT_PLAYLIST":
+		if !a.Config.Demo && len(message.Sources) > 0 && len(message.Sources) <= 500 {
+			a.importBrowserPlaylist(client, state, message.Sources)
+		}
 	case "IMPORT_SPOTIFY_TRACKS":
 		if len(message.Tracks) > 0 && len(message.Tracks) <= 500 {
 			go a.importSpotify(client.RoomID, state, message.Tracks)
@@ -339,7 +340,7 @@ func (a *App) deleteSources(roomID string, state *room.Room, urls []string) {
 		}
 		remove[raw] = true
 		key, ok := a.storageKey(raw)
-		if !ok || a.Config.Demo || (strings.Contains(key, "youtube-cache/") && a.usedByOtherRoom(roomID, raw)) {
+		if !ok || a.Config.Demo || a.usedByOtherRoom(roomID, raw) {
 			continue
 		}
 		if a.Store != nil {
@@ -356,6 +357,10 @@ func (a *App) deleteSources(roomID string, state *room.Room, urls []string) {
 }
 
 func (a *App) handleSavePlaylist(client *realtime.Client, state *room.Room) {
+	if state.ID != persistentRoomID {
+		client.Send(map[string]any{"type": "SAVE_PLAYLIST_RESPONSE", "success": false, "message": "Save this room's playlist in your browser instead.", "deletedCount": 0})
+		return
+	}
 	if a.Config.Demo {
 		client.Send(map[string]any{"type": "SAVE_PLAYLIST_RESPONSE", "success": false, "message": "Saving playlists is disabled in demo mode.", "deletedCount": 0})
 		return
@@ -372,6 +377,35 @@ func (a *App) handleSavePlaylist(client *realtime.Client, state *room.Room) {
 		return
 	}
 	client.Send(map[string]any{"type": "SAVE_PLAYLIST_RESPONSE", "success": false, "message": "Failed to save playlist: " + err.Error(), "deletedCount": 0})
+}
+
+func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, sources []model.AudioSource) {
+	// Browser playlists contain references only. YouTube IDs are resolved by the
+	// proxy when played, so importing a list does not create new storage objects.
+	for _, source := range sources {
+		if len(source.URL) > 2048 || len([]rune(source.Title)) > 300 {
+			continue
+		}
+		valid := false
+		if strings.HasPrefix(source.URL, "/youtube/proxy?") {
+			parsed, err := url.Parse(source.URL)
+			if err == nil {
+				id := parsed.Query().Get("videoId")
+				if youtube.ParseVideoID(id) == id && len(id) == 11 {
+					source.URL = youtube.ProxyURL(id)
+					valid = true
+				}
+			}
+		} else if a.Store != nil {
+			key, ok := a.storageKey(source.URL)
+			valid = ok && (strings.HasPrefix(key, "room-") || strings.HasPrefix(key, "youtube-cache/") || strings.HasPrefix(key, "default/"))
+		}
+		if valid {
+			state.AddAudioSource(source)
+		}
+	}
+	current, _, _, _, _, _, _ := state.State()
+	a.broadcastSources(client.RoomID, current)
 }
 
 func (a *App) importSpotify(roomID string, state *room.Room, tracks []model.SpotifyTrack) {

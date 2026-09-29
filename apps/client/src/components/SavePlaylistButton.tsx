@@ -2,6 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
+import { useRoomStore } from "@/store/room";
+import { PERSISTENT_ROOM_ID } from "@/lib/browserLibrary";
 import { useEffect, useRef, useState } from "react";
 import { Save } from "lucide-react";
 
@@ -12,11 +14,19 @@ interface SavePlaylistButtonProps {
 export const SavePlaylistButton = ({ className }: SavePlaylistButtonProps) => {
   const socket = useGlobalStore((s) => s.socket);
   const savePlaylist = useGlobalStore((s) => s.savePlaylist);
+  const audioSourceCount = useGlobalStore((s) => s.audioSources.length);
+  const roomId = useRoomStore((s) => s.roomId);
+  const isPersistent = roomId === PERSISTENT_ROOM_ID;
   const [isSaving, setIsSaving] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleClick = () => {
-    if (!socket || isSaving) return;
+    if (isSaving) return;
+    if (!isPersistent) {
+      savePlaylist();
+      return;
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
     setIsSaving(true);
 
     // Call store method to trigger WS request
@@ -29,19 +39,23 @@ export const SavePlaylistButton = ({ className }: SavePlaylistButtonProps) => {
     }, 4000);
   };
 
-  // Listen to incoming messages or reset state
-  // We can also reset isSaving whenever the global message timestamp updates
-  const lastMessageReceivedTime = useGlobalStore((s) => s.lastMessageReceivedTime);
   useEffect(() => {
-    if (isSaving) {
-      setIsSaving(false);
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
+    if (!socket) return;
+    const handleResponse = (event: MessageEvent<string>) => {
+      try {
+        const response = JSON.parse(event.data) as { type?: string };
+        if (response.type === "SAVE_PLAYLIST_RESPONSE") {
+          setIsSaving(false);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      } catch {
+        // Other message handling belongs to WebSocketManager.
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastMessageReceivedTime]);
+    };
+    socket.addEventListener("message", handleResponse);
+    return () => socket.removeEventListener("message", handleResponse);
+  }, [socket]);
 
   useEffect(() => {
     return () => {
@@ -56,8 +70,9 @@ export const SavePlaylistButton = ({ className }: SavePlaylistButtonProps) => {
         className
       )}
       onClick={handleClick}
-      disabled={isSaving || !socket}
-      title="Save Playlist"
+      disabled={isSaving || (isPersistent ? !socket : audioSourceCount === 0)}
+      title={isPersistent ? "Save room 090624 playlist to R2" : "Save playlist in this browser"}
+      aria-label={isPersistent ? "Save room 090624 playlist to R2" : "Save playlist in this browser"}
     >
       <Save className={cn("size-4", isSaving && "animate-bounce text-primary-400")} />
     </button>
