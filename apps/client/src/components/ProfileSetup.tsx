@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_AVATAR, type LocalProfile } from "@/lib/profile";
-import { Camera, Check, ImagePlus, RotateCw, Sliders, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, Check, CirclePlus, ImagePlus, RotateCw, Sliders, X, ZoomIn, ZoomOut } from "lucide-react";
 import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -64,6 +64,10 @@ export interface ProfileSetupProps {
   footer?: ReactNode;
   submitLabel?: string;
   disabled?: boolean;
+  showHeader?: boolean;
+  showSubmitButton?: boolean;
+  createDisabled?: boolean;
+  onValidationError?: () => void;
 }
 
 export const ProfileSetup = ({
@@ -74,9 +78,14 @@ export const ProfileSetup = ({
   footer,
   submitLabel = "Join room",
   disabled = false,
+  showHeader = true,
+  showSubmitButton = true,
+  createDisabled = false,
+  onValidationError,
 }: ProfileSetupProps) => {
   const [name, setName] = useState(initialProfile?.name || "");
   const [avatar, setAvatar] = useState(initialProfile?.avatar || DEFAULT_AVATAR);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
 
@@ -200,7 +209,11 @@ export const ProfileSetup = ({
   const submit = (create = false) => {
     if (disabled) return;
     const cleanName = name.trim();
-    if (!cleanName) return toast.error("Please enter your name.");
+    if (!cleanName) {
+      onValidationError?.();
+      nameInputRef.current?.focus();
+      return toast.error("Please enter your name.");
+    }
     const handler = create && onCreate ? onCreate : onSave;
     handler({ name: cleanName.slice(0, 32), avatar });
   };
@@ -215,11 +228,15 @@ export const ProfileSetup = ({
         }}
         className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-5 sm:p-6 shadow-2xl relative"
       >
-        <h1 className="text-lg font-bold text-white">Beatsync</h1>
-        <p className="mt-1 text-xs text-neutral-500">Your music, together.</p>
+        {showHeader && (
+          <>
+            <h1 className="text-lg font-bold text-white">Beatsync</h1>
+            <p className="mt-1 text-xs text-neutral-500">Your music, together.</p>
+          </>
+        )}
 
         {/* Current Avatar Preview & Trigger Actions */}
-        <div className="mt-5 flex items-center gap-3">
+        <div className={`${showHeader ? "mt-5" : ""} flex items-center gap-3`}>
           <div className="relative group">
             <Avatar className="size-11 border border-purple-500/40">
               {avatar.startsWith("data:") ? <AvatarImage src={avatar} alt="Avatar" className="object-cover" /> : null}
@@ -246,6 +263,7 @@ export const ProfileSetup = ({
             </label>
             <input
               id="profile-name"
+              ref={nameInputRef}
               maxLength={32}
               value={name}
               disabled={disabled}
@@ -300,21 +318,33 @@ export const ProfileSetup = ({
 
         {children}
 
-        <Button
-          className="mt-5 w-full rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold py-2.5 shadow-lg shadow-purple-600/20"
-          type="submit"
-          disabled={disabled}
-        >
-          {submitLabel}
-        </Button>
+        {showSubmitButton && (
+          <Button
+            className="mt-5 w-full rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold py-2.5 shadow-lg shadow-purple-600/20"
+            type="submit"
+            disabled={disabled}
+          >
+            {submitLabel}
+          </Button>
+        )}
+        {!showSubmitButton && (
+          <button type="submit" className="sr-only">
+            Join room
+          </button>
+        )}
         {onCreate && (
           <Button
             type="button"
             variant="outline"
-            disabled={disabled}
+            disabled={disabled || createDisabled}
             onClick={() => submit(true)}
-            className="mt-2 w-full rounded-xl border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800"
+            className={
+              showSubmitButton
+                ? "mt-2 w-full rounded-xl border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800"
+                : "mt-6 w-full rounded-xl border-0 bg-white py-2.5 font-semibold text-neutral-950 hover:bg-neutral-200"
+            }
           >
+            {!showSubmitButton && <CirclePlus className="mr-2 size-4" aria-hidden="true" />}
             Create new room
           </Button>
         )}
@@ -432,7 +462,7 @@ export const ProfileSetup = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-purple-300 border border-neutral-700/80 transition-colors"
                   >
                     <RotateCw className="size-3.5 text-purple-400" />
-                    Xoay 90° ({rotation}°)
+                    Rotate 90° ({rotation}°)
                   </button>
                 </div>
               </div>
