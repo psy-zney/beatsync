@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { audioContextManager, isAudioContextPaused } from "@/lib/audioContextManager";
+import { setWebAudioSessionType } from "@/lib/audioSession";
 import { getClientId } from "@/lib/clientId";
 import { getKickBuffer } from "@/components/dashboard/Metronome";
 import { IS_DEMO_MODE } from "@/lib/demo";
@@ -750,11 +751,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
   };
 
   if (typeof window !== "undefined") {
-    // @ts-expect-error only exists for iOS
-    if (window.navigator.audioSession) {
-      // @ts-expect-error only exists for iOS
-      window.navigator.audioSession.type = "playback";
-    }
+    setWebAudioSessionType("playback");
 
     console.log("Detected that no audio sources were loaded, initializing");
     initializeAudioExclusively();

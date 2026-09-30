@@ -4,7 +4,7 @@ import { useClientId } from "@/hooks/useClientId";
 import { cn } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
 import { useWebRTCStore } from "@/store/webrtc";
-import { Headphones, Mic, MicOff, PhoneOff } from "lucide-react";
+import { Headphones, Mic, MicOff, Phone, PhoneOff, Volume2 } from "lucide-react";
 import React from "react";
 import { Button } from "../ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
@@ -13,7 +13,7 @@ import { AudioWaveform } from "../ui/AudioWaveform";
 import { useVoiceChat } from "../room/VoiceChatProvider";
 import { useRoomStore } from "@/store/room";
 
-export const UserVoicePanel = () => {
+export const UserVoicePanel = ({ mobile = false }: { mobile?: boolean }) => {
   const { clientId } = useClientId();
   const connectedClients = useGlobalStore((state) => state.connectedClients);
 
@@ -22,6 +22,8 @@ export const UserVoicePanel = () => {
     isConnecting,
     isReconnecting,
     isMuted,
+    needsAudioPlayback,
+    enableAudioPlayback,
     toggleMute,
     localStream,
     activeSpeakers,
@@ -43,8 +45,101 @@ export const UserVoicePanel = () => {
   const isEmojiAvatar = roomAvatar && !isDataAvatar && roomAvatar.length <= 4;
   const initials = username.slice(0, 2).toUpperCase();
 
+  if (mobile) {
+    return (
+      <div
+        className="relative z-20 shrink-0 border-b border-white/10 bg-neutral-900/95 px-3 py-2"
+        aria-label="Voice chat controls"
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-xl",
+              isVoiceActive ? "bg-emerald-500/15 text-emerald-400" : "bg-violet-500/15 text-violet-300"
+            )}
+          >
+            <Headphones className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold leading-tight">Voice chat</div>
+            <div className="text-xs text-neutral-400">
+              {isReconnecting
+                ? "Reconnecting…"
+                : isConnecting
+                  ? "Joining…"
+                  : isVoiceActive
+                    ? isMuted
+                      ? "Connected · mic off"
+                      : "Connected · mic on"
+                    : "Ready to join"}
+            </div>
+          </div>
+          {!isVoiceActive ? (
+            <Button
+              type="button"
+              onClick={connect}
+              disabled={isConnecting}
+              className="h-11 min-w-24 rounded-xl bg-violet-600 px-3 text-white hover:bg-violet-500"
+              aria-label="Join voice chat"
+            >
+              {isConnecting ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <>
+                  <Phone className="size-4" /> Join call
+                </>
+              )}
+            </Button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleMute}
+                className={cn("size-11 rounded-xl", isMuted ? "text-red-400" : "text-emerald-400")}
+                aria-label={isMuted ? "Turn microphone on" : "Turn microphone off"}
+              >
+                {isMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleDeafen}
+                className={cn("size-11 rounded-xl", isDeafened && "text-red-400")}
+                aria-label={isDeafened ? "Turn call sound on" : "Turn call sound off"}
+              >
+                <Headphones className="size-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={disconnect}
+                className="size-11 rounded-xl text-neutral-400 hover:text-red-400"
+                aria-label="Leave voice chat"
+              >
+                <PhoneOff className="size-5" />
+              </Button>
+            </div>
+          )}
+        </div>
+        {isVoiceActive && needsAudioPlayback && (
+          <button
+            type="button"
+            onClick={() => void enableAudioPlayback()}
+            className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-amber-400/15 px-3 py-2 text-xs font-medium text-amber-200 ring-1 ring-amber-400/25"
+          >
+            <Volume2 className="size-4" /> Enable call sound
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-[#292b2f] flex flex-col w-full h-[52px] mt-auto">
+    <div className="bg-[#292b2f] flex flex-col w-full min-h-[52px] mt-auto">
       <div className="flex items-center h-full px-2 gap-1.5 w-full">
         {/* User Info */}
         <div className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/5 rounded-md p-1 cursor-pointer transition-colors">
@@ -152,6 +247,15 @@ export const UserVoicePanel = () => {
           )}
         </div>
       </div>
+      {isVoiceActive && needsAudioPlayback && (
+        <button
+          type="button"
+          onClick={() => void enableAudioPlayback()}
+          className="bg-amber-400/15 px-3 py-1.5 text-xs text-amber-200"
+        >
+          Enable call sound
+        </button>
+      )}
     </div>
   );
 };

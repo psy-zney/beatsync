@@ -13,6 +13,7 @@ const isVirtualDefaultDevice = (device: MediaDeviceInfo) =>
 export const AudioDeviceSelector = () => {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [canSelectOutput, setCanSelectOutput] = useState(false);
   const { switchAudioInputDevice, switchAudioOutputDevice } = useVoiceChat();
 
   const audioInputDeviceId = useWebRTCStore((state) => state.audioInputDeviceId);
@@ -21,6 +22,7 @@ export const AudioDeviceSelector = () => {
   const fetchDevices = useCallback(async () => {
     setIsRefreshing(true);
     try {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
       setDevices(await navigator.mediaDevices.enumerateDevices());
     } catch (error) {
       console.error("Failed to enumerate devices", error);
@@ -30,9 +32,10 @@ export const AudioDeviceSelector = () => {
   }, []);
 
   useEffect(() => {
+    setCanSelectOutput(typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype);
     void fetchDevices();
-    navigator.mediaDevices.addEventListener("devicechange", fetchDevices);
-    return () => navigator.mediaDevices.removeEventListener("devicechange", fetchDevices);
+    navigator.mediaDevices?.addEventListener?.("devicechange", fetchDevices);
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", fetchDevices);
   }, [fetchDevices]);
 
   const audioInputDevices = useMemo(
@@ -59,7 +62,7 @@ export const AudioDeviceSelector = () => {
   const showBluetoothWarning = headsetMicSelected || (audioInputDeviceId === "default" && bluetoothOutputSelected);
 
   useEffect(() => {
-    const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
+    const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
     const selectedDeviceStillExists = audioInputDevices.some((device) => device.deviceId === audioInputDeviceId);
     if (
       isMac &&
@@ -105,23 +108,29 @@ export const AudioDeviceSelector = () => {
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label className="flex items-center gap-1.5 text-xs text-neutral-400">
-            <Headphones className="size-3.5" /> Speaker / Headphones
-          </label>
-          <select
-            value={audioOutputDeviceId || "default"}
-            onChange={(event) => void switchAudioOutputDevice(event.target.value)}
-            className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
-          >
-            <option value="default">System default</option>
-            {audioOutputDevices.map((device) => (
-              <option key={device.deviceId} value={device.deviceId}>
-                {device.label || `Speaker ${device.deviceId.substring(0, 5)}…`}
-              </option>
-            ))}
-          </select>
-        </div>
+        {canSelectOutput ? (
+          <div className="space-y-1">
+            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+              <Headphones className="size-3.5" /> Speaker / Headphones
+            </label>
+            <select
+              value={audioOutputDeviceId || "default"}
+              onChange={(event) => void switchAudioOutputDevice(event.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
+            >
+              <option value="default">System default</option>
+              {audioOutputDevices.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Speaker ${device.deviceId.substring(0, 5)}…`}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="text-xs leading-5 text-neutral-400">
+            Use your device audio controls to choose a speaker or headphones.
+          </p>
+        )}
 
         {showBluetoothWarning && (
           <div className="space-y-2 rounded-md border border-amber-400/25 bg-amber-400/10 p-2 text-[11px] leading-4 text-amber-100">
@@ -141,9 +150,12 @@ export const AudioDeviceSelector = () => {
           </div>
         )}
 
-        <p className="text-[10px] leading-4 text-neutral-600">
-          Changing the speaker affects music and calls in supported browsers. Safari may follow the macOS output device.
-        </p>
+        {canSelectOutput && (
+          <p className="text-[10px] leading-4 text-neutral-600">
+            Changing the speaker affects music and calls in supported browsers. Safari may follow the macOS output
+            device.
+          </p>
+        )}
       </div>
     </div>
   );

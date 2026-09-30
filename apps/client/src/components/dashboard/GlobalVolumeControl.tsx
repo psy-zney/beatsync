@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useCanMutate, useGlobalStore } from "@/store/global";
-import { Volume1, Volume2, VolumeX, ChevronDown, Music } from "lucide-react";
+import { Volume1, Volume2, VolumeX, ChevronDown, Music, Settings2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "throttle-debounce";
@@ -184,9 +184,9 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
     return (
       <div className={cn("", className)}>
         <div className="flex items-center justify-between px-4 pt-3">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500 flex items-center gap-2">
-            <Volume2 className="h-3.5 w-3.5" />
-            <span>Global Volume</span>
+          <h2 className="text-sm font-medium text-neutral-200 flex items-center gap-2">
+            <Volume2 className="h-4 w-4 text-violet-300" />
+            <span>Sound</span>
           </h2>
         </div>
 
@@ -210,7 +210,7 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
             />
           </div>
 
-          <div className="mt-4 border-t border-neutral-800/70 pt-3">
+          <div className="mt-3 border-t border-neutral-800/70 pt-3">
             <VolumeControl
               icon={<Music className="h-3.5 w-3.5" />}
               label="Your Music Volume"
@@ -218,11 +218,16 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
               onChange={setPersonalVolume}
             />
           </div>
-
-          <div className="mt-4 border-t border-neutral-800/70 pt-3">
+        </div>
+        <details className="group border-t border-white/10">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm text-neutral-300 [&::-webkit-details-marker]:hidden">
+            <Settings2 className="size-4 text-neutral-400" /> Input & output devices
+            <ChevronDown className="ml-auto size-4 text-neutral-500 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-white/10 px-4 py-3">
             <AudioDeviceSelector />
           </div>
-        </div>
+        </details>
       </div>
     );
   }

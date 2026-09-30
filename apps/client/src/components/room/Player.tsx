@@ -181,7 +181,7 @@ export const Player = () => {
   return (
     <div className="w-full flex justify-center">
       <div className="w-full max-w-[37rem]">
-        <div className="flex items-center justify-center gap-6 mb-2">
+        <div className="flex items-center justify-center gap-3 sm:gap-6 mb-2">
           {canMutate && <ClearPlaylistButton />}
           <button
             className={cn(

@@ -3,6 +3,7 @@
 import { useClientId } from "@/hooks/useClientId";
 import { fetchVoiceToken } from "@/lib/api";
 import { audioContextManager } from "@/lib/audioContextManager";
+import { setWebAudioSessionType } from "@/lib/audioSession";
 import { useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { useWebRTCStore } from "@/store/webrtc";
@@ -25,33 +26,12 @@ const isMicrophonePermissionDenied = (error: unknown) => {
   return name === "NotAllowedError" || name === "PermissionDeniedError";
 };
 
-/**
- * iOS Safari is most reliable when getUserMedia is started directly from the
- * button gesture. LiveKit only touches the mic after token/network awaits, by
- * which point Safari may no longer show its permission prompt.
- */
-const requestMicrophonePermission = async (deviceId?: string) => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("This browser does not support microphones.");
-  }
-
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      channelCount: 1,
-      deviceId: deviceId && deviceId !== "default" ? { ideal: deviceId } : undefined,
-    },
-  });
-  stream.getTracks().forEach((track) => track.stop());
-};
-
 interface VoiceChatContextType {
   isConnected: boolean;
   isConnecting: boolean;
   isReconnecting: boolean;
   isMuted: boolean;
+  needsAudioPlayback: boolean;
   activeSpeakers: Set<string>;
   voiceParticipantIds: Set<string>;
   mutedParticipantIds: Set<string>;
@@ -62,6 +42,7 @@ interface VoiceChatContextType {
   connect: () => Promise<void>;
   disconnect: () => void;
   toggleMute: () => void;
+  enableAudioPlayback: () => Promise<void>;
   toggleAINoiseSuppression: () => void;
   switchAudioInputDevice: (deviceId: string) => Promise<void>;
   switchAudioOutputDevice: (deviceId: string) => Promise<void>;
@@ -109,6 +90,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [needsAudioPlayback, setNeedsAudioPlayback] = useState(false);
   const [isAINoiseSuppressionEnabled, setIsAINoiseSuppressionEnabled] = useState(true);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
   const [voiceParticipantIds, setVoiceParticipantIds] = useState<Set<string>>(new Set());
@@ -152,6 +134,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
 
   const resetTransientVoiceState = useCallback(() => {
     clearRemoteAudio();
+    setNeedsAudioPlayback(false);
     setActiveSpeakers(new Set());
     setVoiceParticipantIds(new Set());
     setMutedParticipantIds(new Set());
@@ -222,6 +205,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     const room = roomRef.current;
     roomRef.current = null;
     room?.disconnect(true);
+    setWebAudioSessionType("playback");
 
     resetTransientVoiceState();
     desiredMutedRef.current = true;
@@ -259,6 +243,11 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           },
         });
         roomRef.current = room;
+        const activeRoom = room;
+
+        room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          if (roomRef.current === activeRoom) setNeedsAudioPlayback(!activeRoom.canPlaybackAudio);
+        });
 
         room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
           setActiveSpeakers(new Set(speakers.map((speaker) => (speaker.isLocal ? "local" : speaker.identity))));
@@ -322,7 +311,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             const stream = new MediaStream([track.mediaStreamTrack]);
             setRemoteStreams((previous) => ({ ...previous, [participant.identity]: stream }));
             syncRemoteVolume();
-            element.play().catch(() => toast.message("Tap the screen to enable call audio", { id: "voice-playback" }));
+            element.play().catch(() => setNeedsAudioPlayback(true));
           }
         );
         room.on(
@@ -377,13 +366,17 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
             .catch(console.error);
         }
 
-        await room.startAudio();
+        // Safari can reject autoplay after the network awaits above. Joining the
+        // call still succeeds; the user can unlock playback with a visible tap.
+        await room.startAudio().catch(() => setNeedsAudioPlayback(true));
+        if (!room.canPlaybackAudio) setNeedsAudioPlayback(true);
 
         const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
         const shouldEnableMic = !desiredMutedRef.current && audioInputDeviceId !== "none";
 
         let publication = null;
         if (shouldEnableMic) {
+          setWebAudioSessionType("play-and-record");
           publication = await room.localParticipant
             .setMicrophoneEnabled(true, {
               echoCancellation: true,
@@ -437,6 +430,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         resetTransientVoiceState();
 
         const permissionDenied = isMicrophonePermissionDenied(error);
+        setWebAudioSessionType("playback");
         if (permissionDenied) shouldStayConnectedRef.current = false;
 
         if (shouldStayConnectedRef.current && isRecovery) {
@@ -480,27 +474,25 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
   const connect = useCallback(async () => {
     if (connectionInFlightRef.current || shouldStayConnectedRef.current) return;
 
-    const audioInputDeviceId = useWebRTCStore.getState().audioInputDeviceId;
-    if (audioInputDeviceId !== "none") {
-      try {
-        // Start before fetching a token so iPhone/iPad Safari associates the
-        // permission prompt with this tap.
-        await requestMicrophonePermission(audioInputDeviceId);
-      } catch (error) {
-        toast.error(
-          isMicrophonePermissionDenied(error)
-            ? "Safari does not have microphone access. Allow Microphone in website settings and try again."
-            : error instanceof Error
-              ? error.message
-              : "Could not access the microphone."
-        );
-        return;
-      }
-    }
-
     shouldStayConnectedRef.current = true;
     desiredMutedRef.current = true; // Default to muted to prevent Bluetooth HFP drop
     await connectInternalRef.current(false);
+  }, []);
+
+  const enableAudioPlayback = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    // These play calls must begin synchronously from the button gesture on iOS.
+    const attempts = [
+      room.startAudio(),
+      ...Array.from(remoteAudioRef.current.values())
+        .flat()
+        .map((element) => element.play()),
+    ];
+    const results = await Promise.allSettled(attempts);
+    const failed = results.some((result) => result.status === "rejected");
+    setNeedsAudioPlayback(failed || !room.canPlaybackAudio);
+    if (failed) toast.error("Could not start call audio. Tap Enable call sound again.");
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -511,6 +503,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const nextMuted = !desiredMutedRef.current;
+    if (!nextMuted) setWebAudioSessionType("play-and-record");
     desiredMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
     if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, nextMuted);
@@ -527,8 +520,10 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
       })
       .then((publication) => {
         setLocalStream(publication?.audioTrack ? new MediaStream([publication.audioTrack.mediaStreamTrack]) : null);
+        if (nextMuted) setWebAudioSessionType("playback");
       })
       .catch(() => {
+        if (!nextMuted) setWebAudioSessionType("playback");
         desiredMutedRef.current = !nextMuted;
         setIsMuted(!nextMuted);
         if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, !nextMuted);
@@ -554,10 +549,12 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           await room.localParticipant.setMicrophoneEnabled(false).catch(console.error);
           setLocalStream(null);
         }
+        setWebAudioSessionType("playback");
         return;
       }
 
       if (room && !desiredMutedRef.current) {
+        setWebAudioSessionType("play-and-record");
         // Fully release the previous capture track so a Bluetooth headset does
         // not keep macOS in its low-quality hands-free profile.
         await room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
@@ -573,6 +570,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
           setLocalStream(publication?.audioTrack ? new MediaStream([publication.audioTrack.mediaStreamTrack]) : null);
           return;
         } catch {
+          setWebAudioSessionType("playback");
           desiredMutedRef.current = true;
           setIsMuted(true);
           if (clientId) updateIdentitySet(setMutedParticipantIds, clientId, true);
@@ -634,6 +632,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         isConnecting,
         isReconnecting,
         isMuted,
+        needsAudioPlayback,
         activeSpeakers,
         voiceParticipantIds,
         mutedParticipantIds,
@@ -644,6 +643,7 @@ export const VoiceChatProvider = ({ children }: { children: ReactNode }) => {
         connect,
         disconnect,
         toggleMute,
+        enableAudioPlayback,
         toggleAINoiseSuppression,
         switchAudioInputDevice,
         switchAudioOutputDevice,

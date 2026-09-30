@@ -14,6 +14,7 @@ import { Bottom } from "./Bottom";
 import { Left } from "./Left";
 import { Main } from "./Main";
 import { Right } from "./Right";
+import { UserVoicePanel } from "./UserVoicePanel";
 
 interface DashboardProps {
   roomId: string;
@@ -89,6 +90,8 @@ export const Dashboard = ({ roomId }: DashboardProps) => {
                   <PartyPopper className="h-4 w-4" /> Fun
                 </TabsTrigger>
               </TabsList>
+
+              <UserVoicePanel mobile />
 
               {/* Tab Content Area - Scrolls independently */}
               <AnimatePresence mode="sync">

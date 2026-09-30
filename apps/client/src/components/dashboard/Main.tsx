@@ -11,9 +11,9 @@ export const Main = () => {
         "scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted-foreground/10 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/20"
       )}
     >
-      <motion.div className="p-6 pt-4">
+      <motion.div className="p-3 pt-3 sm:p-6 sm:pt-4">
         {/* <h1 className="text-xl font-semibold mb-8">BeatSync</h1> */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <InlineSearch />
         </div>
         <Queue className="mb-8" />
