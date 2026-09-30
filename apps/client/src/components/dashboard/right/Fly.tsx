@@ -28,12 +28,11 @@ export const Fly = () => {
   const enabled = useFlyStore((state) => state.enabled);
   const mode = useFlyStore((state) => state.mode);
   const width = useFlyStore((state) => state.width);
-  const cycleSeconds = useFlyStore((state) => state.cycleSeconds);
   const manualPan = useFlyStore((state) => state.manualPan);
   const currentPan = useFlyStore((state) => state.currentPan);
+  const currentActivity = useFlyStore((state) => state.currentActivity);
   const setEnabled = useFlyStore((state) => state.setEnabled);
   const setWidth = useFlyStore((state) => state.setWidth);
-  const setCycleSeconds = useFlyStore((state) => state.setCycleSeconds);
   const setManualPan = useFlyStore((state) => state.setManualPan);
 
   const position = ((currentPan + 1) / 2) * 100;
@@ -47,7 +46,7 @@ export const Fly = () => {
             <Radio className="size-4" /> Fly · 3D Music
           </div>
           <p className="mt-1 text-[11px] leading-4 text-neutral-500">
-            Stereo motion for the music you are listening to.
+            Stereo movement follows accents and changes in the playing music.
           </p>
         </div>
         <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Toggle Fly 3D Music" />
@@ -69,15 +68,15 @@ export const Fly = () => {
             <div className="absolute left-0 right-0 top-1/2 h-px bg-white/30" />
             <motion.div
               className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_24px_6px_rgba(255,255,255,0.5)]"
-              animate={{ left: `${position}%`, scale: enabled ? [1, 1.25, 1] : 1 }}
-              transition={{ left: { duration: 0.04, ease: "linear" }, scale: { repeat: Infinity, duration: 1 } }}
+              animate={{ left: `${position}%`, scale: enabled ? 1 + currentActivity * 0.3 : 1 }}
+              transition={{ left: { duration: 0.04, ease: "linear" }, scale: { duration: 0.08 } }}
             />
             <div className="absolute inset-x-0 bottom-0 flex h-4 items-end justify-center gap-1">
               {[0.25, 0.55, 1, 0.55, 0.25].map((height, index) => (
                 <motion.span
                   key={index}
                   className="w-1 bg-white"
-                  animate={{ height: enabled ? `${4 + height * (10 + Math.abs(currentPan) * 8)}px` : "2px" }}
+                  animate={{ height: enabled ? `${2 + height * currentActivity * 15}px` : "2px" }}
                 />
               ))}
             </div>
@@ -97,7 +96,7 @@ export const Fly = () => {
           <MoveHorizontal className="size-3.5" /> Custom
         </div>
         <div className="flex gap-2">
-          <ModeButton mode="auto" label="Auto fly" />
+          <ModeButton mode="auto" label="Follow music" />
           <ModeButton mode="manual" label="Manual" />
         </div>
         <div className="space-y-2">
@@ -108,19 +107,9 @@ export const Fly = () => {
           <Slider value={[width * 100]} onValueChange={([value]) => setWidth(value / 100)} min={0} max={100} step={1} />
         </div>
         {mode === "auto" ? (
-          <div className="space-y-2">
-            <div className="flex justify-between text-[11px] text-neutral-400">
-              <span>Motion speed</span>
-              <span>{cycleSeconds.toFixed(1)}s / cycle</span>
-            </div>
-            <Slider
-              value={[cycleSeconds]}
-              onValueChange={([value]) => setCycleSeconds(value)}
-              min={2}
-              max={16}
-              step={0.5}
-            />
-          </div>
+          <p className="text-[11px] leading-4 text-neutral-500">
+            Movement follows the track’s accents and phrase-like changes. It settles during quiet passages.
+          </p>
         ) : (
           <div className="space-y-2">
             <div className="flex justify-between text-[11px] text-neutral-400">

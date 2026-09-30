@@ -1,4 +1,5 @@
 import { LOW_PASS_CONSTANTS } from "@beatsync/shared";
+import { getMusicMotionProfile, sampleMusicMotion, type MusicMotionProfile } from "./musicMotion";
 
 /** iOS 18+ uses a non-standard "interrupted" state (e.g. phone call, Siri) */
 export function isAudioContextPaused(state: AudioContextState | string | undefined | null): boolean {
@@ -25,10 +26,12 @@ class AudioContextManager {
   private masterGainNode: GainNode | null = null;
   private lowPassFilterNode: BiquadFilterNode | null = null;
   private stereoPannerNode: StereoPannerNode | null = null;
-  private flyOscillatorNode: OscillatorNode | null = null;
-  private flyDepthGainNode: GainNode | null = null;
-  private flyAnalyserNode: AnalyserNode | null = null;
-  private flyAnalyserBuffer: Float32Array<ArrayBuffer> | null = null;
+  private flyMode: "off" | "auto" | "manual" = "off";
+  private flyDepth = 0;
+  private flyManualPan = 0;
+  private flyTrack: { buffer: AudioBuffer; profile?: MusicMotionProfile; startTime: number; offset: number } | null =
+    null;
+  private flyRelease: { pan: number; startTime: number } | null = null;
   private stateChangeCallback: ((state: AudioContextState) => void) | null = null;
   private wakeLock: WakeLockSentinel | null = null;
   private hasVisibilityListener = false;
@@ -285,22 +288,6 @@ class AudioContextManager {
     this.stereoPannerNode = this.audioContext.createStereoPanner();
     this.stereoPannerNode.pan.value = 0;
 
-    // The Fly LFO runs on the audio rendering thread, so background-tab timer
-    // throttling and track changes cannot freeze the stereo movement.
-    this.flyOscillatorNode = this.audioContext.createOscillator();
-    this.flyOscillatorNode.type = "triangle";
-    this.flyOscillatorNode.frequency.value = 1 / 8;
-    this.flyDepthGainNode = this.audioContext.createGain();
-    this.flyDepthGainNode.gain.value = 0;
-    this.flyAnalyserNode = this.audioContext.createAnalyser();
-    this.flyAnalyserNode.fftSize = 32;
-    this.flyAnalyserBuffer = new Float32Array(this.flyAnalyserNode.fftSize);
-
-    this.flyOscillatorNode.connect(this.flyDepthGainNode);
-    this.flyDepthGainNode.connect(this.stereoPannerNode.pan);
-    this.flyDepthGainNode.connect(this.flyAnalyserNode);
-    this.flyOscillatorNode.start();
-
     this.lowPassFilterNode.connect(this.stereoPannerNode);
     this.stereoPannerNode.connect(this.masterGainNode);
     this.masterGainNode.connect(this.audioContext.destination);
@@ -366,79 +353,126 @@ class AudioContextManager {
     }
   }
 
-  /** Pan synchronized music only. Voice-chat audio elements bypass this graph. */
-  setStereoPan(value: number, rampTime?: number): void {
-    if (!this.stereoPannerNode || !this.audioContext) return;
-    const clampedValue = Math.max(-1, Math.min(1, value));
-    const pan = this.stereoPannerNode.pan;
+  /** Keep Fly aligned with the exact buffer offset used by music playback. */
+  setFlyTrack(buffer: AudioBuffer, startTime: number, offset: number): void {
+    const currentPan = this.getCurrentFlyPan();
+    this.flyRelease = null;
+    this.flyTrack = {
+      buffer,
+      startTime,
+      offset,
+    };
+    if (this.flyMode === "auto") this.scheduleFlyMotion(currentPan);
+  }
 
-    if (rampTime && rampTime > 0) {
-      const now = this.audioContext.currentTime;
-      // Hold the sample-accurate value already being rendered before replacing
-      // its automation. Resetting from pan.value here causes audible zipper
-      // noise while a manual slider emits rapid updates.
-      if (typeof pan.cancelAndHoldAtTime === "function") {
-        pan.cancelAndHoldAtTime(now);
-      } else {
-        pan.cancelScheduledValues(now);
-        pan.setValueAtTime(pan.value, now);
-      }
-      pan.linearRampToValueAtTime(clampedValue, now + rampTime);
-    } else {
-      pan.value = clampedValue;
+  clearFlyTrack(): void {
+    const currentPan = this.getCurrentFlyPan();
+    this.flyTrack = null;
+    if (this.flyMode === "auto") {
+      this.flyRelease = { pan: currentPan, startTime: this.audioContext?.currentTime ?? 0 };
+      this.moveFlyPan(0, 0.25, currentPan);
     }
   }
 
-  setFlyAuto(depth: number, cycleSeconds: number): void {
+  setFlyAuto(depth: number): void {
     this.getContext();
-    if (!this.audioContext || !this.flyOscillatorNode || !this.flyDepthGainNode) return;
-
-    const now = this.audioContext.currentTime;
-    const clampedDepth = Math.max(0, Math.min(0.8, depth));
-    const clampedCycle = Math.max(2, Math.min(16, cycleSeconds));
-
-    this.setStereoPan(0, 0.2);
-    this.flyOscillatorNode.frequency.setTargetAtTime(1 / clampedCycle, now, 0.08);
-    this.holdAudioParam(this.flyDepthGainNode.gain, now);
-    this.flyDepthGainNode.gain.linearRampToValueAtTime(clampedDepth, now + 0.2);
+    const currentPan = this.getCurrentFlyPan();
+    this.flyMode = "auto";
+    this.flyDepth = Math.max(0, Math.min(0.8, depth));
+    this.scheduleFlyMotion(currentPan);
   }
 
   setFlyManual(pan: number): void {
     this.getContext();
-    if (!this.audioContext || !this.flyDepthGainNode) return;
-
-    const now = this.audioContext.currentTime;
-    this.holdAudioParam(this.flyDepthGainNode.gain, now);
-    this.flyDepthGainNode.gain.linearRampToValueAtTime(0, now + 0.16);
-    this.setStereoPan(Math.max(-0.8, Math.min(0.8, pan)), 0.2);
+    const currentPan = this.getCurrentFlyPan();
+    this.flyMode = "manual";
+    this.flyRelease = null;
+    this.flyManualPan = Math.max(-0.8, Math.min(0.8, pan));
+    this.moveFlyPan(this.flyManualPan, 0.2, currentPan);
   }
 
   disableFly(): void {
-    if (!this.audioContext || !this.flyDepthGainNode) return;
-    const now = this.audioContext.currentTime;
-    this.holdAudioParam(this.flyDepthGainNode.gain, now);
-    this.flyDepthGainNode.gain.linearRampToValueAtTime(0, now + 0.3);
-    this.setStereoPan(0, 0.3);
+    const currentPan = this.getCurrentFlyPan();
+    this.flyMode = "off";
+    this.flyRelease = null;
+    this.moveFlyPan(0, 0.3, currentPan);
+  }
+
+  getCurrentFlyMotion(): { pan: number; activity: number } {
+    if (this.flyMode === "manual") return { pan: this.flyManualPan, activity: 0 };
+    const track = this.flyTrack;
+    if (this.flyMode !== "auto" || !this.audioContext) return { pan: 0, activity: 0 };
+    if (!track) {
+      const release = this.flyRelease;
+      const remaining = release ? Math.max(0, 1 - (this.audioContext.currentTime - release.startTime) / 0.25) : 0;
+      return { pan: (release?.pan ?? 0) * remaining, activity: 0 };
+    }
+    const profile = track.profile;
+    if (!profile) return { pan: 0, activity: 0 };
+    const trackTime = track.offset + Math.max(0, this.audioContext.currentTime - track.startTime);
+    if (trackTime >= profile.duration || this.audioContext.currentTime < track.startTime) {
+      return { pan: 0, activity: 0 };
+    }
+    const motion = sampleMusicMotion(profile, trackTime);
+    return { pan: motion.pan * this.flyDepth, activity: motion.activity };
   }
 
   getCurrentFlyPan(): number {
-    if (!this.stereoPannerNode) return 0;
-
-    let modulation = 0;
-    if (this.flyAnalyserNode && this.flyAnalyserBuffer) {
-      this.flyAnalyserNode.getFloatTimeDomainData(this.flyAnalyserBuffer);
-      modulation = this.flyAnalyserBuffer[this.flyAnalyserBuffer.length - 1] ?? 0;
-    }
-
-    return Math.max(-1, Math.min(1, this.stereoPannerNode.pan.value + modulation));
+    return this.getCurrentFlyMotion().pan;
   }
 
-  private holdAudioParam(param: AudioParam, time: number): void {
-    if (typeof param.cancelAndHoldAtTime === "function") {
-      param.cancelAndHoldAtTime(time);
-    } else {
-      param.cancelScheduledValues(time);
-      param.setValueAtTime(param.value, time);
+  private moveFlyPan(target: number, duration: number, currentPan: number): void {
+    if (!this.audioContext || !this.stereoPannerNode) return;
+    const now = this.audioContext.currentTime;
+    const pan = this.stereoPannerNode.pan;
+    // Cancel from time zero so an already-running value curve is removed too.
+    pan.cancelScheduledValues(0);
+    pan.setValueAtTime(currentPan, now);
+    pan.linearRampToValueAtTime(target, now + duration);
+  }
+
+  private scheduleFlyMotion(currentPan: number): void {
+    if (!this.audioContext || !this.stereoPannerNode) return;
+    try {
+      const track = this.flyTrack;
+      if (!track || this.flyDepth === 0) {
+        this.moveFlyPan(0, 0.2, currentPan);
+        return;
+      }
+
+      const profile = (track.profile ??= getMusicMotionProfile(track.buffer));
+
+      const now = this.audioContext.currentTime;
+      const startAt = Math.max(now + 0.03, track.startTime);
+      const trackTime = track.offset + Math.max(0, startAt - track.startTime);
+      const remaining = profile.duration - trackTime;
+      if (remaining <= 0.01) {
+        this.moveFlyPan(0, 0.2, currentPan);
+        return;
+      }
+
+      const count = Math.max(2, Math.ceil(remaining / profile.stepSeconds) + 1);
+      const curve = new Float32Array(count);
+      for (let i = 0; i < count; i++) {
+        const position = trackTime + (remaining * i) / (count - 1);
+        curve[i] = sampleMusicMotion(profile, position).pan * this.flyDepth;
+      }
+      const pan = this.stereoPannerNode.pan;
+      pan.cancelScheduledValues(0);
+      pan.setValueAtTime(currentPan, now);
+      pan.linearRampToValueAtTime(curve[0], startAt);
+      pan.setValueCurveAtTime(curve, startAt, remaining);
+    } catch (error) {
+      // Fly is optional. A browser automation quirk must not abort music playback.
+      console.warn("[Fly] Could not schedule music-driven motion", error);
+      this.flyMode = "off";
+      try {
+        const pan = this.stereoPannerNode.pan;
+        pan.cancelScheduledValues(0);
+        pan.value = 0;
+      } catch {
+        // The music source can still play through the unaffected audio graph.
+      }
     }
   }
 

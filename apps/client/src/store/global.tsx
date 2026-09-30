@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { audioContextManager, isAudioContextPaused } from "@/lib/audioContextManager";
+import { getMusicMotionProfile } from "@/lib/musicMotion";
 import { setWebAudioSessionType } from "@/lib/audioSession";
 import { getClientId } from "@/lib/clientId";
 import { getKickBuffer } from "@/components/dashboard/Metronome";
@@ -7,6 +8,7 @@ import { IS_DEMO_MODE } from "@/lib/demo";
 import { getApiUrl } from "@/lib/urls";
 import { PERSISTENT_ROOM_ID, saveBrowserPlaylist } from "@/lib/browserLibrary";
 import { useRoomStore } from "@/store/room";
+import { useFlyStore } from "@/store/fly";
 import { extractFileNameFromUrl } from "@/lib/utils";
 import {
   calculateOffsetEstimate,
@@ -573,6 +575,16 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         },
       });
 
+      // Analyse after decoding, before announcing this track as ready, so Fly
+      // does not stall a scheduled playback start.
+      if (useFlyStore.getState().enabled && useFlyStore.getState().mode === "auto") {
+        try {
+          getMusicMotionProfile(audioBuffer);
+        } catch (error) {
+          console.warn("[Fly] Track analysis failed; loading music without Fly motion", error);
+        }
+      }
+
       // Update the source with loaded buffer
       set((currentState) => ({
         audioSources: currentState.audioSources.map((as) =>
@@ -707,6 +719,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     } catch {
       // Ignore if already stopped
     }
+    audioContextManager.clearFlyTrack();
     console.log(reason);
     set({ isInitingSystem: true, hasUserStartedSystem: false });
   };
@@ -846,6 +859,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           // Ignore errors if already stopped or not initialized
         }
       }
+      audioContextManager.clearFlyTrack();
 
       // Find the new audio source for duration
       const audioIndex = state.findAudioIndexByUrl(url);
@@ -981,6 +995,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         newSourceNode.buffer = audioSourceState.buffer;
         newSourceNode.connect(inputNode);
         newSourceNode.start(startTime, data.trackTimeSeconds);
+        audioContextManager.setFlyTrack(audioSourceState.buffer, startTime, data.trackTimeSeconds);
 
         console.log(
           `[DemoPlay] sync start: ctx=${ctx.currentTime.toFixed(3)} startTime=${startTime.toFixed(3)} offset=${data.trackTimeSeconds}`
@@ -1339,6 +1354,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         sourceNode.disconnect();
         sourceNode.stop();
       } catch (_) {}
+      audioContextManager.clearFlyTrack();
 
       const startTime = data.absoluteStartTime ?? audioContext.currentTime + data.when;
       const audioIndex = data.audioIndex ?? 0;
@@ -1423,6 +1439,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       };
 
       newSourceNode.start(startTime, data.offset);
+      audioContextManager.setFlyTrack(audioBuffer, startTime, data.offset);
       console.log("Started playback at offset:", data.offset, "with delay:", data.when, "audio index:", audioIndex);
 
       // Update state with the new source node and tracking info
@@ -1450,6 +1467,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       const stopTime = audioContext.currentTime + data.when;
       sourceNode.stop(stopTime);
+      audioContextManager.clearFlyTrack();
 
       // Calculate current position in the track at the time of pausing
       const elapsedSinceStart = stopTime - state.playbackStartTime;

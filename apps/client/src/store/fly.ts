@@ -7,15 +7,14 @@ interface FlyState {
   enabled: boolean;
   mode: FlyMode;
   width: number;
-  cycleSeconds: number;
   manualPan: number;
   currentPan: number;
+  currentActivity: number;
   setEnabled: (enabled: boolean) => void;
   setMode: (mode: FlyMode) => void;
   setWidth: (width: number) => void;
-  setCycleSeconds: (seconds: number) => void;
   setManualPan: (pan: number) => void;
-  setCurrentPan: (pan: number) => void;
+  setCurrentMotion: (pan: number, activity: number) => void;
 }
 
 export const useFlyStore = create<FlyState>()(
@@ -24,24 +23,22 @@ export const useFlyStore = create<FlyState>()(
       enabled: false,
       mode: "auto",
       width: 0.8,
-      cycleSeconds: 8,
       manualPan: 0,
       currentPan: 0,
+      currentActivity: 0,
       setEnabled: (enabled) => set({ enabled }),
       setMode: (mode) => set({ mode }),
       setWidth: (width) => set({ width: Math.max(0, Math.min(1, width)) }),
-      setCycleSeconds: (cycleSeconds) => set({ cycleSeconds: Math.max(2, Math.min(16, cycleSeconds)) }),
       setManualPan: (manualPan) => set({ manualPan: Math.max(-1, Math.min(1, manualPan)) }),
-      setCurrentPan: (currentPan) => set({ currentPan }),
+      setCurrentMotion: (currentPan, currentActivity) => set({ currentPan, currentActivity }),
     }),
     {
       name: "beatsync-fly-audio",
       storage: createJSONStorage(() => localStorage),
-      partialize: ({ enabled, mode, width, cycleSeconds, manualPan }) => ({
+      partialize: ({ enabled, mode, width, manualPan }) => ({
         enabled,
         mode,
         width,
-        cycleSeconds,
         manualPan,
       }),
     }
