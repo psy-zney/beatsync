@@ -452,6 +452,10 @@ func (a *App) broadcastClients(roomID string, clients []model.Client) {
 	a.Hub.Broadcast(roomID, roomEvent(map[string]any{"type": "CLIENT_CHANGE", "clients": clients}))
 }
 func (a *App) broadcastSources(roomID string, sources []model.AudioSource) {
+	// The room protocol requires an array, including after the last track is removed.
+	if sources == nil {
+		sources = []model.AudioSource{}
+	}
 	a.Hub.Broadcast(roomID, roomEvent(map[string]any{"type": "SET_AUDIO_SOURCES", "sources": sources}))
 }
 func roomEvent(event map[string]any) map[string]any {

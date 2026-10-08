@@ -48,6 +48,26 @@ func dialTestRoomClient(t *testing.T, server *httptest.Server, roomID, clientID 
 	return connection
 }
 
+func TestDeletingLastTrackSendsAnEmptySourcesArray(t *testing.T) {
+	application, server := newWebSocketTestServer(t)
+	state := application.Rooms.GetOrCreate("947411")
+	state.AddAudioSource(model.AudioSource{URL: "/fixture.mp3"})
+	client := dialTestRoomClient(t, server, "947411", "delete-last-track")
+	readUntil(t, client, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	if err := client.WriteJSON(map[string]any{"type": "DELETE_AUDIO_SOURCES", "urls": []string{"/fixture.mp3"}}); err != nil {
+		t.Fatal(err)
+	}
+	message := readUntil(t, client, func(message map[string]any) bool {
+		event, _ := message["event"].(map[string]any)
+		return event["type"] == "SET_AUDIO_SOURCES"
+	})
+	event := message["event"].(map[string]any)
+	sources, ok := event["sources"].([]any)
+	if !ok || len(sources) != 0 {
+		t.Fatalf("empty queue must be [], got %#v", event["sources"])
+	}
+}
+
 func TestMultipleRoomsKeepPlaylistsSeparateAndReportNewRoom(t *testing.T) {
 	t.Parallel()
 	application, server := newWebSocketTestServer(t)
