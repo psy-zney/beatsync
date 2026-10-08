@@ -30,6 +30,12 @@ beforeEach(() => {
 afterAll(() => Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow }));
 
 describe("browser playlist library", () => {
+  it("keeps imported lyrics and timing when a playlist is saved and reopened", () => {
+    const lyrics = { synced: "[00:05]Hello", plain: "", offset: 0.5, provider: "import" as const };
+    saveBrowserPlaylist("123456", [{ url: "/youtube/proxy?videoId=dQw4w9WgXcQ", title: "Song", lyrics }]);
+    expect(readSavedPlaylists()[0].tracks[0].lyrics).toEqual(lyrics);
+  });
+
   it("round trips Unicode titles and compact stable YouTube references without audio data", () => {
     saveBrowserPlaylist("123456", [
       { url: "https://cdn.test/youtube-cache/dQw4w9WgXcQ.webm", title: "Nhạc cùng nhau 🎧" },

@@ -2,7 +2,7 @@
   "name": "server",
   "private": true,
   "scripts": {
-    "dev": "go run ./cmd/beatsync",
+    "dev": "bun ../../scripts/dev-server.ts",
     "build": "go build -trimpath -o dist/beatsync-server ./cmd/beatsync",
     "start": "./dist/beatsync-server",
     "test": "go test ./...",

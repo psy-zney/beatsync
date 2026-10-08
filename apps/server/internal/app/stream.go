@@ -65,6 +65,7 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 			}
 			sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
 			a.broadcastSources(roomID, sources)
+			go a.triggerAutoLyrics(roomID, state)
 			log.Printf("stream cache hit: room=%s video=%s", roomID, cachedVideoID)
 			return nil
 		}
@@ -85,6 +86,7 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 		}
 		sources := state.AddAudioSource(model.AudioSource{URL: youtube.ProxyURL(videoID), Title: trackName})
 		a.broadcastSources(roomID, sources)
+		go a.triggerAutoLyrics(roomID, state)
 		return nil
 	}
 	var (
@@ -143,6 +145,7 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 	}
 	sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
 	a.broadcastSources(roomID, sources)
+	go a.triggerAutoLyrics(roomID, state)
 	return nil
 }
 

@@ -1,6 +1,9 @@
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Position struct {
 	X float64 `json:"x"`
@@ -31,8 +34,53 @@ type Client struct {
 }
 
 type AudioSource struct {
-	URL   string `json:"url"`
-	Title string `json:"title,omitempty"`
+	URL            string       `json:"url"`
+	Title          string       `json:"title,omitempty"`
+	Lyrics         *TrackLyrics `json:"lyrics,omitempty"`
+	LyricsState    string       `json:"lyricsState,omitempty"`
+	LyricsVersion  uint64       `json:"lyricsVersion,omitempty"`
+	LyricsRetryAt  time.Time    `json:"-"`
+	LyricsAttempts int          `json:"-"`
+}
+
+// TrackLyrics is immutable after it is attached to a source. A positive offset
+// delays the displayed lyrics relative to the audio, in seconds.
+type TrackLyrics struct {
+	Synced          string      `json:"synced"`
+	Plain           string      `json:"plain"`
+	Offset          float64     `json:"offset"`
+	Provider        string      `json:"provider"`
+	Language        string      `json:"language,omitempty"`
+	SyncType        string      `json:"syncType,omitempty"`
+	Lines           []LyricLine `json:"lines,omitempty"`
+	ResolverVersion int         `json:"resolverVersion,omitempty"`
+	Automatic       bool        `json:"automatic,omitempty"`
+}
+
+type LyricWord struct {
+	StartTime float64 `json:"startTime"`
+	EndTime   float64 `json:"endTime"`
+	Text      string  `json:"text"`
+}
+
+type LyricLine struct {
+	StartTime float64     `json:"startTime"`
+	EndTime   float64     `json:"endTime"`
+	Text      string      `json:"text"`
+	Words     []LyricWord `json:"words,omitempty"`
+}
+
+type LyricsMetadata struct {
+	Title    string  `json:"title,omitempty"`
+	Track    string  `json:"track,omitempty"`
+	Artist   string  `json:"artist,omitempty"`
+	Duration float64 `json:"duration,omitempty"`
+	Language string  `json:"language,omitempty"`
+}
+
+type YouTubeLyricsResult struct {
+	Lyrics   *TrackLyrics   `json:"lyrics,omitempty"`
+	Metadata LyricsMetadata `json:"metadata"`
 }
 
 type PlaybackState struct {
@@ -91,6 +139,8 @@ type WSRequest struct {
 	Tracks                []SpotifyTrack  `json:"tracks"`
 	Sources               []AudioSource   `json:"sources"`
 	Avatar                string          `json:"avatar"`
+	Lyrics                *TrackLyrics    `json:"lyrics"`
+	OnlyIfEmpty           bool            `json:"onlyIfEmpty"`
 }
 
 type SpotifyTrack struct {

@@ -40,6 +40,11 @@ export const RoomJoinedSchema = z.object({
   isNewRoom: z.boolean(),
 });
 
+export const ErrorResponseSchema = z.object({
+  type: z.literal("ERROR"),
+  message: z.string(),
+});
+
 export const WSUnicastSchema = z.discriminatedUnion("type", [
   NTPResponseMessageSchema,
   ScheduledActionSchema,
@@ -47,5 +52,6 @@ export const WSUnicastSchema = z.discriminatedUnion("type", [
   WebRTCSignalUnicastSchema,
   SavePlaylistResponseSchema,
   RoomJoinedSchema,
+  ErrorResponseSchema,
 ]);
 export type WSUnicastType = z.infer<typeof WSUnicastSchema>;

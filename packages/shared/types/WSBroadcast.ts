@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LOW_PASS_CONSTANTS } from "../constants";
 import { LocationSchema, PauseActionSchema, PlayActionSchema } from "./WSRequest";
-import { AudioSourceSchema, AvatarSchema, ChatMessageSchema, PositionSchema } from "./basic";
+import { AudioSourceSchema, AvatarSchema, ChatMessageSchema, PositionSchema, TrackLyricsSchema } from "./basic";
 
 // Client change
 export const ClientDataSchema = z.object({
@@ -37,6 +37,15 @@ const SetAudioSourcesSchema = z.object({
 });
 export type SetAudioSourcesType = z.infer<typeof SetAudioSourcesSchema>;
 
+const TrackLyricsUpdateSchema = z.object({
+  type: z.literal("TRACK_LYRICS_UPDATE"),
+  audioSource: z.string(),
+  lyrics: TrackLyricsSchema.nullable(),
+  lyricsState: z.enum(["", "fetching", "ready", "not_found", "error"]),
+  lyricsVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+});
+export type TrackLyricsUpdateType = z.infer<typeof TrackLyricsUpdateSchema>;
+
 // Chat update event
 const ChatUpdateSchema = z.object({
   type: z.literal("CHAT_UPDATE"),
@@ -59,6 +68,7 @@ const RoomEventSchema = z.object({
     ClientChangeMessageSchema,
     ClientMovedSchema,
     SetAudioSourcesSchema,
+    TrackLyricsUpdateSchema,
     ChatUpdateSchema,
     LoadAudioSourceSchema,
   ]),

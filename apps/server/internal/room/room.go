@@ -30,25 +30,28 @@ type Room struct {
 	mu sync.RWMutex
 	ID string
 
-	clients        map[string]*model.Client
-	connected      map[string]bool
-	audioSources   []model.AudioSource
-	playback       model.PlaybackState
-	globalVolume   float64
-	lowPassFreq    float64
-	metronome      bool
-	spatial        bool
-	spatialStart   float64
-	listening      model.Position
-	chat           []model.ChatMessage
-	nextChatID     int64
-	streamJobs     map[string]bool
-	demoReady      map[string]bool
-	pending        *PendingPlay
-	pendingToken   uint64
-	playlistDirty  bool
-	playlistLoaded bool
-	lastActivity   time.Time
+	clients         map[string]*model.Client
+	connected       map[string]bool
+	audioSources    []model.AudioSource
+	playback        model.PlaybackState
+	globalVolume    float64
+	lowPassFreq     float64
+	metronome       bool
+	spatial         bool
+	spatialStart    float64
+	listening       model.Position
+	chat            []model.ChatMessage
+	nextChatID      int64
+	streamJobs      map[string]bool
+	demoReady       map[string]bool
+	pending         *PendingPlay
+	pendingToken    uint64
+	playlistDirty   bool
+	playlistLoaded  bool
+	lastActivity    time.Time
+	lyricsJobs      map[string]uint64
+	lyricsToken     uint64
+	lastLyricsRetry map[string]time.Time
 }
 
 func New(id string) *Room {
@@ -197,16 +200,41 @@ func (r *Room) AddAudioSource(source model.AudioSource) []model.AudioSource {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	source.Title = strings.TrimSpace(source.Title)
+	if !ValidLyrics(source.Lyrics) || model.LegacyAutomaticLyrics(source.Lyrics) {
+		source.Lyrics = nil
+	}
 	for index, existing := range r.audioSources {
 		if existing.URL == source.URL {
 			// Cached objects keep a stable URL. Let later resolution heal their
 			// title so reconnecting and late-joining clients receive fresh metadata.
 			if source.Title != "" && source.Title != existing.Title {
 				r.audioSources[index].Title = source.Title
+				if existing.Lyrics == nil && existing.LyricsState != "fetching" {
+					r.audioSources[index].LyricsState = ""
+					r.audioSources[index].LyricsRetryAt = time.Time{}
+				}
+				r.playlistDirty = true
+			}
+			if existing.Lyrics == nil && source.Lyrics != nil {
+				r.audioSources[index].Lyrics = model.CloneTrackLyrics(source.Lyrics)
+				r.lyricsToken++
+				r.audioSources[index].LyricsVersion = r.lyricsToken
+				delete(r.lyricsJobs, source.URL)
 				r.playlistDirty = true
 			}
 			return append([]model.AudioSource(nil), r.audioSources...)
 		}
+	}
+	if source.Lyrics != nil {
+		source.Lyrics = model.CloneTrackLyrics(source.Lyrics)
+	}
+	r.lyricsToken++
+	source.LyricsVersion = r.lyricsToken
+	source.LyricsState = ""
+	source.LyricsRetryAt = time.Time{}
+	source.LyricsAttempts = 0
+	if source.Lyrics != nil {
+		source.LyricsState = "ready"
 	}
 	r.audioSources = append(r.audioSources, source)
 	r.playlistDirty = true
@@ -217,6 +245,7 @@ func (r *Room) SetAudioSources(sources []model.AudioSource) []model.AudioSource 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.audioSources = append([]model.AudioSource(nil), sources...)
+	r.resetLyricsLocked()
 	r.playlistDirty = true
 	return append([]model.AudioSource(nil), r.audioSources...)
 }
@@ -226,6 +255,10 @@ func (r *Room) RemoveAudioSources(urls map[string]bool) []model.AudioSource {
 	defer r.mu.Unlock()
 	filtered := r.audioSources[:0]
 	for _, source := range r.audioSources {
+		if urls[source.URL] {
+			delete(r.lyricsJobs, source.URL)
+			delete(r.lastLyricsRetry, source.URL)
+		}
 		if !urls[source.URL] {
 			filtered = append(filtered, source)
 		}
@@ -497,6 +530,7 @@ func (r *Room) Restore(backup model.RoomBackup) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.audioSources = append([]model.AudioSource(nil), backup.AudioSources...)
+	r.resetLyricsLocked()
 	r.globalVolume = backup.GlobalVolume
 	r.lowPassFreq = backup.LowPassFreq
 	r.playback = model.PlaybackState{Type: "paused"}

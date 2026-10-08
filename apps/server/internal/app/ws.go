@@ -135,6 +135,7 @@ func (a *App) healSourceTitles(roomID string, state *room.Room, sources []model.
 	if changed {
 		current, _, _, _, _, _, _ := state.State()
 		a.broadcastSources(roomID, current)
+		go a.triggerAutoLyrics(roomID, state)
 	}
 }
 
@@ -220,8 +221,20 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 			a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "CHAT_UPDATE", "messages": []model.ChatMessage{chat}, "isFullSync": false, "newestId": newest}))
 		}
 	case "REORDER_AUDIO_SOURCES":
-		if validReorder(state, message.ReorderedAudioSources) {
-			a.broadcastSources(client.RoomID, state.SetAudioSources(message.ReorderedAudioSources))
+		if sources, ok := state.ReorderAudioSources(message.ReorderedAudioSources); ok {
+			a.broadcastSources(client.RoomID, sources)
+		}
+	case "SET_TRACK_LYRICS":
+		if sources, err := state.SetTrackLyrics(message.AudioSource, message.Lyrics, message.OnlyIfEmpty); err != nil {
+			client.Send(map[string]any{"type": "ERROR", "message": err.Error()})
+		} else if sources != nil {
+			a.broadcastLyrics(client.RoomID, sources, message.AudioSource)
+		}
+	case "RETRY_TRACK_LYRICS":
+		if sources, ok := state.RetryLyrics(message.AudioSource); ok {
+			a.Lyrics.Invalidate(message.AudioSource, extractVideoID(message.AudioSource))
+			a.broadcastLyrics(client.RoomID, sources, message.AudioSource)
+			a.triggerAutoLyrics(client.RoomID, state)
 		}
 	case "SET_METRONOME":
 		at := state.SetMetronome(message.Enabled)
@@ -259,6 +272,7 @@ func (a *App) beginPlay(client *realtime.Client, state *room.Room, message model
 		return
 	}
 	a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "LOAD_AUDIO_SOURCE", "audioSourceToPlay": source}))
+	go a.triggerAutoLyrics(client.RoomID, state)
 	a.schedule(3*time.Second, func() { a.executePlay(client.RoomID, state, token) })
 }
 func (a *App) executePlay(roomID string, state *room.Room, token uint64) {
@@ -306,6 +320,7 @@ func (a *App) loadDefaults(roomID string, state *room.Room) {
 		}
 	}
 	a.broadcastSources(roomID, sources)
+	go a.triggerAutoLyrics(roomID, state)
 }
 
 func (a *App) prepareDemoRoom(state *room.Room) {
@@ -383,7 +398,7 @@ func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, s
 	// Browser playlists contain references only. YouTube IDs are resolved by the
 	// proxy when played, so importing a list does not create new storage objects.
 	for _, source := range sources {
-		if len(source.URL) > 2048 || len([]rune(source.Title)) > 300 {
+		if len(source.URL) > 2048 || len([]rune(source.Title)) > 300 || !room.ValidLyrics(source.Lyrics) {
 			continue
 		}
 		valid := false
@@ -406,6 +421,7 @@ func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, s
 	}
 	current, _, _, _, _, _, _ := state.State()
 	a.broadcastSources(client.RoomID, current)
+	go a.triggerAutoLyrics(client.RoomID, state)
 }
 
 func (a *App) importSpotify(roomID string, state *room.Room, tracks []model.SpotifyTrack) {
@@ -446,28 +462,6 @@ func scheduled(at float64, action map[string]any) map[string]any {
 }
 func spatialConfig(start float64) map[string]any {
 	return map[string]any{"type": "SPATIAL_CONFIG", "centerX": 50.0, "centerY": 50.0, "radius": 25.0, "speed": math.Pi / 3000, "startTime": start}
-}
-func validReorder(state *room.Room, sources []model.AudioSource) bool {
-	if len(sources) == 0 {
-		return false
-	}
-	current, _, _, _, _, _, _ := state.State()
-	if len(current) != len(sources) {
-		return false
-	}
-	counts := make(map[string]int)
-	for _, source := range current {
-		counts[source.URL]++
-	}
-	for _, source := range sources {
-		counts[source.URL]--
-	}
-	for _, count := range counts {
-		if count != 0 {
-			return false
-		}
-	}
-	return true
 }
 func firstSearchTrack(value map[string]any) (string, string) {
 	data, _ := value["data"].(map[string]any)

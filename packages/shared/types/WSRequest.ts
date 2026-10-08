@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CHAT_CONSTANTS, LOW_PASS_CONSTANTS } from "../constants";
-import { AudioSourceSchema, AvatarSchema, PositionSchema } from "./basic";
+import { AudioSourceSchema, AvatarSchema, PositionSchema, TrackLyricsSchema } from "./basic";
 
 // ROOM EVENTS
 export const LocationSchema = z.object({
@@ -38,6 +38,8 @@ export const ClientActionEnum = z.enum([
   "IMPORT_SPOTIFY_TRACKS", // Sequentially import spotify tracks
   "IMPORT_PLAYLIST", // Import references from a playlist saved in the browser
   "UPDATE_PROFILE", // Broadcast the local avatar to other room members
+  "SET_TRACK_LYRICS", // Share lyrics and timing correction for a queued track
+  "RETRY_TRACK_LYRICS",
 ]);
 
 export const NTPRequestPacketSchema = z.object({
@@ -180,12 +182,24 @@ export const UpdateProfileSchema = z.object({
   avatar: AvatarSchema,
 });
 
+export const SetTrackLyricsSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.SET_TRACK_LYRICS),
+  audioSource: z.string().max(2048),
+  lyrics: TrackLyricsSchema.nullable(),
+  onlyIfEmpty: z.boolean().optional(),
+});
+
 export const ImportPlaylistSchema = z.object({
   type: z.literal(ClientActionEnum.enum.IMPORT_PLAYLIST),
   sources: z
     .array(AudioSourceSchema.extend({ url: z.string().max(2048), title: z.string().max(300).optional() }))
     .min(1)
     .max(500),
+});
+
+export const RetryTrackLyricsSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.RETRY_TRACK_LYRICS),
+  audioSource: z.string().max(2048),
 });
 
 export const WSRequestSchema = z.discriminatedUnion("type", [
@@ -214,6 +228,8 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   ImportSpotifyTracksSchema,
   ImportPlaylistSchema,
   UpdateProfileSchema,
+  SetTrackLyricsSchema,
+  RetryTrackLyricsSchema,
 ]);
 export type WSRequestType = z.infer<typeof WSRequestSchema>;
 export type PlayActionType = z.infer<typeof PlayActionSchema>;

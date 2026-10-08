@@ -22,9 +22,61 @@ export const AvatarSchema = z
     "Avatar must be a short emoji or a processed JPEG"
   );
 
+export const MAX_LYRICS_BYTES = 40_000;
+
+const LyricWordSchema = z
+  .object({
+    startTime: z.number().finite().min(0).max(86400),
+    endTime: z.number().finite().min(0).max(86400),
+    text: z.string().max(MAX_LYRICS_BYTES),
+  })
+  .refine((word) => word.endTime >= word.startTime);
+
+const LyricLineSchema = z
+  .object({
+    startTime: z.number().finite().min(0).max(86400),
+    endTime: z.number().finite().min(0).max(86400),
+    text: z.string().max(MAX_LYRICS_BYTES),
+    words: z.array(LyricWordSchema).max(200).optional(),
+  })
+  .refine(
+    (line) =>
+      line.endTime >= line.startTime &&
+      (line.words ?? []).every(
+        (word, index, words) =>
+          word.startTime >= line.startTime &&
+          word.endTime <= line.endTime + 0.001 &&
+          (index === 0 || word.startTime >= words[index - 1].startTime)
+      )
+  );
+
+export const TrackLyricsSchema = z
+  .object({
+    synced: z.string().max(MAX_LYRICS_BYTES),
+    plain: z.string().max(MAX_LYRICS_BYTES),
+    offset: z.number().finite().min(-30).max(30),
+    provider: z.enum(["lrclib", "import", "youtube-manual", "youtube-auto", "user", "custom"]),
+    language: z.string().max(16).optional(),
+    syncType: z.enum(["none", "line", "word"]).optional(),
+    lines: z.array(LyricLineSchema).max(1500).optional(),
+    resolverVersion: z.number().int().min(0).max(1000).optional(),
+    automatic: z.boolean().optional(),
+  })
+  .refine((lyrics) => new TextEncoder().encode(lyrics.synced + lyrics.plain).byteLength <= MAX_LYRICS_BYTES)
+  .refine(
+    (lyrics) =>
+      !lyrics.lines?.length ||
+      (new TextEncoder().encode(JSON.stringify(lyrics)).byteLength <= MAX_LYRICS_BYTES &&
+        lyrics.lines.every((line, index, lines) => index === 0 || line.startTime >= lines[index - 1].startTime))
+  );
+export type TrackLyricsType = z.infer<typeof TrackLyricsSchema>;
+
 export const AudioSourceSchema = z.object({
   url: z.string(),
   title: z.string().optional(),
+  lyrics: TrackLyricsSchema.optional(),
+  lyricsState: z.enum(["fetching", "ready", "not_found", "error"]).optional(),
+  lyricsVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 });
 export type AudioSourceType = z.infer<typeof AudioSourceSchema>;
 

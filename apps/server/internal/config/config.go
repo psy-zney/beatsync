@@ -70,6 +70,7 @@ type Config struct {
 	CookiesPath              string
 	StreamConcurrency        int
 	StreamQueueSize          int
+	LyricsConcurrency        int
 	MaxAudioDownloadBytes    int64
 	MemorySoftLimitBytes     uint64
 	MemoryHardLimitBytes     uint64
@@ -115,6 +116,7 @@ func Load() (Config, error) {
 		CookiesPath:              env("YOUTUBE_COOKIES_PATH", "../../cookies.txt"),
 		StreamConcurrency:        envInt("STREAM_MAX_CONCURRENCY", 1),
 		StreamQueueSize:          envInt("STREAM_MAX_QUEUE", 12),
+		LyricsConcurrency:        envInt("LYRICS_MAX_CONCURRENCY", 1),
 		MaxAudioDownloadBytes:    int64(envInt("MAX_AUDIO_DOWNLOAD_MB", 120)) * 1024 * 1024,
 		MemorySoftLimitBytes:     uint64(envInt("MEMORY_SOFT_LIMIT_MB", 220)) * 1024 * 1024,
 		MemoryHardLimitBytes:     uint64(envInt("MEMORY_HARD_LIMIT_MB", 320)) * 1024 * 1024,
@@ -144,6 +146,9 @@ func Load() (Config, error) {
 	}
 	if c.WorkerConcurrency < 1 || c.WorkerConcurrency > 32 {
 		return Config{}, fmt.Errorf("WORKER_CONCURRENCY must be between 1 and 32")
+	}
+	if c.LyricsConcurrency < 1 || c.LyricsConcurrency > 4 {
+		return Config{}, fmt.Errorf("LYRICS_MAX_CONCURRENCY must be between 1 and 4")
 	}
 	if (c.WorkerAccessClientID == "") != (c.WorkerAccessClientSecret == "") {
 		return Config{}, fmt.Errorf("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together")

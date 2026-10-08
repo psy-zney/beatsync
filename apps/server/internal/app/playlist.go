@@ -32,6 +32,7 @@ func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
 	if len(saved) > 0 {
 		state.SetAudioSources(saved)
 		state.MarkPlaylistSaved()
+		go a.triggerAutoLyrics(state.ID, state)
 	}
 }
 

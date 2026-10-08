@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"path/filepath"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/psy-zney/beatsync/apps/server/internal/backup"
 	"github.com/psy-zney/beatsync/apps/server/internal/config"
 	"github.com/psy-zney/beatsync/apps/server/internal/hybrid"
+	"github.com/psy-zney/beatsync/apps/server/internal/lyrics"
 	"github.com/psy-zney/beatsync/apps/server/internal/memory"
 	"github.com/psy-zney/beatsync/apps/server/internal/queue"
 	"github.com/psy-zney/beatsync/apps/server/internal/realtime"
@@ -22,21 +24,26 @@ import (
 )
 
 type App struct {
-	Config     config.Config
-	Rooms      *room.Manager
-	Hub        *realtime.Hub
-	Queue      *queue.Queue
-	Store      *storage.Client
-	YouTube    *youtube.Service
-	Spotify    *spotify.Service
-	Backup     *backup.Manager
-	Memory     *memory.Monitor
-	Hybrid     *hybrid.Broker
-	HTTP       *http.Client
-	startedAt  time.Time
-	upgrader   websocket.Upgrader
-	schedule   func(time.Duration, func())
-	background sync.WaitGroup
+	Config        config.Config
+	Rooms         *room.Manager
+	Hub           *realtime.Hub
+	Queue         *queue.Queue
+	Store         *storage.Client
+	YouTube       *youtube.Service
+	Spotify       *spotify.Service
+	Lyrics        *lyrics.Service
+	Backup        *backup.Manager
+	Memory        *memory.Monitor
+	Hybrid        *hybrid.Broker
+	HTTP          *http.Client
+	startedAt     time.Time
+	upgrader      websocket.Upgrader
+	schedule      func(time.Duration, func())
+	background    sync.WaitGroup
+	lyricsWake    chan struct{}
+	lyricsContext context.Context
+	lyricsCancel  context.CancelFunc
+	lyricsWorkers sync.WaitGroup
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -53,7 +60,8 @@ func New(cfg config.Config) (*App, error) {
 	backups := backup.New(rooms, store, cfg.LocalBackupPath)
 	application := &App{
 		Config: cfg, Rooms: rooms, Hub: realtime.NewHub(), Queue: jobs, Store: store,
-		YouTube: youtube.New(cfg), Spotify: spotify.New(cfg), Backup: backups,
+		YouTube: youtube.New(cfg), Spotify: spotify.New(cfg), Lyrics: lyrics.NewService(cfg.YTDLPPath, cfg.CookiesPath, lyrics.WithCacheDirectory(filepath.Join(filepath.Dir(cfg.LocalBackupPath), "lyrics-cache")), lyrics.WithConcurrency(cfg.LyricsConcurrency)),
+		Backup:    backups,
 		Hybrid:    hybrid.NewBroker(cfg.HybridWorkerSecret),
 		HTTP:      &http.Client{Transport: &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 20 * time.Second}},
 		startedAt: time.Now(),
@@ -61,6 +69,8 @@ func New(cfg config.Config) (*App, error) {
 	}
 	application.Memory = memory.New(cfg, jobs, func(context.Context) error { return backups.SaveLocal() })
 	application.upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 2048, CheckOrigin: func(*http.Request) bool { return true }}
+	application.Lyrics.SetYouTubeFetcher(application.fetchYouTubeLyrics)
+	application.startAutoLyrics()
 	return application, nil
 }
 
@@ -75,6 +85,9 @@ func (a *App) Restore(ctx context.Context) {
 	}
 	if restored {
 		log.Printf("state restored: %d room(s)", a.Rooms.Count())
+		for _, r := range a.Rooms.Rooms() {
+			go a.triggerAutoLyrics(r.ID, r)
+		}
 	}
 }
 
@@ -125,6 +138,15 @@ func (a *App) RunBackground(ctx context.Context) {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	if a.lyricsCancel != nil {
+		a.lyricsCancel()
+		done := make(chan struct{})
+		go func() { a.lyricsWorkers.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	}
 	a.Queue.Close()
 	a.Hub.Close()
 	a.Hybrid.Close()

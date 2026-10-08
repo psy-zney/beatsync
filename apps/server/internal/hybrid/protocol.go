@@ -10,6 +10,7 @@ const (
 	KindYouTubeSearch   = "youtube.search"
 	KindYouTubeResolve  = "youtube.resolve"
 	KindYouTubeMetadata = "youtube.metadata"
+	KindYouTubeLyrics   = "youtube.lyrics"
 )
 
 var ErrWorkerUnavailable = errors.New("hybrid worker unavailable")

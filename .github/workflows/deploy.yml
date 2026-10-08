@@ -32,7 +32,7 @@ jobs:
           GOARCH: amd64
         run: |
           set -euo pipefail
-          go test ./...
+          CGO_ENABLED=1 go test -race ./...
           mkdir -p dist
           go build -trimpath -ldflags='-s -w' -o dist/beatsync-server ./cmd/beatsync
 

@@ -1,4 +1,4 @@
-import type { AudioSourceType } from "@beatsync/shared";
+import { TrackLyricsSchema, type AudioSourceType } from "@beatsync/shared";
 import { validateFullRoomId } from "./room";
 
 export const PERSISTENT_ROOM_ID = "090624";
@@ -15,7 +15,7 @@ export interface SavedPlaylist {
   tracks: AudioSourceType[];
 }
 
-// Store only stable references and titles, never audio buffers or signed stream URLs.
+// Store stable references, titles and optional lyrics, never audio buffers.
 export function compactTrackUrl(url: string): string {
   const cached = url.match(/\/youtube-cache\/([A-Za-z0-9_-]{11})\.[a-z0-9]+(?:\?.*)?$/);
   if (cached) return cached[1];
@@ -60,7 +60,14 @@ export function parseSavedPlaylists(raw: string | null): SavedPlaylist[] {
           const url = expandTrackUrl(tuple[0]);
           if (urls.has(url)) return [];
           urls.add(url);
-          return [{ url, title: typeof tuple[1] === "string" ? tuple[1].slice(0, 300) : undefined }];
+          const lyrics = TrackLyricsSchema.safeParse(tuple[2]);
+          return [
+            {
+              url,
+              title: typeof tuple[1] === "string" ? tuple[1].slice(0, 300) : undefined,
+              ...(lyrics.success ? { lyrics: lyrics.data } : {}),
+            },
+          ];
         });
         if (!tracks.length) return [];
         seen.add(roomId);
@@ -79,7 +86,9 @@ function writePlaylists(playlists: SavedPlaylist[]): void {
     playlists.map(({ roomId, savedAt, tracks }) => [
       roomId,
       savedAt,
-      tracks.map(({ url, title }) => [compactTrackUrl(url), title ?? ""]),
+      tracks.map(({ url, title, lyrics }) =>
+        lyrics ? [compactTrackUrl(url), title ?? "", lyrics] : [compactTrackUrl(url), title ?? ""]
+      ),
     ])
   );
   if (new TextEncoder().encode(value).byteLength > MAX_LIBRARY_BYTES) {

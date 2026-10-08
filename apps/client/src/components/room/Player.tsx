@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Slider } from "../ui/slider";
 import ClearPlaylistButton from "../ClearPlaylistButton";
 import SavePlaylistButton from "../SavePlaylistButton";
+import { LyricsControls } from "./LyricsDialog";
 
 export const Player = () => {
   const canMutate = useCanMutate();
@@ -162,6 +163,9 @@ export const Player = () => {
         !(
           e.target instanceof HTMLInputElement ||
           e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLButtonElement ||
+          e.target instanceof HTMLSelectElement ||
+          (e.target as HTMLElement).closest?.('[role="dialog"]') ||
           (e.target as HTMLElement).isContentEditable
         )
       ) {
@@ -258,6 +262,7 @@ export const Player = () => {
             {trackDuration > 0 ? formatTime(trackDuration) : ""}
           </span>
         </div>
+        <LyricsControls />
       </div>
     </div>
   );

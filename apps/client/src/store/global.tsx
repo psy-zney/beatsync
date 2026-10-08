@@ -19,6 +19,7 @@ import {
   sendProbePair as sendProbePairWS,
 } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
+import { mergeLyricsUpdate } from "@/lib/lyricsUpdates";
 import {
   AudioSourceSchema,
   AudioSourceType,
@@ -35,6 +36,7 @@ import {
   PositionType,
   SearchResponseType,
   SetAudioSourcesType,
+  TrackLyricsUpdateType,
   SpatialConfigType,
   epochNow,
 } from "@beatsync/shared";
@@ -179,16 +181,17 @@ interface GlobalState extends GlobalStateValues {
   getAudioDuration: ({ url }: { url: string }) => number;
   getSelectedTrack: () => AudioSourceState | null;
   handleSetAudioSources: (data: SetAudioSourcesType) => void;
+  handleLyricsUpdate: (data: TrackLyricsUpdateType) => void;
 
   setIsInitingSystem: (isIniting: boolean) => void;
   reorderClient: (clientId: string) => void;
   changeAudioSource: (url: string) => boolean;
   findAudioIndexByUrl: (url: string) => number | null;
   schedulePlay: (data: { trackTimeSeconds: number; targetServerTime: number; audioSource: string }) => void;
-  schedulePause: (data: { targetServerTime: number }) => void;
+  schedulePause: (data: { targetServerTime: number; trackTimeSeconds: number; audioSource: string }) => void;
   setSocket: (socket: WebSocket | null) => void;
   broadcastPlay: (trackTimeSeconds?: number) => void;
-  broadcastPause: () => void;
+  broadcastPause: (trackTimeSeconds?: number) => void;
   startSpatialAudio: () => void;
   sendStopSpatialAudio: () => void;
   sendChatMessage: (text: string, replyToMessageId?: number) => void;
@@ -1044,14 +1047,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       });
     },
 
-    schedulePause: ({ targetServerTime }: { targetServerTime: number }) => {
+    schedulePause: ({ targetServerTime, trackTimeSeconds, audioSource }) => {
       const state = get();
+      if (audioSource !== state.selectedAudioUrl) return;
       const waitTimeSeconds = getWaitTimeSeconds(state, targetServerTime);
       console.log(`Pausing track in ${waitTimeSeconds}`);
 
-      state.pauseAudio({
-        when: waitTimeSeconds,
-      });
+      if (state.isPlaying && state.audioPlayer) state.pauseAudio({ when: waitTimeSeconds });
+      // The server's paused position also represents a seek while already paused.
+      set({ currentTime: Math.max(0, Math.min(trackTimeSeconds, state.duration || trackTimeSeconds)) });
     },
 
     setSocket: (socket) => set({ socket }),
@@ -1102,7 +1106,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       });
     },
 
-    broadcastPause: () => {
+    broadcastPause: (trackTimeSeconds) => {
       const state = get();
       const { socket } = getSocket(state);
 
@@ -1118,7 +1122,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         ws: socket,
         request: {
           type: ClientActionEnum.enum.PAUSE,
-          trackTimeSeconds: state.getCurrentTrackPosition(),
+          trackTimeSeconds: trackTimeSeconds ?? state.getCurrentTrackPosition(),
           audioSource: state.selectedAudioUrl,
         },
       });
@@ -1670,6 +1674,14 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       return state.audioSources.find((as) => as.source.url === state.selectedAudioUrl) || null;
     },
 
+    handleLyricsUpdate: (update) =>
+      set((state) => ({
+        audioSources: state.audioSources.map((entry) => {
+          const source = mergeLyricsUpdate(entry.source, update);
+          return source === entry.source ? entry : { ...entry, source };
+        }),
+      })),
+
     async handleSetAudioSources({ sources, currentAudioSource }) {
       // Wait for audio initialization to complete if it's in progress
       if (initializationMutex.isLocked()) {
@@ -1726,6 +1738,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
               ...existing.source,
               ...source,
               title: source.title?.trim() || existing.source.title,
+              lyrics:
+                (existing.source.lyricsVersion ?? 0) > (source.lyricsVersion ?? 0)
+                  ? existing.source.lyrics
+                  : source.lyrics,
+              lyricsState:
+                (existing.source.lyricsVersion ?? 0) > (source.lyricsVersion ?? 0)
+                  ? existing.source.lyricsState
+                  : source.lyricsState,
+              lyricsVersion: Math.max(existing.source.lyricsVersion ?? 0, source.lyricsVersion ?? 0),
             },
           };
         }

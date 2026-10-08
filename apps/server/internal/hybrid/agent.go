@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/psy-zney/beatsync/apps/server/internal/config"
+	"github.com/psy-zney/beatsync/apps/server/internal/lyrics"
 	"github.com/psy-zney/beatsync/apps/server/internal/spotify"
 	"github.com/psy-zney/beatsync/apps/server/internal/youtube"
 )
@@ -175,6 +176,12 @@ func (a *Agent) handle(ctx context.Context, kind string, payload json.RawMessage
 		}
 		title, videoID, err := a.youtube.Metadata(ctx, input.Input)
 		return YouTubeMetadataResult{Title: title, VideoID: videoID}, err
+	case KindYouTubeLyrics:
+		var input YouTubeInput
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		return lyrics.FetchYouTube(ctx, a.cfg.YTDLPPath, a.cfg.CookiesPath, input.Input)
 	default:
 		return nil, fmt.Errorf("unsupported job kind %q", kind)
 	}

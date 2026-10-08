@@ -3,6 +3,7 @@ import { useClientId } from "@/hooks/useClientId";
 import { useNtpHeartbeat } from "@/hooks/useNtpHeartbeat";
 import { useWebSocketReconnection } from "@/hooks/useWebSocketReconnection";
 import { getWsUrl } from "@/lib/urls";
+import { decodeWSResponse } from "@/lib/wsResponse";
 import { PERSISTENT_ROOM_ID, readSavedPlaylists, rememberRecentRoom } from "@/lib/browserLibrary";
 import { useChatStore } from "@/store/chat";
 import { useGlobalStore } from "@/store/global";
@@ -10,7 +11,7 @@ import { toast } from "sonner";
 import { useRoomStore } from "@/store/room";
 import { validateProbePair, getProbeStats, NTPMeasurement } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
-import { ClientActionEnum, epochNow, NTPResponseMessageType, WSResponseSchema } from "@beatsync/shared";
+import { ClientActionEnum, epochNow, NTPResponseMessageType } from "@beatsync/shared";
 import { useEffect, useRef } from "react";
 
 /**
@@ -58,7 +59,6 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
   const processLowPassConfig = useGlobalStore((state) => state.processLowPassConfig);
   const processMetronomeConfig = useGlobalStore((state) => state.processMetronomeConfig);
   const handleSetAudioSources = useGlobalStore((state) => state.handleSetAudioSources);
-  const applyFinalGain = useGlobalStore((state) => state.applyFinalGain);
   const setActiveStreamJobs = useGlobalStore((state) => state.setActiveStreamJobs);
   const setMessages = useChatStore((state) => state.setMessages);
   const handleLoadAudioSource = useGlobalStore((state) => state.handleLoadAudioSource);
@@ -168,14 +168,17 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
     // TODO: Refactor into exhaustive handler registry
     ws.onmessage = async (msg) => {
-      const response = WSResponseSchema.parse(JSON.parse(msg.data));
+      const response = decodeWSResponse(msg.data);
+      if (!response) return;
       if (response.type !== "NTP_RESPONSE") {
         // Avoid a global store update for every timing probe. UI actions only
         // need to observe actual application responses.
         useGlobalStore.setState({ lastMessageReceivedTime: Date.now() });
       }
 
-      if (response.type === "ROOM_JOINED") {
+      if (response.type === "ERROR") {
+        toast.error(response.message, { id: "server-error" });
+      } else if (response.type === "ROOM_JOINED") {
         rememberRecentRoom(roomId);
         if (
           !hasReceivedRoomStateRef.current &&
@@ -212,6 +215,8 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
 
         if (event.type === "SET_AUDIO_SOURCES") {
           handleSetAudioSources(event);
+        } else if (event.type === "TRACK_LYRICS_UPDATE") {
+          useGlobalStore.getState().handleLyricsUpdate(event);
         } else if (event.type === "CHAT_UPDATE") {
           // Handle chat messages
           setMessages(event.messages, event.isFullSync, event.newestId);
@@ -263,6 +268,8 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         } else if (scheduledAction.type === "PAUSE") {
           schedulePause({
             targetServerTime: serverTimeToExecute,
+            trackTimeSeconds: scheduledAction.trackTimeSeconds,
+            audioSource: scheduledAction.audioSource,
           });
         } else if (scheduledAction.type === "SPATIAL_CONFIG") {
           processSpatialConfig(scheduledAction);

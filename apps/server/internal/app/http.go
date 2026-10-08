@@ -102,7 +102,7 @@ func (a *App) handleHealth(writer http.ResponseWriter) {
 		status = "degraded"
 	}
 	queueStats := a.Queue.Stats()
-	writeJSON(writer, http.StatusOK, map[string]any{"status": status, "uptimeMs": time.Since(a.startedAt).Milliseconds(), "startedAt": a.startedAt.UTC().Format(time.RFC3339), "rooms": a.Rooms.Count(), "memory": memoryStatus, "streamQueue": queueStats, "hybridWorker": a.Hybrid.Stats(queueStats.Pending)})
+	writeJSON(writer, http.StatusOK, map[string]any{"status": status, "uptimeMs": time.Since(a.startedAt).Milliseconds(), "startedAt": a.startedAt.UTC().Format(time.RFC3339), "rooms": a.Rooms.Count(), "memory": memoryStatus, "streamQueue": queueStats, "hybridWorker": a.Hybrid.Stats(queueStats.Pending), "lyrics": a.Lyrics.Stats()})
 }
 
 func (a *App) handleStats(writer http.ResponseWriter) {
@@ -262,6 +262,7 @@ func (a *App) handleUploadComplete(writer http.ResponseWriter, request *http.Req
 	}
 	sources := room.AddAudioSource(model.AudioSource{URL: payload.PublicURL, Title: payload.OriginalName})
 	a.broadcastSources(payload.RoomID, sources)
+	go a.triggerAutoLyrics(payload.RoomID, room)
 	writeJSON(writer, http.StatusOK, map[string]any{"success": true})
 }
 
