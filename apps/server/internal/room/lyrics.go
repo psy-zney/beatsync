@@ -14,6 +14,9 @@ func ValidLyrics(lyrics *model.TrackLyrics) bool {
 }
 
 func (r *Room) SetTrackLyrics(url string, lyrics *model.TrackLyrics, onlyIfEmpty bool) ([]model.AudioSource, error) {
+	if lyrics != nil && lyrics.Provider == "youtube-auto" {
+		return nil, errors.New("Automatic YouTube captions are unreliable for singing; choose author captions or corrected lyrics")
+	}
 	if !ValidLyrics(lyrics) {
 		return nil, errors.New("Invalid lyrics: use at most 40 KB and a timing offset between -30 and 30 seconds")
 	}
@@ -103,7 +106,7 @@ func (r *Room) FinishLyricsFetch(url string, token uint64, value *model.TrackLyr
 		if source.URL != url || source.Lyrics != nil {
 			continue
 		}
-		if value != nil && (!ValidLyrics(value) || !model.HasTrackLyrics(value)) {
+		if value != nil && (!ValidLyrics(value) || !model.HasTrackLyrics(value) || value.Provider == "youtube-auto") {
 			value = nil
 			status = "error"
 		}

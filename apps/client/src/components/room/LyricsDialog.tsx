@@ -29,7 +29,7 @@ import { toast } from "sonner";
 type LyricsMode = "lyrics" | "karaoke";
 
 function shareLyrics(url: string, lyrics: TrackLyricsType | null, onlyIfEmpty = false): boolean {
-  if (lyrics && !onlyIfEmpty) lyrics = { ...lyrics, automatic: false, resolverVersion: 5 };
+  if (lyrics && !onlyIfEmpty) lyrics = { ...lyrics, automatic: false, resolverVersion: 6 };
   const ws = useGlobalStore.getState().socket;
   if (!ws || !sendWSRequest({ ws, request: { type: "SET_TRACK_LYRICS", audioSource: url, lyrics, onlyIfEmpty } })) {
     if (!onlyIfEmpty) toast.error("Kết nối lại phòng trước khi chỉnh sửa lời.");

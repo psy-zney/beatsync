@@ -41,8 +41,7 @@ type youtubeInfo struct {
 	} `json:"formats"`
 }
 type captionChoice struct {
-	language  string
-	automatic bool
+	language string
 }
 
 func FetchYouTubeSubtitles(ctx context.Context, path, cookies, videoID string) (*model.TrackLyrics, error) {
@@ -51,7 +50,7 @@ func FetchYouTubeSubtitles(ctx context.Context, path, cookies, videoID string) (
 }
 
 // FetchYouTube extracts metadata once, then downloads only original-language
-// captions. Automatic translations are never eligible as song lyrics.
+// author-uploaded captions. Singing ASR and translations are not lyric sources.
 func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.YouTubeLyricsResult, error) {
 	var result model.YouTubeLyricsResult
 	if path == "" || !videoIDPattern.MatchString(videoID) {
@@ -111,8 +110,7 @@ func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.
 		return result, err
 	}
 	var lastError error
-	// One manual track then one original automatic track is enough; downloading
-	// every translated language consumes the budget and causes rate limiting.
+	// Download one author-uploaded track in the song's original language.
 	for _, choice := range choices {
 		leftovers, _ := filepath.Glob(filepath.Join(temporary, "caption.*"))
 		for _, name := range leftovers {
@@ -120,11 +118,7 @@ func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.
 		}
 		output := filepath.Join(temporary, "caption.%(ext)s")
 		subArgs := append(append([]string(nil), common...), "--skip-download", "--load-info-json", infoPath, "--sub-format", "json3/vtt", "--sub-langs", regexp.QuoteMeta(choice.language), "-o", output)
-		if choice.automatic {
-			subArgs = append(subArgs, "--no-write-subs", "--write-auto-subs")
-		} else {
-			subArgs = append(subArgs, "--write-subs", "--no-write-auto-subs")
-		}
+		subArgs = append(subArgs, "--write-subs", "--no-write-auto-subs")
 		if _, err = runExtractor(ctx, path, subArgs...); err != nil {
 			lastError = err
 			continue
@@ -158,10 +152,6 @@ func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.
 			if len(lines) < 2 || len([]rune(plain)) < 30 {
 				continue
 			}
-			provider := "youtube-manual"
-			if choice.automatic {
-				provider = "youtube-auto"
-			}
 			kind := "line"
 			for _, line := range lines {
 				if len(line.Words) > 0 {
@@ -169,7 +159,7 @@ func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.
 					break
 				}
 			}
-			value := &model.TrackLyrics{Synced: synced, Provider: provider, Language: baseLanguage(choice.language), SyncType: kind, Lines: lines, ResolverVersion: model.LyricsResolverVersion, Automatic: true}
+			value := &model.TrackLyrics{Synced: synced, Provider: "youtube-manual", Language: baseLanguage(choice.language), SyncType: kind, Lines: lines, ResolverVersion: model.LyricsResolverVersion, Automatic: true}
 			if !model.ValidTrackLyrics(value) && len(value.Lines) > 0 {
 				// Enhanced LRC retains original word times and gap cues even
 				// when the duplicate structure would exceed the payload limit.
@@ -191,57 +181,34 @@ func selectCaptions(info youtubeInfo, expected string) []captionChoice {
 	if expected == "" {
 		return nil
 	}
-	var choices []captionChoice
-	for _, automatic := range []bool{false, true} {
-		tracks := info.Subtitles
-		if automatic {
-			tracks = info.Automatic
+	// Singing ASR can produce fluent-looking text with severe word errors.
+	// Automatic tracks remain useful as language metadata, not as lyric text.
+	var codes []string
+	for code, formats := range info.Subtitles {
+		if baseLanguage(code) != expected || len(formats) == 0 {
+			continue
 		}
-		var codes []string
-		for code, formats := range tracks {
-			if baseLanguage(code) != expected || len(formats) == 0 {
-				continue
+		translated := false
+		for _, format := range formats {
+			parsed, err := url.Parse(format.URL)
+			if err != nil || parsed.Query().Get("tlang") != "" || strings.Contains(strings.ToLower(format.Name), " from ") {
+				translated = true
 			}
-			translated := false
-			for _, format := range formats {
-				parsed, err := url.Parse(format.URL)
-				if err != nil || parsed.Query().Get("tlang") != "" || strings.Contains(strings.ToLower(format.Name), " from ") {
-					translated = true
-				}
-			}
-			if translated {
-				continue
-			}
-			// Auto tracks must explicitly identify the native language, or have lang
-			// matching the requested original language and no translation parameter.
-			if automatic && !strings.HasSuffix(code, "-orig") {
-				native := false
-				for _, format := range formats {
-					parsed, _ := url.Parse(format.URL)
-					if parsed != nil && baseLanguage(parsed.Query().Get("lang")) == expected {
-						native = true
-					}
-				}
-				if !native {
-					continue
-				}
-			}
+		}
+		if !translated {
 			codes = append(codes, code)
 		}
-		sort.Slice(codes, func(i, j int) bool {
-			if strings.HasSuffix(codes[i], "-orig") != strings.HasSuffix(codes[j], "-orig") {
-				return strings.HasSuffix(codes[i], "-orig")
-			}
-			if (codes[i] == expected) != (codes[j] == expected) {
-				return codes[i] == expected
-			}
-			return codes[i] < codes[j]
-		})
-		if len(codes) > 0 {
-			choices = append(choices, captionChoice{language: codes[0], automatic: automatic})
-		}
 	}
-	return choices
+	sort.Slice(codes, func(i, j int) bool {
+		if (codes[i] == expected) != (codes[j] == expected) {
+			return codes[i] == expected
+		}
+		return codes[i] < codes[j]
+	})
+	if len(codes) == 0 {
+		return nil
+	}
+	return []captionChoice{{language: codes[0]}}
 }
 
 func originalLanguage(info youtubeInfo) string {

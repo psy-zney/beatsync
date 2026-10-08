@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
@@ -99,7 +100,9 @@ func searchLRCLIB(ctx context.Context, client *http.Client, baseURL string, meta
 	if baseURL == "" {
 		baseURL = DefaultLRCLIBBase
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/search?q="+url.QueryEscape(query), nil)
+	// YouTube titles can contain decomposed Vietnamese accents. The catalog
+	// searches composed text, although both forms look identical in the UI.
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/search?q="+url.QueryEscape(norm.NFC.String(query)), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -126,3 +126,37 @@ func TestLegacyLRCLIBIsRefetchedAndManualCorrectionsArePreserved(t *testing.T) {
 		t.Fatal("legacy catalog lyrics remained, or explicit corrections were lost")
 	}
 }
+
+func TestASRDocumentsAreRemovedIncludingTimingOnlyEdits(t *testing.T) {
+	for _, automatic := range []bool{true, false} {
+		state := New("123456")
+		state.Restore(model.RoomBackup{AudioSources: []model.AudioSource{
+			{URL: "asr", Lyrics: &model.TrackLyrics{Provider: "youtube-auto", ResolverVersion: 5, Automatic: automatic, Offset: -0.1, Synced: "[00:01]nghỉ em có quen vui à"}},
+			{URL: "manual", Lyrics: &model.TrackLyrics{Provider: "import", ResolverVersion: 5, Synced: "[00:01]Lời đã được người dùng sửa"}},
+		}})
+		sources, _, _, _, _, _, _ := state.State()
+		if sources[0].Lyrics != nil || sources[1].Lyrics == nil {
+			t.Fatal("ASR survived migration or a manual correction was removed")
+		}
+		if _, _, ok := state.BeginLyricsFetch("asr", time.Now()); !ok {
+			t.Fatal("removed ASR never became eligible for a new source")
+		}
+	}
+}
+
+func TestStaleClientsAndWorkersCannotRestoreRejectedASR(t *testing.T) {
+	state := New("123456")
+	state.AddAudioSource(model.AudioSource{URL: "track"})
+	asr := &model.TrackLyrics{Provider: "youtube-auto", ResolverVersion: model.LyricsResolverVersion, Synced: "[00:01]Lời nhận dạng sai"}
+	if _, err := state.SetTrackLyrics("track", asr, false); err == nil {
+		t.Fatal("stale client reintroduced ASR")
+	}
+	_, token, ok := state.BeginLyricsFetch("track", time.Now())
+	if !ok {
+		t.Fatal("rejected client update blocked automatic retrieval")
+	}
+	sources, ok := state.FinishLyricsFetch("track", token, asr, "ready", time.Now())
+	if !ok || sources[0].Lyrics != nil || sources[0].LyricsState != "error" {
+		t.Fatal("ASR worker result marked the track ready")
+	}
+}

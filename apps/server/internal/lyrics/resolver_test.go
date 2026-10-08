@@ -74,7 +74,7 @@ func TestOriginalCaptionSelection(t *testing.T) {
 		"en-orig": {{URL: "https://youtube.com/api/timedtext?lang=en"}},
 	}}
 	choices := selectCaptions(info, "vi")
-	if len(choices) != 2 || choices[0].language != "vi" || choices[0].automatic || choices[1].language != "vi-orig" {
+	if len(choices) != 1 || choices[0].language != "vi" {
 		t.Fatalf("choices=%+v", choices)
 	}
 	info.Subtitles = nil
@@ -82,8 +82,8 @@ func TestOriginalCaptionSelection(t *testing.T) {
 	if len(selectCaptions(info, "vi")) != 0 {
 		t.Fatal("translated captions must be excluded")
 	}
-	if choices := selectCaptions(info, "en"); len(choices) != 1 || choices[0].language != "en-orig" {
-		t.Fatal("English native captions rejected")
+	if choices := selectCaptions(info, "en"); len(choices) != 0 {
+		t.Fatal("native English ASR was accepted as lyric text")
 	}
 }
 

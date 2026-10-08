@@ -8,13 +8,18 @@ import (
 )
 
 const MaxLyricsBytes = 40_000
-const LyricsResolverVersion = 5
+const LyricsResolverVersion = 6
 
 func LegacyAutomaticLyrics(value *TrackLyrics) bool {
+	// Even timing-only edits of an old ASR document retain this provider name.
+	// Explicit text corrections/imports use their own provider and survive.
+	if value != nil && value.Provider == "youtube-auto" {
+		return true
+	}
 	if value != nil && value.ResolverVersion > 0 && !value.Automatic {
 		return false
 	}
-	return value != nil && (value.Automatic || value.Provider == "youtube-manual" || value.Provider == "youtube-auto" || (value.Provider == "lrclib" && value.ResolverVersion == 0)) && value.ResolverVersion != LyricsResolverVersion
+	return value != nil && (value.Automatic || value.Provider == "youtube-manual" || (value.Provider == "lrclib" && value.ResolverVersion == 0)) && value.ResolverVersion != LyricsResolverVersion
 }
 
 func ValidTrackLyrics(value *TrackLyrics) bool {

@@ -3,6 +3,8 @@ package lyrics
 import (
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 func baseLanguage(value string) string {
@@ -13,6 +15,7 @@ func baseLanguage(value string) string {
 // Only infer languages with strong textual evidence. An unknown language is
 // preferable to treating every Latin-script song as English.
 func detectLanguage(text string) string {
+	text = norm.NFC.String(text)
 	counts := map[string]int{}
 	letters := 0
 	for _, r := range strings.ToLower(text) {
@@ -81,6 +84,7 @@ func languageMatches(text, expected string) bool {
 }
 
 func normalizeSearchString(value string) string {
+	value = norm.NFC.String(value)
 	var result strings.Builder
 	for _, r := range strings.ToLower(value) {
 		switch {

@@ -117,7 +117,7 @@ func (s *Service) GetOrFetch(ctx context.Context, key, id, title string, duratio
 	}
 	key = canonicalKey(key, id)
 	s.mu.Lock()
-	if entry, ok := s.cache[key]; ok && time.Now().Before(entry.Expires) && (entry.Lyrics != nil || entry.Query == normalizeSearchString(title)) {
+	if entry, ok := s.cache[key]; ok && time.Now().Before(entry.Expires) && (entry.Lyrics == nil || entry.Lyrics.Provider != "youtube-auto") && (entry.Lyrics != nil || entry.Query == normalizeSearchString(title)) {
 		entry.Used = time.Now()
 		s.cache[key] = entry
 		s.mu.Unlock()
@@ -170,7 +170,7 @@ func (s *Service) GetOrFetch(ctx context.Context, key, id, title string, duratio
 		if result.Metadata.Language != "" {
 			metadata.Language = result.Metadata.Language
 		}
-		if result.Lyrics != nil {
+		if result.Lyrics != nil && result.Lyrics.Provider != "youtube-auto" {
 			if model.ValidTrackLyrics(result.Lyrics) && model.HasTrackLyrics(result.Lyrics) && languageMatches(lyricsText(result.Lyrics), metadata.Language) {
 				call.lyrics = model.CloneTrackLyrics(result.Lyrics)
 			} else {
@@ -243,7 +243,7 @@ func (s *Service) store(key string, value *model.TrackLyrics, ttl time.Duration,
 // Used by tests/cache seeding; user edits stay in their room and are never
 // published as global lyrics or timing offsets for another room.
 func (s *Service) StoreManually(key string, value *model.TrackLyrics) {
-	if key == "" || !model.ValidTrackLyrics(value) || !model.HasTrackLyrics(value) {
+	if key == "" || !model.ValidTrackLyrics(value) || !model.HasTrackLyrics(value) || value.Provider == "youtube-auto" {
 		return
 	}
 	s.store(canonicalKey(key, ""), value, 30*24*time.Hour)
@@ -269,7 +269,7 @@ func (s *Service) loadDisk(key string) *model.TrackLyrics {
 		return nil
 	}
 	var entry cacheEntry
-	if json.Unmarshal(data, &entry) != nil || entry.Version != cacheVersion || time.Now().After(entry.Expires) || !model.ValidTrackLyrics(entry.Lyrics) || !model.HasTrackLyrics(entry.Lyrics) {
+	if json.Unmarshal(data, &entry) != nil || entry.Version != cacheVersion || time.Now().After(entry.Expires) || !model.ValidTrackLyrics(entry.Lyrics) || !model.HasTrackLyrics(entry.Lyrics) || entry.Lyrics.Provider == "youtube-auto" {
 		return nil
 	}
 	return entry.Lyrics

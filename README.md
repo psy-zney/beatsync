@@ -15,7 +15,7 @@ BeatSync là ứng dụng nghe nhạc đồng bộ theo thời gian thực giữ
 
 ## Lyrics và Karaoke
 
-Lời được lấy tự động ở backend khi thêm bài, khôi phục playlist hoặc phát nhạc; không cần mở hộp thoại hay nhập tìm kiếm. Hệ thống chuẩn bị bài đang phát và hai bài tiếp theo, ưu tiên phụ đề gốc do tác giả đăng trên YouTube, rồi phụ đề tự động đúng ngôn ngữ gốc và [LRCLIB](https://lrclib.net/docs). Nhạc Việt dùng lời Việt; các bài khác dùng lời gốc, không tự chọn phụ đề dịch máy.
+Lời được lấy tự động ở backend khi thêm bài, khôi phục playlist hoặc phát nhạc; không cần mở hộp thoại hay nhập tìm kiếm. Hệ thống chuẩn bị bài đang phát và hai bài tiếp theo, ưu tiên phụ đề gốc do tác giả đăng trên YouTube, rồi [LRCLIB](https://lrclib.net/docs) khi khớp bài, nghệ sĩ và thời lượng. Phụ đề nhận dạng giọng hát tự động của YouTube bị loại khỏi luồng lấy lời vì có thể sai nhiều từ. Nhạc Việt dùng lời Việt; các bài khác dùng lời gốc, không tự chọn phụ đề dịch máy.
 
 Bấm **Lời bài hát** hoặc **Karaoke** dưới trình phát. Lời tự cuộn, tô sáng câu đang hát, hỗ trợ tô từng từ khi nguồn có timestamp thật; bấm vào câu để tua. Đoạn nhạc không có lời được hiển thị riêng. Karaoke mở chữ lớn trên máy tính và điện thoại. Lời thường vẫn đọc được; không có timestamp thì hiển thị tĩnh. Mỗi bản lời tối đa 40 KB.
 
