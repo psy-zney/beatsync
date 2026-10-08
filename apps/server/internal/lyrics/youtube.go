@@ -30,6 +30,8 @@ type youtubeInfo struct {
 	Title     string                     `json:"title"`
 	Track     string                     `json:"track"`
 	Artist    string                     `json:"artist"`
+	Channel   string                     `json:"channel"`
+	Uploader  string                     `json:"uploader"`
 	Duration  float64                    `json:"duration"`
 	Language  string                     `json:"language"`
 	Subtitles map[string][]captionFormat `json:"subtitles"`
@@ -81,6 +83,25 @@ func FetchYouTube(parent context.Context, path, cookies, videoID string) (model.
 	}
 	expected := originalLanguage(info)
 	result.Metadata = model.LyricsMetadata{Title: info.Title, Track: info.Track, Artist: info.Artist, Duration: info.Duration, Language: expected}
+	// Official audio uploads often have no music tags or captions. Use the
+	// uploader only when the video's artist credits independently match it.
+	if result.Metadata.Track == "" || result.Metadata.Artist == "" {
+		artist := info.Artist
+		if artist == "" {
+			artist = info.Channel
+		}
+		if artist == "" {
+			artist = info.Uploader
+		}
+		if track, creditedArtist := inferCreditedTrack(info.Title, artist); track != "" {
+			if result.Metadata.Track == "" {
+				result.Metadata.Track = track
+			}
+			if result.Metadata.Artist == "" {
+				result.Metadata.Artist = creditedArtist
+			}
+		}
+	}
 	choices := selectCaptions(info, expected)
 	if len(choices) == 0 {
 		return result, nil
