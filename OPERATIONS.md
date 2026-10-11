@@ -53,3 +53,11 @@ swapon --show
 ```
 
 Các giới hạn production 220/320 MiB và queue 1/12 được khóa trong unit do script cài đặt tạo ra, nên `.env` cũ 600/750 MiB không thể vô tình vượt `MemoryMax=420M`. Muốn đổi chúng, sửa đồng thời `ExecStart`, `MemoryHigh` và `MemoryMax` trong `scripts/install-go-backend.sh`, luôn giữ `soft < hard < MemoryMax`.
+
+## LiveKit tự quản lý trên VPS
+
+Container LiveKit mở signaling nội bộ tại `127.0.0.1:9002` (trong container là cổng `7880`) và công bố dải media UDP `50000–50100`. Nginx dùng `/etc/nginx/sites-enabled/voice-public.conf`: cổng `80` phục vụ ACME và chuyển hướng HTTPS, cổng `443` kết thúc TLS rồi chuyển HTTP/WebSocket tới LiveKit. Chứng chỉ `voice.zney295.id.vn` nằm trong `/etc/letsencrypt/live/`; `certbot.timer` cùng deploy hook tự gia hạn và reload Nginx.
+
+Cloudflare cần bản ghi A proxied cho `voice.zney295.id.vn` và **không** rewrite hostname này sang cổng `9000`; HTTPS dùng cổng mặc định `443`. Giữ nguyên Origin Rule của `beatsync-server.zney295.id.vn` tới gateway `9000`. Backend chỉ cần `LIVEKIT_URL=wss://voice.zney295.id.vn` cùng `LIVEKIT_API_KEY` và `LIVEKIT_API_SECRET`; frontend lấy URL qua `/voice/token`.
+
+Sau khi đổi Cloudflare, kiểm tra `https://voice.zney295.id.vn/`, kết nối WebSocket LiveKit bằng token thật và chạy `sudo certbot renew --dry-run --cert-name voice.zney295.id.vn` trên VPS. API và WebSocket chạy qua Nginx; media WebRTC dùng UDP `50000–50100` trực tiếp tới VPS, nên cần mở dải này trong firewall của nhà cung cấp VPS ngoài iptables và Docker.

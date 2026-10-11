@@ -33,5 +33,7 @@ target/
 *.rlib
 *.rmeta
 
-# Sensitive documentation
+# Sensitive documentation & secrets
 INFRASTRUCTURE_CONG_VPS.txt
+*cookies.txt
+cookies.txt

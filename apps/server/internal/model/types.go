@@ -116,6 +116,7 @@ type WSRequest struct {
 	ProbeGroupID          int64           `json:"probeGroupId"`
 	ProbeGroupIndex       int             `json:"probeGroupIndex"`
 	TrackTimeSeconds      float64         `json:"trackTimeSeconds"`
+	PreviousAudioSource   string          `json:"previousAudioSource"`
 	AudioSource           string          `json:"audioSource"`
 	Source                AudioSource     `json:"source"`
 	ClientID              string          `json:"clientId"`

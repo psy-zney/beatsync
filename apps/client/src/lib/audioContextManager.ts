@@ -421,14 +421,58 @@ class AudioContextManager {
     return this.getCurrentFlyMotion().pan;
   }
 
+  private resetStereoPanner(targetPan = 0): StereoPannerNode | null {
+    if (!this.audioContext || !this.lowPassFilterNode || !this.masterGainNode) return null;
+    try {
+      // Build the replacement before touching the live graph. If creation or
+      // connection fails, the current music output remains connected.
+      const replacement = this.audioContext.createStereoPanner();
+      replacement.pan.value = targetPan;
+      replacement.connect(this.masterGainNode);
+      this.lowPassFilterNode.connect(replacement);
+      if (this.stereoPannerNode) {
+        try {
+          this.lowPassFilterNode.disconnect(this.stereoPannerNode);
+        } catch {}
+        try {
+          this.stereoPannerNode.disconnect();
+        } catch {}
+      }
+      this.stereoPannerNode = replacement;
+      return this.stereoPannerNode;
+    } catch (error) {
+      console.warn("[Fly] Could not reset StereoPannerNode", error);
+      return null;
+    }
+  }
+
   private moveFlyPan(target: number, duration: number, currentPan: number): void {
     if (!this.audioContext || !this.stereoPannerNode) return;
     const now = this.audioContext.currentTime;
-    const pan = this.stereoPannerNode.pan;
-    // Cancel from time zero so an already-running value curve is removed too.
-    pan.cancelScheduledValues(0);
-    pan.setValueAtTime(currentPan, now);
-    pan.linearRampToValueAtTime(target, now + duration);
+    try {
+      const pan = this.stereoPannerNode.pan;
+      // Cancel from time zero so an already-running value curve is removed too.
+      pan.cancelScheduledValues(0);
+      pan.setValueAtTime(currentPan, now);
+      pan.linearRampToValueAtTime(target, now + duration);
+    } catch {
+      // In browsers like Firefox (Bug 1752775), cancelScheduledValues fails to clear
+      // an active setValueCurveAtTime. Recreate the panner node to cleanly reset the timeline.
+      const panner = this.resetStereoPanner(currentPan);
+      if (panner) {
+        try {
+          const pan = panner.pan;
+          pan.setValueAtTime(currentPan, now);
+          pan.linearRampToValueAtTime(target, now + duration);
+        } catch {
+          try {
+            panner.pan.value = target;
+          } catch (error) {
+            console.warn("[Fly] Could not reset pan", error);
+          }
+        }
+      }
+    }
   }
 
   private scheduleFlyMotion(currentPan: number): void {
@@ -457,19 +501,42 @@ class AudioContextManager {
         const position = trackTime + (remaining * i) / (count - 1);
         curve[i] = sampleMusicMotion(profile, position).pan * this.flyDepth;
       }
+
+      let scheduled = false;
       const pan = this.stereoPannerNode.pan;
-      pan.cancelScheduledValues(0);
-      pan.setValueAtTime(currentPan, now);
-      pan.linearRampToValueAtTime(curve[0], startAt);
-      pan.setValueCurveAtTime(curve, startAt, remaining);
+
+      try {
+        pan.cancelScheduledValues(0);
+        pan.setValueAtTime(currentPan, now);
+        pan.linearRampToValueAtTime(curve[0], startAt);
+        pan.setValueCurveAtTime(curve, startAt, remaining);
+        scheduled = true;
+      } catch {
+        // If an in-progress curve event couldn't be cancelled (Firefox Bug 1752775),
+        // recreate the StereoPannerNode to reset the automation timeline cleanly.
+        const panner = this.resetStereoPanner(currentPan);
+        if (panner) {
+          try {
+            const newPan = panner.pan;
+            newPan.setValueAtTime(currentPan, now);
+            newPan.linearRampToValueAtTime(curve[0], startAt);
+            newPan.setValueCurveAtTime(curve, startAt, remaining);
+            scheduled = true;
+          } catch (innerError) {
+            console.warn("[Fly] Failed to schedule curve on new panner", innerError);
+          }
+        }
+      }
+
+      if (!scheduled) {
+        this.moveFlyPan(curve[0] ?? 0, 0.2, currentPan);
+      }
     } catch (error) {
       // Fly is optional. A browser automation quirk must not abort music playback.
       console.warn("[Fly] Could not schedule music-driven motion", error);
       this.flyMode = "off";
       try {
-        const pan = this.stereoPannerNode.pan;
-        pan.cancelScheduledValues(0);
-        pan.value = 0;
+        this.resetStereoPanner(0);
       } catch {
         // The music source can still play through the unaffected audio graph.
       }

@@ -38,7 +38,6 @@ type App struct {
 	HTTP          *http.Client
 	startedAt     time.Time
 	upgrader      websocket.Upgrader
-	schedule      func(time.Duration, func())
 	background    sync.WaitGroup
 	lyricsWake    chan struct{}
 	lyricsContext context.Context
@@ -65,7 +64,6 @@ func New(cfg config.Config) (*App, error) {
 		Hybrid:    hybrid.NewBroker(cfg.HybridWorkerSecret),
 		HTTP:      &http.Client{Transport: &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 20 * time.Second}},
 		startedAt: time.Now(),
-		schedule:  func(delay time.Duration, callback func()) { time.AfterFunc(delay, callback) },
 	}
 	application.Memory = memory.New(cfg, jobs, func(context.Context) error { return backups.SaveLocal() })
 	application.upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 2048, CheckOrigin: func(*http.Request) bool { return true }}

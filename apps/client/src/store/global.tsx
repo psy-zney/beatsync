@@ -20,6 +20,7 @@ import {
 } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
 import { mergeLyricsUpdate } from "@/lib/lyricsUpdates";
+import { getPlaybackWindow, planAudioPreload, trimAudioCache } from "@/lib/audioPreload";
 import {
   AudioSourceSchema,
   AudioSourceType,
@@ -190,7 +191,7 @@ interface GlobalState extends GlobalStateValues {
   schedulePlay: (data: { trackTimeSeconds: number; targetServerTime: number; audioSource: string }) => void;
   schedulePause: (data: { targetServerTime: number; trackTimeSeconds: number; audioSource: string }) => void;
   setSocket: (socket: WebSocket | null) => void;
-  broadcastPlay: (trackTimeSeconds?: number) => void;
+  broadcastPlay: (trackTimeSeconds?: number, previousAudioSource?: string) => void;
   broadcastPause: (trackTimeSeconds?: number) => void;
   startSpatialAudio: () => void;
   sendStopSpatialAudio: () => void;
@@ -446,7 +447,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
   // Helper function to manage LRU cache
   const addURLToLRU = (url: string) => {
     const state = get();
-    const queue = [...state.bufferAccessQueue];
+    const queue = state.bufferAccessQueue.filter(
+      (cachedUrl) =>
+        cachedUrl === url ||
+        state.audioSources.some((item) => item.source.url === cachedUrl && item.status === "loaded")
+    );
 
     // Remove URL if it exists (to move it to front)
     const existingIndex = queue.indexOf(url);
@@ -458,27 +463,20 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     queue.unshift(url);
 
     // Determine which URLs to evict (if any) — skip eviction in demo mode
-    const urlsToEvict: string[] = [];
-    while (!IS_DEMO_MODE && queue.length > MAX_CACHED_BUFFERS) {
-      const urlToEvict = queue.pop();
-      if (urlToEvict) {
-        // Don't evict the currently selected/playing track
-        if (urlToEvict !== state.selectedAudioUrl) {
-          urlsToEvict.push(urlToEvict);
-          console.log(`[LRU Cache] Evicting ${urlToEvict}`);
-        } else {
-          // If we tried to evict the playing track, keep it at the end
-          queue.push(urlToEvict);
-          break;
-        }
-      }
-    }
+    const protectedUrls = getPlaybackWindow(
+      state.audioSources.map((item) => item.source.url),
+      state.selectedAudioUrl,
+      MAX_CACHED_BUFFERS
+    );
+    const trimmed = IS_DEMO_MODE
+      ? { queue, evictedUrls: [] }
+      : trimAudioCache(queue, protectedUrls, MAX_CACHED_BUFFERS);
 
     // Apply all changes in one atomic update
     set((currentState) => ({
-      bufferAccessQueue: queue,
+      bufferAccessQueue: trimmed.queue,
       audioSources: currentState.audioSources.map((as) =>
-        urlsToEvict.includes(as.source.url) ? { ...as, status: "idle", buffer: undefined } : as
+        trimmed.evictedUrls.includes(as.source.url) ? { ...as, status: "idle", buffer: undefined } : as
       ),
     }));
   };
@@ -629,7 +627,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         }
       }
 
-      eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
+      eagerLoadIdleSources();
     } catch (error) {
       console.error(`Failed to load audio source ${url}:`, error);
       const currentSocket = get().socket;
@@ -659,17 +657,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       }
 
       if (!isConnectionUnavailable) {
-        eagerLoadIdleSources({ preferredUrls: get().bufferAccessQueue });
+        eagerLoadIdleSources();
       }
     }
   };
 
   // Preload queue items in the background.
   // Demo mode loads everything; production keeps a small rolling preload window.
-  const eagerLoadIdleSources = ({ preferredUrls = [], skip }: { preferredUrls?: string[]; skip?: string } = {}) => {
+  const eagerLoadIdleSources = ({ skip }: { skip?: string } = {}) => {
     const state = get();
-    const activeCount = state.audioSources.filter((as) => as.status === "loaded" || as.status === "loading").length;
-    const loadingCount = state.audioSources.filter((as) => as.status === "loading").length;
 
     if (IS_DEMO_MODE) {
       for (const as of state.audioSources) {
@@ -681,22 +677,23 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       return;
     }
 
-    if (activeCount >= MAX_CACHED_BUFFERS || loadingCount >= MAX_BACKGROUND_PRELOADS) {
-      return;
-    }
-
-    const orderedUrls = [...preferredUrls, ...state.audioSources.map((as) => as.source.url)].filter(
-      (url, index, arr) => arr.indexOf(url) === index
+    const plan = planAudioPreload(
+      state.audioSources,
+      state.selectedAudioUrl,
+      state.bufferAccessQueue,
+      MAX_CACHED_BUFFERS,
+      MAX_BACKGROUND_PRELOADS
     );
-
-    const nextIdleUrl = orderedUrls.find((url) => {
-      if (url === skip) return false;
-      const sourceState = state.audioSources.find((as) => as.source.url === url);
-      return sourceState?.status === "idle";
-    });
-
-    if (nextIdleUrl) {
-      void loadAudioSource(nextIdleUrl);
+    if (plan.loadUrl && plan.loadUrl !== skip) {
+      if (plan.evictedUrls.length) {
+        set((currentState) => ({
+          bufferAccessQueue: currentState.bufferAccessQueue.filter((url) => !plan.evictedUrls.includes(url)),
+          audioSources: currentState.audioSources.map((item) =>
+            plan.evictedUrls.includes(item.source.url) ? { ...item, status: "idle", buffer: undefined } : item
+          ),
+        }));
+      }
+      void loadAudioSource(plan.loadUrl);
     }
   };
 
@@ -886,7 +883,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       });
 
       void loadAudioSource(url);
-      eagerLoadIdleSources({ preferredUrls: [url], skip: url });
+      eagerLoadIdleSources({ skip: url });
 
       // Return the previous playing state for the skip functions to use
       return wasPlaying;
@@ -900,6 +897,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     },
 
     schedulePlay: async (data) => {
+      toast.dismiss("room-audio-loading");
       const state = get();
       if (state.isInitingSystem) {
         console.log("Not playing audio, still loading");
@@ -1048,6 +1046,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     },
 
     schedulePause: ({ targetServerTime, trackTimeSeconds, audioSource }) => {
+      toast.dismiss("room-audio-loading");
       const state = get();
       if (audioSource !== state.selectedAudioUrl) return;
       const waitTimeSeconds = getWaitTimeSeconds(state, targetServerTime);
@@ -1061,7 +1060,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     setSocket: (socket) => set({ socket }),
 
     // if trackTimeSeconds is not provided, use the current track position
-    broadcastPlay: (trackTimeSeconds?: number) => {
+    broadcastPlay: (trackTimeSeconds?: number, previousAudioSource?: string) => {
       const state = get();
       const { socket } = getSocket(state);
 
@@ -1102,6 +1101,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           type: ClientActionEnum.enum.PLAY,
           trackTimeSeconds: trackTimeSeconds ?? state.getCurrentTrackPosition(),
           audioSource: audioId,
+          ...(previousAudioSource ? { previousAudioSource } : {}),
         },
       });
     },
@@ -1424,6 +1424,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           const endedNaturally = audioContext.currentTime >= expectedEndTime - 0.5;
 
           if (endedNaturally) {
+            // Another client may already have requested the successor while this
+            // source was still ending. Never advance again from that new selection.
+            if (currentState.selectedAudioUrl !== audioSourceState.source.url) return;
             console.log("Track ended naturally, skipping to next via autoplay.");
             // Set currentTime to duration, as playback fully completed
             // We don't set isPlaying false here, let skipToNextTrack handle state transition
@@ -1459,6 +1462,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         playbackOffset: data.offset,
         duration: audioBuffer.duration, // Set the duration
       }));
+      eagerLoadIdleSources();
     },
 
     processSpatialConfig: (config: SpatialConfigType) => {
@@ -1559,7 +1563,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         console.log(
           `Skip to next: ${nextAudioId}. Was playing: ${wasPlayingBeforeSkip}, Is autoplay: ${isAutoplay}. Broadcasting play.`
         );
-        state.broadcastPlay(0); // Play next track from start
+        state.broadcastPlay(0, isAutoplay ? selectedAudioId : undefined); // Play next track from start
       } else {
         console.log(
           `Skip to next: ${nextAudioId}. Was playing: ${wasPlayingBeforeSkip}, Is autoplay: ${isAutoplay}. Not broadcasting play.`
@@ -1768,7 +1772,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       // Preload queue items as soon as they enter the room.
       // Demo mode waits for sync; production preloads in the background immediately.
       if (IS_DEMO_MODE ? get().isSynced : true) {
-        eagerLoadIdleSources({ preferredUrls: newQueue, skip: replacementCurrentAudioSource });
+        eagerLoadIdleSources({ skip: replacementCurrentAudioSource });
       }
 
       // Check if the currently selected/playing track was removed
@@ -1946,9 +1950,13 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     // Audio source methods
     handleLoadAudioSource: ({ audioSourceToPlay }: LoadAudioSourceType) => {
+      toast.info("Waiting for everyone in the room to load the track…", {
+        id: "room-audio-loading",
+        duration: Infinity,
+      });
       set({ selectedAudioUrl: audioSourceToPlay.url });
       void loadAudioSource(audioSourceToPlay.url);
-      eagerLoadIdleSources({ preferredUrls: [audioSourceToPlay.url], skip: audioSourceToPlay.url });
+      eagerLoadIdleSources({ skip: audioSourceToPlay.url });
     },
 
     setOnWebRTCSignal: (callback) => {

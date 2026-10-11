@@ -161,45 +161,98 @@ func TestWebSocketBurstDoesNotDisconnectHealthyClient(t *testing.T) {
 	}
 }
 
-func TestPendingPlayTimeoutUsesDeterministicScheduler(t *testing.T) {
-	t.Parallel()
-	application, server := newWebSocketTestServer(t)
-	callbacks := make(chan func(), 1)
-	application.schedule = func(delay time.Duration, callback func()) {
-		if delay != 3*time.Second {
-			t.Errorf("schedule delay=%s, want 3s", delay)
-		}
-		callbacks <- callback
-	}
-	source := model.AudioSource{URL: "https://audio.test/worker.mp3", Title: "Worker track"}
-	application.Rooms.GetOrCreate("090624").AddAudioSource(source)
-	connection := dialTestClient(t, server, "timer-client")
-
-	if err := connection.WriteJSON(map[string]any{"type": "PLAY", "audioSource": source.URL, "trackTimeSeconds": 8.25}); err != nil {
+// An NTP response on the same socket is a fence: all earlier load messages
+// have been handled, so any premature PLAY would appear before it.
+func assertNoPlayBeforeFence(t *testing.T, connection *websocket.Conn) {
+	t.Helper()
+	if err := connection.WriteJSON(map[string]any{"type": "NTP_REQUEST", "t0": 987}); err != nil {
 		t.Fatal(err)
 	}
 	readUntil(t, connection, func(message map[string]any) bool {
-		if message["type"] != "ROOM_EVENT" {
-			return false
+		if message["type"] == "SCHEDULED_ACTION" {
+			action, _ := message["scheduledAction"].(map[string]any)
+			if action["type"] == "PLAY" {
+				t.Fatal("PLAY sent before every client loaded")
+			}
 		}
+		return message["type"] == "NTP_RESPONSE" && message["t0"] == float64(987)
+	})
+}
+
+func TestPendingPlayWaitsBeyondOldTimeoutAndForInitiator(t *testing.T) {
+	t.Parallel()
+	application, server := newWebSocketTestServer(t)
+	source := model.AudioSource{URL: "https://audio.test/worker.mp3", Title: "Worker track"}
+	first := dialTestClient(t, server, "initiator")
+	readUntil(t, first, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	second := dialTestClient(t, server, "slow-client")
+	readUntil(t, second, func(message map[string]any) bool { return message["type"] == "ROOM_JOINED" })
+	state := application.Rooms.GetOrCreate("090624")
+	state.AddAudioSource(source)
+	if err := first.WriteJSON(map[string]any{"type": "PLAY", "audioSource": source.URL, "trackTimeSeconds": 0}); err != nil {
+		t.Fatal(err)
+	}
+	for _, connection := range []*websocket.Conn{first, second} {
+		readUntil(t, connection, func(message map[string]any) bool {
+			event, _ := message["event"].(map[string]any)
+			return event["type"] == "LOAD_AUDIO_SOURCE"
+		})
+	}
+	// Reproduce a fetch/decode taking longer than the former three-second timer.
+	time.Sleep(3200 * time.Millisecond)
+	assertNoPlayBeforeFence(t, first)
+	if err := second.WriteJSON(map[string]any{"type": "AUDIO_SOURCE_LOADED", "source": map[string]any{"url": source.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	assertNoPlayBeforeFence(t, second)
+	if err := first.WriteJSON(map[string]any{"type": "AUDIO_SOURCE_LOADED", "source": map[string]any{"url": source.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	var executeAt float64
+	for _, connection := range []*websocket.Conn{first, second} {
+		message := readUntil(t, connection, func(message map[string]any) bool {
+			action, _ := message["scheduledAction"].(map[string]any)
+			return message["type"] == "SCHEDULED_ACTION" && action["type"] == "PLAY"
+		})
+		action := message["scheduledAction"].(map[string]any)
+		if action["trackTimeSeconds"] != float64(0) {
+			t.Fatalf("lost track beginning: %#v", action)
+		}
+		at := message["serverTimeToExecute"].(float64)
+		if executeAt != 0 && at != executeAt {
+			t.Fatal("clients received different start times")
+		}
+		executeAt = at
+	}
+}
+
+func TestInitialAutoplayAndJoiningClientWaitForLoad(t *testing.T) {
+	t.Parallel()
+	application, server := newWebSocketTestServer(t)
+	source := model.AudioSource{URL: "https://audio.test/worker.mp3", Title: "Worker track"}
+	application.Rooms.GetOrCreate("090624").AddAudioSource(source)
+	first := dialTestClient(t, server, "first")
+	readUntil(t, first, func(message map[string]any) bool {
 		event, _ := message["event"].(map[string]any)
 		return event["type"] == "LOAD_AUDIO_SOURCE"
 	})
-
-	select {
-	case callback := <-callbacks:
-		callback()
-	case <-time.After(3 * time.Second):
-		t.Fatal("play timeout was not scheduled")
-	}
-	message := readUntil(t, connection, func(message map[string]any) bool {
-		if message["type"] != "SCHEDULED_ACTION" {
-			return false
-		}
-		action, _ := message["scheduledAction"].(map[string]any)
-		return action["type"] == "PLAY" && action["trackTimeSeconds"] == 8.25
+	assertNoPlayBeforeFence(t, first)
+	late := dialTestClient(t, server, "late")
+	readUntil(t, late, func(message map[string]any) bool {
+		event, _ := message["event"].(map[string]any)
+		return event["type"] == "LOAD_AUDIO_SOURCE"
 	})
-	if message["serverTimeToExecute"].(float64) <= 0 {
-		t.Fatalf("scheduled message=%#v", message)
+	if err := first.WriteJSON(map[string]any{"type": "AUDIO_SOURCE_LOADED", "source": map[string]any{"url": source.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	assertNoPlayBeforeFence(t, first)
+	if err := late.WriteJSON(map[string]any{"type": "AUDIO_SOURCE_LOADED", "source": map[string]any{"url": source.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, connection := range []*websocket.Conn{first, late} {
+		readUntil(t, connection, func(message map[string]any) bool {
+			action, _ := message["scheduledAction"].(map[string]any)
+			return action["type"] == "PLAY"
+		})
 	}
 }

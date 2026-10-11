@@ -280,11 +280,18 @@ func (r *Room) HasSource(url string) bool {
 func (r *Room) BeginPlay(action map[string]any, initiator string) (uint64, model.AudioSource, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if previous, _ := action["previousAudioSource"].(string); previous != "" {
+		// Several clients finish together. Only the first continuation may
+		// start a load barrier; late end events must not reset it or skip again.
+		if r.pending != nil || r.playback.Type != "playing" || r.playback.AudioSource != previous {
+			return 0, model.AudioSource{}, false
+		}
+	}
 	url, _ := action["audioSource"].(string)
 	for _, source := range r.audioSources {
 		if source.URL == url {
 			r.pendingToken++
-			r.pending = &PendingPlay{Token: r.pendingToken, Action: action, Loaded: map[string]bool{initiator: true}, Initiator: initiator}
+			r.pending = &PendingPlay{Token: r.pendingToken, Action: action, Loaded: make(map[string]bool), Initiator: initiator}
 			return r.pendingToken, source, true
 		}
 	}
@@ -294,16 +301,11 @@ func (r *Room) BeginPlay(action map[string]any, initiator string) (uint64, model
 func (r *Room) MarkAudioLoaded(id, sourceURL string) (uint64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.pending == nil || r.pending.Action["audioSource"] != sourceURL {
+	if r.pending == nil || !r.connected[id] || r.pending.Action["audioSource"] != sourceURL {
 		return 0, false
 	}
 	r.pending.Loaded[id] = true
-	for clientID := range r.connected {
-		if !r.pending.Loaded[clientID] {
-			return r.pending.Token, false
-		}
-	}
-	return r.pending.Token, true
+	return r.pendingReadyLocked()
 }
 
 // PendingReady reports whether every client that is still connected has
@@ -312,6 +314,10 @@ func (r *Room) MarkAudioLoaded(id, sourceURL string) (uint64, bool) {
 func (r *Room) PendingReady() (uint64, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.pendingReadyLocked()
+}
+
+func (r *Room) pendingReadyLocked() (uint64, bool) {
 	if r.pending == nil || len(r.connected) == 0 {
 		return 0, false
 	}
@@ -323,10 +329,29 @@ func (r *Room) PendingReady() (uint64, bool) {
 	return r.pending.Token, true
 }
 
+// PendingSource lets a client joining during loading participate in the barrier.
+func (r *Room) PendingSource() (model.AudioSource, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.pending != nil {
+		for _, source := range r.audioSources {
+			if source.URL == r.pending.Action["audioSource"] {
+				return source, true
+			}
+		}
+	}
+	return model.AudioSource{}, false
+}
+
 func (r *Room) ExecutePending(token uint64) (map[string]any, float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pending == nil || r.pending.Token != token {
+		return nil, 0, false
+	}
+	// Recheck under the same lock as execution: a client may have joined since
+	// the last readiness check. Never advance playback while anyone is loading.
+	if _, ready := r.pendingReadyLocked(); !ready {
 		return nil, 0, false
 	}
 	action := r.pending.Action
@@ -360,7 +385,7 @@ func (r *Room) Pause(action map[string]any) (float64, bool) {
 	url, _ := action["audioSource"].(string)
 	position, _ := action["trackTimeSeconds"].(float64)
 	// A pause must also invalidate a play that is waiting for clients to load
-	// the source; otherwise its timeout can restart playback after the user has
+	// the source; otherwise a late load acknowledgement can restart playback after the user has
 	// already pressed pause.
 	r.pending = nil
 	if !r.hasSourceLocked(url) {

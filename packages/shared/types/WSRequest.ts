@@ -57,6 +57,7 @@ export const PlayActionSchema = z.object({
   type: z.literal(ClientActionEnum.enum.PLAY),
   trackTimeSeconds: z.number(),
   audioSource: z.string(),
+  previousAudioSource: z.string().optional(), // Automatic continuation is valid only for this ended track.
 });
 
 export const PauseActionSchema = z.object({

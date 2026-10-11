@@ -103,15 +103,14 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 		client.Send(roomEvent(map[string]any{"type": "CLIENT_CHANGE", "clients": clients}))
 		a.broadcastClients(client.RoomID, clients)
 	}
-	if state.ConnectionCount() == 1 && len(sources) > 0 && playback.Type == "paused" {
+	if source, pending := state.PendingSource(); pending {
+		client.Send(roomEvent(map[string]any{"type": "LOAD_AUDIO_SOURCE", "audioSourceToPlay": source}))
+	} else if state.ConnectionCount() == 1 && len(sources) > 0 && playback.Type == "paused" {
 		source := playback.AudioSource
 		if source == "" {
 			source = sources[0].URL
 		}
-		action := map[string]any{"type": "PLAY", "audioSource": source, "trackTimeSeconds": playback.TrackPositionSeconds}
-		if executeAt, ok := state.PlayImmediate(action); ok {
-			a.Hub.Broadcast(client.RoomID, scheduled(executeAt, action))
-		}
+		a.beginPlay(client, state, model.WSRequest{AudioSource: source, TrackTimeSeconds: playback.TrackPositionSeconds})
 	}
 }
 
@@ -261,19 +260,21 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 
 func (a *App) beginPlay(client *realtime.Client, state *room.Room, message model.WSRequest) {
 	action := map[string]any{"type": "PLAY", "audioSource": message.AudioSource, "trackTimeSeconds": message.TrackTimeSeconds}
+	if message.PreviousAudioSource != "" {
+		action["previousAudioSource"] = message.PreviousAudioSource
+	}
 	if a.Config.Demo {
 		if executeAt, ok := state.PlayImmediate(action); ok {
 			a.Hub.Broadcast(client.RoomID, scheduled(executeAt, action))
 		}
 		return
 	}
-	token, source, ok := state.BeginPlay(action, client.ClientID)
+	_, source, ok := state.BeginPlay(action, client.ClientID)
 	if !ok {
 		return
 	}
 	a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "LOAD_AUDIO_SOURCE", "audioSourceToPlay": source}))
 	go a.triggerAutoLyrics(client.RoomID, state)
-	a.schedule(3*time.Second, func() { a.executePlay(client.RoomID, state, token) })
 }
 func (a *App) executePlay(roomID string, state *room.Room, token uint64) {
 	action, executeAt, ok := state.ExecutePending(token)

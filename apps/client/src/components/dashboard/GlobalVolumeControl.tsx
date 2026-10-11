@@ -19,22 +19,35 @@ interface VolumeControlProps {
   label: string;
   value: number; // 0 to maxValue
   onChange: (val: number) => void;
+  onCommit?: (val: number) => void;
   disabled?: boolean;
   maxValue?: number;
+  badge?: React.ReactNode;
 }
 
-const VolumeControl = ({ icon, label, value, onChange, disabled = false, maxValue = 1 }: VolumeControlProps) => {
+const VolumeControl = ({
+  icon,
+  label,
+  value,
+  onChange,
+  onCommit,
+  disabled = false,
+  maxValue = 1,
+  badge,
+}: VolumeControlProps) => {
   const percent = Math.round(value * 100);
 
   return (
-    <div className="flex flex-col gap-1.5 w-full">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs text-neutral-300">
-          {icon}
-          <span className="truncate max-w-[120px]" title={label}>
+    <div className="flex flex-col gap-2 w-full">
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2 text-neutral-300 font-medium">
+          <span className="flex items-center text-neutral-400">{icon}</span>
+          <span className="truncate" title={label}>
             {label}
           </span>
+          {badge}
         </div>
+        <span className="font-mono text-[11px] text-neutral-400 tabular-nums font-medium">{percent}%</span>
       </div>
       <div className="flex items-center gap-2">
         <Slider
@@ -43,8 +56,9 @@ const VolumeControl = ({ icon, label, value, onChange, disabled = false, maxValu
           max={maxValue * 100}
           step={1}
           onValueChange={(val) => onChange(val[0] / 100)}
+          onValueCommit={(val) => onCommit?.(val[0] / 100)}
           disabled={disabled}
-          className={cn("flex-1", disabled && "opacity-50")}
+          className={cn("flex-1", disabled && "opacity-50 cursor-not-allowed")}
         />
       </div>
     </div>
@@ -179,55 +193,57 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
     [canMutate, sendGlobalVolumeUpdate]
   );
 
-  // Mobile layout (vertical, like PlaybackPermissions)
+  // Mobile layout (vertical)
   if (isMobile) {
     return (
-      <div className={cn("", className)}>
-        <div className="flex items-center justify-between px-4 pt-3">
+      <div className={cn("p-4 space-y-4", className)}>
+        <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-neutral-200 flex items-center gap-2">
             <Volume2 className="h-4 w-4 text-violet-300" />
-            <span>Sound</span>
+            <span>Sound Controls</span>
           </h2>
         </div>
 
-        <div className="px-4 pb-3">
-          <div className="flex items-center gap-3 mt-2.5">
-            <button
-              className={cn("text-neutral-400 transition-colors", canMutate ? "hover:text-white" : "opacity-50")}
-              disabled={!canMutate}
-            >
-              {volumeIcon}
-            </button>
-            <Slider
-              value={[displayVolume * 100]}
-              min={0}
-              max={100}
-              step={1}
-              onValueChange={handleSliderChange}
-              onValueCommit={handleSliderCommit}
-              disabled={!canMutate}
-              className={cn("flex-1", !canMutate && "opacity-50")}
-            />
-          </div>
+        <div className="space-y-4">
+          <VolumeControl
+            icon={
+              <button
+                type="button"
+                className={cn(
+                  "text-neutral-400 transition-colors",
+                  canMutate ? "hover:text-white cursor-pointer" : "opacity-50 cursor-not-allowed"
+                )}
+                disabled={!canMutate}
+                onClick={() => {
+                  if (!canMutate) return;
+                  const newVolume = displayVolume > 0 ? 0 : 1;
+                  setDisplayVolume(newVolume);
+                  currentVolumeRef.current = newVolume;
+                  targetVolumeRef.current = newVolume;
+                  sendGlobalVolumeUpdate(newVolume);
+                }}
+                title={canMutate ? (displayVolume > 0 ? "Mute room" : "Unmute room") : "Synced with room host"}
+              >
+                {volumeIcon}
+              </button>
+            }
+            label="Room Volume"
+            value={displayVolume}
+            onChange={(val) => handleSliderChange([val * 100])}
+            onCommit={(val) => handleSliderCommit([val * 100])}
+            disabled={!canMutate}
+            badge={!canMutate ? <span className="text-[10px] text-neutral-500 font-normal">(Synced)</span> : undefined}
+          />
 
-          <div className="mt-3 border-t border-neutral-800/70 pt-3">
+          <div className="border-t border-white/5 pt-3">
             <VolumeControl
-              icon={<Music className="h-3.5 w-3.5" />}
+              icon={<Music className="h-3.5 w-3.5 text-neutral-400" />}
               label="Your Music Volume"
               value={personalVolume}
               onChange={setPersonalVolume}
             />
           </div>
         </div>
-        <details className="group border-t border-white/10">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-sm text-neutral-300 [&::-webkit-details-marker]:hidden">
-            <Settings2 className="size-4 text-neutral-400" /> Input & output devices
-            <ChevronDown className="ml-auto size-4 text-neutral-500 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="border-t border-white/10 px-4 py-3">
-            <AudioDeviceSelector />
-          </div>
-        </details>
       </div>
     );
   }

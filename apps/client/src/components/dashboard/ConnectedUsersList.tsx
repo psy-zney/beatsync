@@ -24,23 +24,24 @@ export const ConnectedUsersList = () => {
 
   return (
     <TooltipProvider>
-      <div className="">
-        <div className="flex items-center justify-between px-4 pt-3">
-          <div className="flex items-center gap-2 text-neutral-500">
-            <Users className="h-3.5 w-3.5" />
-            <h2 className="text-xs font-medium uppercase tracking-wider">Connected Users</h2>
+      <div>
+        <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
+          <div className="flex items-center gap-2 text-neutral-200">
+            <Users className="h-4 w-4 text-violet-300" />
+            <h2 className="text-sm font-medium">Connected Users</h2>
           </div>
-          <Badge variant="outline">{clients.length}</Badge>
+          <Badge variant="outline" className="border-white/10 bg-white/5 text-xs font-mono text-neutral-300">
+            {clients.length}
+          </Badge>
         </div>
 
-        <div className="px-4 pb-3">
+        <div className="px-3 pb-3">
           {clients.length === 0 ? (
-            <div className="text-center py-8 text-neutral-500 text-xs">No other users connected</div>
+            <div className="text-center py-6 text-neutral-500 text-xs">No other users connected</div>
           ) : (
-            <div className="space-y-2">
-              {/* List of connected users - Constrained height */}
-              <div className="relative mt-2.5">
-                <div className="space-y-1 overflow-y-auto flex-shrink-0 scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted-foreground/10 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/20 -mx-1">
+            <div className="space-y-1">
+              <div className="relative">
+                <div className="space-y-1 overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted-foreground/10 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/20">
                   {clientsWithData.map(({ client, isCurrentUser }) => (
                     <ConnectedUserItem
                       key={client.clientId}
