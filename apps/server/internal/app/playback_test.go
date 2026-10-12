@@ -42,4 +42,24 @@ func TestPlaybackHandlersRequireAllLoadAcknowledgements(t *testing.T) {
 	if playback.Type != "playing" || playback.TrackPositionSeconds != 8.25 || playback.ServerTimeToExecute <= 0 {
 		t.Fatalf("all clients loaded but playback was not scheduled correctly: %+v", playback)
 	}
+
+	state.AddAudioSource(model.AudioSource{URL: "https://audio.test/next.mp3", Title: "Next track"})
+	continued := []byte(`{"type":"PLAY","audioSource":"https://audio.test/next.mp3","previousAudioSource":"https://audio.test/worker.mp3","trackTimeSeconds":0}`)
+	application.handleWSMessage(first, state, continued)
+	loadedNext := []byte(`{"type":"AUDIO_SOURCE_LOADED","source":{"url":"https://audio.test/next.mp3"}}`)
+	application.handleWSMessage(first, state, loadedNext)
+	application.handleWSMessage(late, state, continued)
+	_, playback, _, _, _, _, _ = state.State()
+	if playback.AudioSource != source.URL {
+		t.Fatal("automatic continuation began before the late client loaded")
+	}
+	application.handleWSMessage(late, state, loadedNext)
+	_, playback, _, _, _, _, _ = state.State()
+	if playback.AudioSource != "https://audio.test/next.mp3" || playback.TrackPositionSeconds != 0 {
+		t.Fatalf("duplicate continuation discarded readiness or skipped the beginning: %+v", playback)
+	}
+	application.handleWSMessage(late, state, continued)
+	if _, pending := state.PendingSource(); pending {
+		t.Fatal("late end event restarted loading after continuation already began")
+	}
 }

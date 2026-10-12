@@ -4,9 +4,13 @@ type PreloadSource = {
 };
 
 /** Follow playback order, including wrapping from the last track to the first. */
-export function getPlaybackWindow(urls: string[], selectedUrl: string, limit: number): string[] {
+export function getPlaybackWindow(urls: string[], selectedUrl: string, limit: number, nextUrl?: string): string[] {
+  if (!urls.length) return [];
   const start = Math.max(0, urls.indexOf(selectedUrl));
-  return Array.from({ length: Math.min(limit, urls.length) }, (_, offset) => urls[(start + offset) % urls.length]);
+  const plannedNext = nextUrl ? urls.indexOf(nextUrl) : -1;
+  const next = plannedNext >= 0 && plannedNext !== start ? plannedNext : (start + 1) % urls.length;
+  const upcoming = Array.from({ length: urls.length }, (_, offset) => urls[(next + offset) % urls.length]);
+  return [...new Set([urls[start], ...upcoming])].slice(0, limit);
 }
 
 /** Keep the selected and upcoming tracks ahead of older decoded buffers. */
@@ -14,7 +18,8 @@ export function trimAudioCache(queue: string[], protectedUrls: string[], limit: 
   const retained = [...new Set(queue)];
   const evictedUrls: string[] = [];
   while (retained.length > limit) {
-    const victim = retained.findLastIndex((url) => !protectedUrls.includes(url));
+    let victim = retained.length - 1;
+    while (victim >= 0 && protectedUrls.includes(retained[victim])) victim--;
     if (victim < 0) break;
     evictedUrls.push(...retained.splice(victim, 1));
   }
@@ -26,12 +31,14 @@ export function planAudioPreload(
   selectedUrl: string,
   accessQueue: string[],
   maxBuffers: number,
-  maxBackgroundLoads: number
+  maxBackgroundLoads: number,
+  nextUrl?: string
 ): { loadUrl?: string; evictedUrls: string[] } {
   const window = getPlaybackWindow(
     sources.map((item) => item.source.url),
     selectedUrl,
-    maxBuffers
+    maxBuffers,
+    nextUrl
   );
   const byUrl = new Map(sources.map((item) => [item.source.url, item]));
   // Loading the selected track must not prevent starting its successor early.

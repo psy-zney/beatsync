@@ -14,6 +14,7 @@ export const LocationSchema = z.object({
 
 export const ClientActionEnum = z.enum([
   "PLAY",
+  "SET_SHUFFLE",
   "PAUSE",
   "NTP_REQUEST",
   "START_SPATIAL_AUDIO",
@@ -58,6 +59,11 @@ export const PlayActionSchema = z.object({
   trackTimeSeconds: z.number(),
   audioSource: z.string(),
   previousAudioSource: z.string().optional(), // Automatic continuation is valid only for this ended track.
+});
+
+export const SetShuffleSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.SET_SHUFFLE),
+  enabled: z.boolean(),
 });
 
 export const PauseActionSchema = z.object({
@@ -205,6 +211,7 @@ export const RetryTrackLyricsSchema = z.object({
 
 export const WSRequestSchema = z.discriminatedUnion("type", [
   PlayActionSchema,
+  SetShuffleSchema,
   PauseActionSchema,
   NTPRequestPacketSchema,
   StartSpatialAudioSchema,

@@ -177,3 +177,50 @@ func TestAutomaticContinuationWaitsAndIgnoresDuplicateEndEvents(t *testing.T) {
 		t.Fatal("stale end event skipped again")
 	}
 }
+
+func TestRoomShufflePlanIsStableAndDoesNotReorderPlaylist(t *testing.T) {
+	state := New("090624")
+	state.SetAudioSources([]model.AudioSource{{URL: "a"}, {URL: "b"}, {URL: "c"}, {URL: "d"}})
+	state.PlayImmediate(map[string]any{"audioSource": "b"})
+	state.SetShuffle(true)
+	current, chosen, shuffled := state.NextAudioSource()
+	if current != "b" || chosen == "b" || chosen == "" || !shuffled {
+		t.Fatalf("invalid plan: %q -> %q, shuffle=%v", current, chosen, shuffled)
+	}
+	for range 20 {
+		from, next, enabled := state.NextAudioSource()
+		if from != current || next != chosen || !enabled {
+			t.Fatal("clients would receive different shuffle successors")
+		}
+	}
+	state.SetShuffle(true)
+	_, repeated, _ := state.NextAudioSource()
+	if repeated != chosen {
+		t.Fatal("duplicate shuffle command rerolled the plan")
+	}
+	sources, playback, _, _, _, _, _ := state.State()
+	for i, url := range []string{"a", "b", "c", "d"} {
+		if sources[i].URL != url {
+			t.Fatal("hidden shuffle reordered the visible playlist")
+		}
+	}
+	if playback.AudioSource != "b" {
+		t.Fatal("preloading changed current playback")
+	}
+	state.RemoveAudioSources(map[string]bool{chosen: true})
+	_, replacement, _ := state.NextAudioSource()
+	if replacement == chosen || replacement == "b" || replacement == "" {
+		t.Fatal("removed successor was not replaced")
+	}
+	state.SetShuffle(false)
+	_, sequential, enabled := state.NextAudioSource()
+	remaining, _, _, _, _, _, _ := state.State()
+	for i, source := range remaining {
+		if source.URL == "b" && sequential != remaining[(i+1)%len(remaining)].URL {
+			t.Fatal("disabling shuffle did not restore sequential continuation")
+		}
+	}
+	if enabled {
+		t.Fatal("shuffle remains enabled")
+	}
+}

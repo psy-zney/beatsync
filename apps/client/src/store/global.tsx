@@ -31,6 +31,7 @@ import {
   MetronomeConfigType,
   GRID,
   LoadAudioSourceType,
+  PreloadNextAudioType,
   LOW_PASS_CONSTANTS,
   NTP_CONSTANTS,
   WebRTCSignalUnicastType,
@@ -106,6 +107,8 @@ interface GlobalStateValues {
   isInitingSystem: boolean;
   hasUserStartedSystem: boolean; // Track if user has clicked "Start System" at least once
   selectedAudioUrl: string;
+  plannedNextFromUrl: string;
+  plannedNextAudioUrl: string;
 
   // Websocket
   socket: WebSocket | null;
@@ -254,6 +257,7 @@ interface GlobalState extends GlobalStateValues {
   clearPlaylist: () => void;
   setOnWebRTCSignal: (callback: ((msg: WebRTCSignalUnicastType) => void) | null) => void;
   handleLoadAudioSource: (event: LoadAudioSourceType) => void;
+  handlePreloadNextAudio: (event: PreloadNextAudioType) => void;
 }
 
 // Define initial state values
@@ -268,6 +272,8 @@ const initialState: GlobalStateValues = {
   playbackStartTime: 0,
   playbackOffset: 0,
   selectedAudioUrl: "",
+  plannedNextFromUrl: "",
+  plannedNextAudioUrl: "",
 
   // Spatial audio
   isShuffled: false,
@@ -444,6 +450,32 @@ export const useCanMutate = () => {
 };
 
 export const useGlobalStore = create<GlobalState>((set, get) => {
+  let shuffleFromUrl = "";
+  let shuffleNextUrl: string | undefined;
+  const getPlannedShuffleNextUrl = (state: GlobalState): string | undefined => {
+    if (
+      state.plannedNextFromUrl === state.selectedAudioUrl &&
+      state.audioSources.some((item) => item.source.url === state.plannedNextAudioUrl)
+    ) {
+      return state.plannedNextAudioUrl;
+    }
+    // Online shuffle choices belong to the server; local random selection is
+    // only a fallback for cached playback while disconnected.
+    if (state.socket?.readyState === WebSocket.OPEN) return undefined;
+    if (!state.isShuffled || state.audioSources.length < 2) {
+      shuffleFromUrl = "";
+      shuffleNextUrl = undefined;
+      return undefined;
+    }
+    const currentUrl = state.selectedAudioUrl || state.audioSources[0].source.url;
+    const candidates = state.audioSources.filter((item) => item.source.url !== currentUrl);
+    if (shuffleFromUrl !== currentUrl || !candidates.some((item) => item.source.url === shuffleNextUrl)) {
+      shuffleFromUrl = currentUrl;
+      shuffleNextUrl = candidates[Math.floor(Math.random() * candidates.length)]?.source.url;
+    }
+    return shuffleNextUrl;
+  };
+
   // Helper function to manage LRU cache
   const addURLToLRU = (url: string) => {
     const state = get();
@@ -466,7 +498,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     const protectedUrls = getPlaybackWindow(
       state.audioSources.map((item) => item.source.url),
       state.selectedAudioUrl,
-      MAX_CACHED_BUFFERS
+      MAX_CACHED_BUFFERS,
+      getPlannedShuffleNextUrl(state)
     );
     const trimmed = IS_DEMO_MODE
       ? { queue, evictedUrls: [] }
@@ -482,7 +515,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
   };
 
   // Load audio buffer for a source
-  const loadAudioSource = async (url: string) => {
+  const loadAudioSource = async (url: string, silent = false) => {
     try {
       const state = get();
       const existing = state.audioSources.find((as) => as.source.url === url);
@@ -650,7 +683,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
             : currentState.awaitingSyncAfterLoadUrl,
       }));
 
-      if (isConnectionUnavailable) {
+      if (isConnectionUnavailable && !silent) {
         toast.warning("This track is not cached. Beatsync will load it once the connection is restored.", {
           id: "offline-audio-loading",
         });
@@ -671,9 +704,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       for (const as of state.audioSources) {
         if (as.source.url === skip) continue;
         if (as.status === "idle") {
-          void loadAudioSource(as.source.url);
+          void loadAudioSource(as.source.url, true);
         }
       }
+      return;
+    }
+
+    // Wait for the room's hidden shuffle plan instead of starting an unrelated
+    // sequential download that could occupy the only background load slot.
+    if (state.isShuffled && state.socket?.readyState === WebSocket.OPEN && !getPlannedShuffleNextUrl(state)) {
       return;
     }
 
@@ -682,7 +721,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       state.selectedAudioUrl,
       state.bufferAccessQueue,
       MAX_CACHED_BUFFERS,
-      MAX_BACKGROUND_PRELOADS
+      MAX_BACKGROUND_PRELOADS,
+      getPlannedShuffleNextUrl(state)
     );
     if (plan.loadUrl && plan.loadUrl !== skip) {
       if (plan.evictedUrls.length) {
@@ -693,7 +733,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           ),
         }));
       }
-      void loadAudioSource(plan.loadUrl);
+      void loadAudioSource(plan.loadUrl, true);
     }
   };
 
@@ -1543,10 +1583,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       let nextIndex: number;
       if (isShuffled) {
-        // Shuffle logic: pick a random index DIFFERENT from the current one
-        do {
-          nextIndex = Math.floor(Math.random() * audioSources.length);
-        } while (nextIndex === currentIndex);
+        // Use the successor chosen during preloading, rather than choosing a
+        // different random track only after the current buffer has ended.
+        nextIndex = audioSources.findIndex((item) => item.source.url === getPlannedShuffleNextUrl(state));
+        if (nextIndex < 0) return;
       } else {
         // Normal sequential logic
         nextIndex = (currentIndex + 1) % audioSources.length;
@@ -1597,7 +1637,15 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       }
     },
 
-    toggleShuffle: () => set((state) => ({ isShuffled: !state.isShuffled })),
+    toggleShuffle: () => {
+      const state = get();
+      if (state.socket?.readyState === WebSocket.OPEN) {
+        sendWSRequest({ ws: state.socket, request: { type: "SET_SHUFFLE", enabled: !state.isShuffled } });
+      } else {
+        set({ isShuffled: !state.isShuffled, plannedNextFromUrl: "", plannedNextAudioUrl: "" });
+        eagerLoadIdleSources();
+      }
+    },
 
     setIsSpatialAudioEnabled: (isEnabled) => set({ isSpatialAudioEnabled: isEnabled }),
 
@@ -1957,6 +2005,16 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       set({ selectedAudioUrl: audioSourceToPlay.url });
       void loadAudioSource(audioSourceToPlay.url);
       eagerLoadIdleSources({ skip: audioSourceToPlay.url });
+    },
+
+    handlePreloadNextAudio: (event) => {
+      set({
+        plannedNextFromUrl: event.currentAudioSource,
+        plannedNextAudioUrl: event.nextAudioSource,
+        isShuffled: event.shuffled,
+      });
+      // The successor stays hidden: no playlist reorder, selection change or toast.
+      eagerLoadIdleSources();
     },
 
     setOnWebRTCSignal: (callback) => {

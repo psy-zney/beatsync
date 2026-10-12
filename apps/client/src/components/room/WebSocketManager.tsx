@@ -253,6 +253,8 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
           }
         } else if (event.type === "LOAD_AUDIO_SOURCE") {
           handleLoadAudioSource(event);
+        } else if (event.type === "PRELOAD_NEXT_AUDIO") {
+          useGlobalStore.getState().handlePreloadNextAudio(event);
         }
       } else if (response.type === "SCHEDULED_ACTION") {
         // handle scheduling action

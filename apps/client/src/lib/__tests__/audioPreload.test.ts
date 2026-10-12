@@ -91,4 +91,24 @@ describe("automatic continuation preloading", () => {
         .previousAudioSource
     ).toBe("a");
   });
+
+  it("preloads and protects the planned shuffle successor instead of the sequential track", () => {
+    const sources = [
+      source("a", "loaded"),
+      source("b", "loaded"),
+      source("c", "loaded"),
+      source("d", "idle"),
+      source("e", "idle"),
+    ];
+    expect(
+      getPlaybackWindow(
+        sources.map((item) => item.source.url),
+        "b",
+        3,
+        "e"
+      )
+    ).toEqual(["b", "e", "a"]);
+    expect(planAudioPreload(sources, "b", ["b", "c", "a"], 3, 1, "e")).toEqual({ loadUrl: "e", evictedUrls: ["c"] });
+    expect(trimAudioCache(["c", "e", "b", "a"], ["b", "e", "a"], 3).evictedUrls).toEqual(["c"]);
+  });
 });

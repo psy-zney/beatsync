@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -46,6 +47,9 @@ type Room struct {
 	demoReady       map[string]bool
 	pending         *PendingPlay
 	pendingToken    uint64
+	shuffled        bool
+	nextFrom        string
+	nextURL         string
 	playlistDirty   bool
 	playlistLoaded  bool
 	lastActivity    time.Time
@@ -275,6 +279,52 @@ func (r *Room) HasSource(url string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.hasSourceLocked(url)
+}
+
+func (r *Room) SetShuffle(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.shuffled != enabled {
+		r.shuffled = enabled
+		r.nextFrom, r.nextURL = "", ""
+	}
+}
+
+// NextAudioSource chooses one successor for the whole room. The choice is
+// stable while the current track loads/plays, so every client can preload it.
+func (r *Room) NextAudioSource() (string, string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current := r.playback.AudioSource
+	if r.pending != nil {
+		current, _ = r.pending.Action["audioSource"].(string)
+	}
+	if current == "" && len(r.audioSources) > 0 {
+		current = r.audioSources[0].URL
+	}
+	index := -1
+	for i, source := range r.audioSources {
+		if source.URL == current {
+			index = i
+			break
+		}
+	}
+	if index < 0 || len(r.audioSources) < 2 {
+		r.nextFrom, r.nextURL = current, ""
+		return current, "", r.shuffled
+	}
+	if !r.shuffled {
+		r.nextFrom, r.nextURL = current, r.audioSources[(index+1)%len(r.audioSources)].URL
+	} else if r.nextFrom != current || r.nextURL == current || !r.hasSourceLocked(r.nextURL) {
+		candidates := make([]string, 0, len(r.audioSources)-1)
+		for _, source := range r.audioSources {
+			if source.URL != current {
+				candidates = append(candidates, source.URL)
+			}
+		}
+		r.nextFrom, r.nextURL = current, candidates[rand.IntN(len(candidates))]
+	}
+	return current, r.nextURL, r.shuffled
 }
 
 func (r *Room) BeginPlay(action map[string]any, initiator string) (uint64, model.AudioSource, bool) {

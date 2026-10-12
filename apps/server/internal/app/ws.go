@@ -112,6 +112,7 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 		}
 		a.beginPlay(client, state, model.WSRequest{AudioSource: source, TrackTimeSeconds: playback.TrackPositionSeconds})
 	}
+	client.Send(roomEvent(nextAudioEvent(state)))
 }
 
 func (a *App) healSourceTitles(roomID string, state *room.Room, sources []model.AudioSource) {
@@ -167,6 +168,9 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 		}
 	case "PLAY":
 		a.beginPlay(client, state, message)
+	case "SET_SHUFFLE":
+		state.SetShuffle(message.Enabled)
+		a.broadcastNextAudio(client.RoomID, state)
 	case "AUDIO_SOURCE_LOADED":
 		if a.Config.Demo {
 			count := state.MarkDemoReady(client.ClientID)
@@ -274,6 +278,7 @@ func (a *App) beginPlay(client *realtime.Client, state *room.Room, message model
 		return
 	}
 	a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "LOAD_AUDIO_SOURCE", "audioSourceToPlay": source}))
+	a.broadcastNextAudio(client.RoomID, state)
 	go a.triggerAutoLyrics(client.RoomID, state)
 }
 func (a *App) executePlay(roomID string, state *room.Room, token uint64) {
@@ -458,6 +463,20 @@ func (a *App) broadcastSources(roomID string, sources []model.AudioSource) {
 		sources = []model.AudioSource{}
 	}
 	a.Hub.Broadcast(roomID, roomEvent(map[string]any{"type": "SET_AUDIO_SOURCES", "sources": sources}))
+	if a.Rooms != nil {
+		if state, ok := a.Rooms.Get(roomID); ok {
+			a.broadcastNextAudio(roomID, state)
+		}
+	}
+}
+
+func nextAudioEvent(state *room.Room) map[string]any {
+	current, next, shuffled := state.NextAudioSource()
+	return map[string]any{"type": "PRELOAD_NEXT_AUDIO", "currentAudioSource": current, "nextAudioSource": next, "shuffled": shuffled}
+}
+
+func (a *App) broadcastNextAudio(roomID string, state *room.Room) {
+	a.Hub.Broadcast(roomID, roomEvent(nextAudioEvent(state)))
 }
 func roomEvent(event map[string]any) map[string]any {
 	return map[string]any{"type": "ROOM_EVENT", "event": event}

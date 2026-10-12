@@ -62,6 +62,14 @@ const LoadAudioSourceSchema = z.object({
 });
 export type LoadAudioSourceType = z.infer<typeof LoadAudioSourceSchema>;
 
+const PreloadNextAudioSchema = z.object({
+  type: z.literal("PRELOAD_NEXT_AUDIO"),
+  currentAudioSource: z.string(),
+  nextAudioSource: z.string(),
+  shuffled: z.boolean(),
+});
+export type PreloadNextAudioType = z.infer<typeof PreloadNextAudioSchema>;
+
 const RoomEventSchema = z.object({
   type: z.literal("ROOM_EVENT"),
   event: z.discriminatedUnion("type", [
@@ -71,6 +79,7 @@ const RoomEventSchema = z.object({
     TrackLyricsUpdateSchema,
     ChatUpdateSchema,
     LoadAudioSourceSchema,
+    PreloadNextAudioSchema,
   ]),
 });
 
