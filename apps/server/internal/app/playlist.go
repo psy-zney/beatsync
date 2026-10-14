@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/psy-zney/beatsync/apps/server/internal/model"
 	"github.com/psy-zney/beatsync/apps/server/internal/room"
+	"github.com/psy-zney/beatsync/apps/server/internal/youtube"
 )
 
 const persistentRoomID = "090624"
@@ -30,9 +33,27 @@ func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
 		return
 	}
 	if len(saved) > 0 {
+		// Nâng cấp các track sang link R2 trực tiếp nếu đã có sẵn trong cache
+		for i := range saved {
+			if id := youtube.ParseVideoID(saved[i].URL); id != "" {
+				if key := a.cachedYouTubeKey(parent, id); key != "" {
+					saved[i].URL = a.Store.PublicURL(key)
+				}
+			}
+		}
 		state.SetAudioSources(saved)
 		state.MarkPlaylistSaved()
 		go a.triggerAutoLyrics(state.ID, state)
+
+		// Sliding window preload: Đệm sẵn 2 bài đầu tiên cho phòng đặc biệt 090624
+		preloadCount := min(2, len(saved))
+		for i := 0; i < preloadCount; i++ {
+			if id := youtube.ParseVideoID(saved[i].URL); id != "" {
+				if a.cachedYouTubeKey(parent, id) == "" {
+					a.queueStream(state.ID, state, id, saved[i].Title)
+				}
+			}
+		}
 	}
 }
 
@@ -83,4 +104,59 @@ func (a *App) cleanupUnusedRoomFiles(parent context.Context, state *room.Room) (
 		}
 	}
 	return deleted, nil
+}
+
+// wipeRoomR2Storage permanently purges all R2 storage objects for a room when it has been empty
+// for > 5 minutes.
+// NOTE: Room "090624" is the special persistent room and is strictly protected from being wiped.
+func (a *App) wipeRoomR2Storage(parent context.Context, roomID string, state *room.Room) {
+	if a.Store == nil || a.Config.Demo {
+		return
+	}
+	// Note phòng đặc biệt 090624: Tuyệt đối không xoá dữ liệu trên R2
+	if roomID == persistentRoomID {
+		log.Printf("[Special Room] %s is preserved; skipping R2 storage wipe", roomID)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
+	defer cancel()
+
+	prefix := "room-" + roomID + "/"
+	// 1. Delete all room-specific files on R2 (custom audio uploads, room playlist, etc.)
+	objects, err := a.Store.List(ctx, prefix)
+	if err == nil {
+		deletedCount := 0
+		for _, object := range objects {
+			if delErr := a.Store.Delete(ctx, object.Key); delErr == nil {
+				deletedCount++
+			}
+		}
+		if deletedCount > 0 {
+			log.Printf("wiped %d room object(s) under %s on R2", deletedCount, prefix)
+		}
+	}
+
+	// 2. Clean up cached tracks (e.g. youtube-cache/) that are NOT used by any other active room
+	if state != nil {
+		sources, _, _, _, _, _, _ := state.State()
+		deletedCache := 0
+		for _, source := range sources {
+			if !a.usedByOtherRoom(roomID, source.URL) {
+				if key, ok := a.storageKey(source.URL); ok {
+					// Safety guard: never delete anything belonging to special room 090624
+					if strings.HasPrefix(key, "room-"+persistentRoomID+"/") {
+						continue
+					}
+					if delErr := a.Store.Delete(ctx, key); delErr == nil {
+						deletedCache++
+					}
+				}
+			}
+		}
+		if deletedCache > 0 {
+			log.Printf("purged %d unused cached audio object(s) on R2 for idle room=%s", deletedCache, roomID)
+		}
+	}
+	log.Printf("R2 storage completely wiped for idle room=%s (empty > 5m)", roomID)
 }

@@ -43,6 +43,8 @@ type App struct {
 	lyricsContext context.Context
 	lyricsCancel  context.CancelFunc
 	lyricsWorkers sync.WaitGroup
+	importMu      sync.Mutex
+	importCancels map[string]context.CancelFunc
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -60,10 +62,11 @@ func New(cfg config.Config) (*App, error) {
 	application := &App{
 		Config: cfg, Rooms: rooms, Hub: realtime.NewHub(), Queue: jobs, Store: store,
 		YouTube: youtube.New(cfg), Spotify: spotify.New(cfg), Lyrics: lyrics.NewService(cfg.YTDLPPath, cfg.CookiesPath, lyrics.WithCacheDirectory(filepath.Join(filepath.Dir(cfg.LocalBackupPath), "lyrics-cache")), lyrics.WithConcurrency(cfg.LyricsConcurrency)),
-		Backup:    backups,
-		Hybrid:    hybrid.NewBroker(cfg.HybridWorkerSecret),
-		HTTP:      &http.Client{Transport: &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 20 * time.Second}},
-		startedAt: time.Now(),
+		Backup:        backups,
+		Hybrid:        hybrid.NewBroker(cfg.HybridWorkerSecret),
+		HTTP:          &http.Client{Transport: &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 60 * time.Second, ResponseHeaderTimeout: 20 * time.Second}},
+		startedAt:     time.Now(),
+		importCancels: make(map[string]context.CancelFunc),
 	}
 	application.Memory = memory.New(cfg, jobs, func(context.Context) error { return backups.SaveLocal() })
 	application.upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 2048, CheckOrigin: func(*http.Request) bool { return true }}
@@ -123,8 +126,14 @@ func (a *App) RunBackground(ctx context.Context) {
 				}
 				removed := a.Rooms.CleanupIdle(a.Config.RoomIdleTTL, func(room *room.Room) {
 					if room.ID == persistentRoomID {
+						// Note phòng đặc biệt 090624: lưu playlist và bảo toàn vĩnh viễn trên R2
 						a.savePlaylist(context.Background(), room)
+						log.Printf("[Special Room] %s preserved on R2", room.ID)
+					} else {
+						// Phòng thường trống > 5 phút: xoá sạch toàn bộ dữ liệu trên R2
+						a.wipeRoomR2Storage(context.Background(), room.ID, room)
 					}
+					a.cancelRoomJobs(room.ID)
 				})
 				if removed > 0 {
 					log.Printf("released %d idle room(s)", removed)
@@ -133,6 +142,53 @@ func (a *App) RunBackground(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (a *App) registerImportCancel(roomID string, cancel context.CancelFunc) {
+	a.importMu.Lock()
+	if old, ok := a.importCancels[roomID]; ok {
+		old()
+	}
+	a.importCancels[roomID] = cancel
+	a.importMu.Unlock()
+}
+
+func (a *App) unregisterImportCancel(roomID string) {
+	a.importMu.Lock()
+	delete(a.importCancels, roomID)
+	a.importMu.Unlock()
+}
+
+func (a *App) cancelSpotifyImport(roomID string) {
+	a.importMu.Lock()
+	if cancel, ok := a.importCancels[roomID]; ok {
+		cancel()
+		delete(a.importCancels, roomID)
+	}
+	a.importMu.Unlock()
+}
+
+func (a *App) cancelRoomJobs(roomID string) {
+	if roomID == "" {
+		return
+	}
+	// 1. Abort any running Spotify import goroutine for this room
+	a.cancelSpotifyImport(roomID)
+
+	// 2. Kill in-flight yt-dlp processes and R2 uploads, drop queued stream jobs
+	if a.Queue != nil {
+		a.Queue.CancelJobsWithPrefix(roomID + ":")
+	}
+
+	// 3. Clear room's stream jobs map and broadcast reset
+	if state, ok := a.Rooms.Get(roomID); ok {
+		state.ClearStreamJobs()
+		a.Hub.Broadcast(roomID, map[string]any{"type": "STREAM_JOB_UPDATE", "activeJobCount": 0})
+	}
+
+	// 4. Trigger memory release
+	debug.FreeOSMemory()
+	log.Printf("cancelled all background jobs and released resources for room=%s", roomID)
 }
 
 func (a *App) Shutdown(ctx context.Context) {

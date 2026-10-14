@@ -2,6 +2,7 @@
 
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { fetchDiscoverRooms } from "@/lib/api";
+import { audioContextManager } from "@/lib/audioContextManager";
 import { readRecentRooms } from "@/lib/browserLibrary";
 import { readLocalProfile, saveLocalProfile, type LocalProfile } from "@/lib/profile";
 import { generateRoomId, validateFullRoomId } from "@/lib/room";
@@ -55,13 +56,10 @@ export const Join = () => {
 
   const submitFullCode = () => {
     setIsCompleting(true);
-    // Let the final digit and loading state render before changing pages.
-    submitTimerRef.current = setTimeout(() => {
-      submitTimerRef.current = null;
-      const form = document.getElementById("profile-setup-form") as HTMLFormElement | null;
-      if (form) form.requestSubmit();
-      else setIsCompleting(false);
-    }, 100);
+    // Instant submission without unnecessary waiting
+    const form = document.getElementById("profile-setup-form") as HTMLFormElement | null;
+    if (form) form.requestSubmit();
+    else setIsCompleting(false);
   };
 
   const animateRoomCode = (code: string) => {
@@ -95,6 +93,10 @@ export const Join = () => {
     }
     useRoomStore.getState().setUsername(nextProfile.name);
     useRoomStore.getState().setAvatar(nextProfile.avatar);
+
+    // Resume audio context directly from user interaction gesture
+    audioContextManager.resume().catch(() => {});
+
     joiningRef.current = true;
     setIsJoining(true);
     router.push(`/room/${nextRoomId}`);
@@ -116,7 +118,7 @@ export const Join = () => {
         <h1 className="flex items-center justify-center gap-2 text-xl font-semibold text-white" aria-live="polite">
           {isCompleting || isJoining ? (
             <>
-              <Loader2 className="size-5 animate-spin text-purple-400" aria-hidden="true" />
+              <Loader2 className="size-5 animate-spin text-white" aria-hidden="true" />
               Joining room…
             </>
           ) : (
@@ -148,7 +150,7 @@ export const Join = () => {
                 <InputOTPSlot
                   key={index}
                   index={index}
-                  className={`size-11 rounded-xl! border! border-neutral-700 bg-neutral-800/70 font-mono text-xl font-medium tabular-nums text-white transition-all duration-150 sm:size-12 data-[active=true]:border-purple-400 data-[active=true]:ring-purple-500/20 ${roomId.length > index ? "border-purple-500/40 bg-purple-500/10" : ""} ${isAnimating && roomId.length === index + 1 ? "scale-110 border-purple-400 shadow-[0_0_16px_rgba(168,85,247,0.25)]" : ""}`}
+                  className={`size-11 rounded-xl! border! border-neutral-700 bg-neutral-800/70 font-mono text-xl font-medium tabular-nums text-white transition-all duration-150 sm:size-12 data-[active=true]:border-white data-[active=true]:ring-white/20 ${roomId.length > index ? "border-white/40 bg-white/5" : ""} ${isAnimating && roomId.length === index + 1 ? "scale-110 border-white shadow-[0_0_16px_rgba(255,255,255,0.2)]" : ""}`}
                 />
               ))}
             </InputOTPGroup>
@@ -167,7 +169,7 @@ export const Join = () => {
                   type="button"
                   disabled={isJoining || isAnimating || isCompleting}
                   onClick={() => animateRoomCode(id)}
-                  className="rounded-lg border border-neutral-700/70 bg-neutral-800/60 px-2.5 py-1.5 font-mono text-xs text-neutral-200 transition-colors hover:border-purple-500/60 hover:bg-purple-500/10 hover:text-white disabled:opacity-50"
+                  className="rounded-lg border border-neutral-700/70 bg-neutral-800/60 px-2.5 py-1.5 font-mono text-xs text-neutral-200 transition-colors hover:border-white/50 hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
                 >
                   {id}
                 </button>

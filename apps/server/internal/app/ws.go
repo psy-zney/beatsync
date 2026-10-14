@@ -67,6 +67,7 @@ func (a *App) handleWebSocket(writer http.ResponseWriter, request *http.Request)
 			a.broadcastClients(roomID, clients)
 		} else {
 			roomState.StopSpatial()
+			a.cancelRoomJobs(roomID)
 		}
 	}
 	log.Printf("WebSocket closed: room=%s client=%s", roomID, clientID)
@@ -93,6 +94,7 @@ func (a *App) sendInitialState(client *realtime.Client, state *room.Room, client
 	if len(messages) > 0 {
 		client.Send(roomEvent(map[string]any{"type": "CHAT_UPDATE", "messages": messages, "isFullSync": true, "newestId": newest}))
 	}
+	client.Send(roomEvent(map[string]any{"type": "SET_PLAYBACK_CONTROLS", "permissions": state.PlaybackControls()}))
 	if a.Config.Demo {
 		if self, ok := state.Client(client.ClientID); ok {
 			client.Send(roomEvent(map[string]any{"type": "CLIENT_CHANGE", "clients": []model.Client{self}}))
@@ -166,9 +168,43 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 		if err == nil {
 			a.broadcastClients(client.RoomID, clients)
 		}
+	case "SET_ADMIN":
+		if !state.IsAdmin(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Only the room host can change admin permissions"})
+			return
+		}
+		targetID := message.TargetClientID
+		if targetID == "" {
+			targetID = message.ClientID
+		}
+		if targetID != "" {
+			clients, ok := state.SetAdmin(targetID, message.IsAdmin)
+			if ok {
+				a.broadcastClients(client.RoomID, clients)
+			}
+		}
+	case "SET_PLAYBACK_CONTROLS":
+		if !state.IsAdmin(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Only the room host can change playback controls permissions"})
+			return
+		}
+		if perm, ok := state.SetPlaybackControls(message.Permissions); ok {
+			a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{
+				"type":        "SET_PLAYBACK_CONTROLS",
+				"permissions": perm,
+			}))
+		}
 	case "PLAY":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Playback controls are restricted to the room host"})
+			return
+		}
 		a.beginPlay(client, state, message)
 	case "SET_SHUFFLE":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Playback controls are restricted to the room host"})
+			return
+		}
 		state.SetShuffle(message.Enabled)
 		a.broadcastNextAudio(client.RoomID, state)
 	case "AUDIO_SOURCE_LOADED":
@@ -181,19 +217,39 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 			a.executePlay(client.RoomID, state, token)
 		}
 	case "PAUSE":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Playback controls are restricted to the room host"})
+			return
+		}
 		action := map[string]any{"type": "PAUSE", "audioSource": message.AudioSource, "trackTimeSeconds": message.TrackTimeSeconds}
 		if executeAt, ok := state.Pause(action); ok {
 			a.Hub.Broadcast(client.RoomID, scheduled(executeAt, action))
 		}
 	case "START_SPATIAL_AUDIO":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Spatial controls are restricted to the room host"})
+			return
+		}
 		start := state.StartSpatial()
 		a.Hub.Broadcast(client.RoomID, scheduled(state.ScheduledTime(0), spatialConfig(start)))
 	case "STOP_SPATIAL_AUDIO":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Spatial controls are restricted to the room host"})
+			return
+		}
 		state.StopSpatial()
 		a.Hub.Broadcast(client.RoomID, scheduled(nowMS(), map[string]any{"type": "STOP_SPATIAL_AUDIO"}))
 	case "REORDER_CLIENT":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Reordering users is restricted to the room host"})
+			return
+		}
 		a.broadcastClients(client.RoomID, state.ReorderClient(message.ClientID))
 	case "SET_LISTENING_SOURCE":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Listening source controls are restricted to the room host"})
+			return
+		}
 		state.SetListening(model.Position{X: message.X, Y: message.Y})
 	case "MOVE_CLIENT":
 		if state.MoveClient(message.ClientID, message.Position) {
@@ -208,14 +264,30 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 	case "SEND_IP":
 		a.broadcastClients(client.RoomID, state.UpdateLocation(client.ClientID, message.Location))
 	case "LOAD_DEFAULT_TRACKS":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Loading tracks is restricted to the room host"})
+			return
+		}
 		go a.loadDefaults(client.RoomID, state)
 	case "DELETE_AUDIO_SOURCES":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Deleting tracks is restricted to the room host"})
+			return
+		}
 		go a.deleteSources(client.RoomID, state, message.URLs)
 	case "SEARCH_MUSIC":
 		go a.searchMusic(client, message.Query, message.Offset)
 	case "STREAM_MUSIC":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Adding music is restricted to the room host"})
+			return
+		}
 		a.queueStream(client.RoomID, state, room.TrackIDString(message.TrackID), message.TrackName)
 	case "SET_GLOBAL_VOLUME":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Volume controls are restricted to the room host"})
+			return
+		}
 		at := state.SetGlobalVolume(message.Volume)
 		a.Hub.Broadcast(client.RoomID, scheduled(at, map[string]any{"type": "GLOBAL_VOLUME_CONFIG", "volume": clamp(message.Volume, 0, 1), "rampTime": 0.1}))
 	case "SEND_CHAT_MESSAGE":
@@ -224,6 +296,10 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 			a.Hub.Broadcast(client.RoomID, roomEvent(map[string]any{"type": "CHAT_UPDATE", "messages": []model.ChatMessage{chat}, "isFullSync": false, "newestId": newest}))
 		}
 	case "REORDER_AUDIO_SOURCES":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Reordering tracks is restricted to the room host"})
+			return
+		}
 		if sources, ok := state.ReorderAudioSources(message.ReorderedAudioSources); ok {
 			a.broadcastSources(client.RoomID, sources)
 		}
@@ -240,20 +316,40 @@ func (a *App) handleWSMessage(client *realtime.Client, state *room.Room, payload
 			a.triggerAutoLyrics(client.RoomID, state)
 		}
 	case "SET_METRONOME":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Metronome controls are restricted to the room host"})
+			return
+		}
 		at := state.SetMetronome(message.Enabled)
 		a.Hub.Broadcast(client.RoomID, scheduled(at, map[string]any{"type": "METRONOME_CONFIG", "enabled": message.Enabled}))
 	case "SET_LOW_PASS_FREQ":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Audio filter controls are restricted to the room host"})
+			return
+		}
 		at := state.SetLowPass(message.Freq)
 		a.Hub.Broadcast(client.RoomID, scheduled(at, map[string]any{"type": "LOW_PASS_CONFIG", "freq": clamp(message.Freq, 20, 20_000), "rampTime": 0.05}))
 	case "WEBRTC_SIGNAL":
 		a.Hub.Send(client.RoomID, message.TargetClientID, map[string]any{"type": "WEBRTC_SIGNAL", "sourceClientId": client.ClientID, "signal": message.Signal})
 	case "SAVE_PLAYLIST":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Saving playlists is restricted to the room host"})
+			return
+		}
 		go a.handleSavePlaylist(client, state)
 	case "IMPORT_PLAYLIST":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Importing playlists is restricted to the room host"})
+			return
+		}
 		if !a.Config.Demo && len(message.Sources) > 0 && len(message.Sources) <= 500 {
 			a.importBrowserPlaylist(client, state, message.Sources)
 		}
 	case "IMPORT_SPOTIFY_TRACKS":
+		if !state.CanMutate(client.ClientID) {
+			client.Send(map[string]any{"type": "ERROR", "message": "Importing tracks is restricted to the room host"})
+			return
+		}
 		if len(message.Tracks) > 0 && len(message.Tracks) <= 500 {
 			go a.importSpotify(client.RoomID, state, message.Tracks)
 		}
@@ -360,6 +456,9 @@ func (a *App) deleteSources(roomID string, state *room.Room, urls []string) {
 			continue
 		}
 		remove[raw] = true
+		if id := youtube.ParseVideoID(raw); id != "" {
+			a.Queue.CancelJobsWithPrefix(roomID + ":" + id)
+		}
 		key, ok := a.storageKey(raw)
 		if !ok || a.Config.Demo || a.usedByOtherRoom(roomID, raw) {
 			continue
@@ -401,47 +500,104 @@ func (a *App) handleSavePlaylist(client *realtime.Client, state *room.Room) {
 }
 
 func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, sources []model.AudioSource) {
-	// Browser playlists contain references only. YouTube IDs are resolved by the
-	// proxy when played, so importing a list does not create new storage objects.
+	ctx := context.Background()
+	var tracksToPreload []struct {
+		id    string
+		title string
+	}
+
 	for _, source := range sources {
 		if len(source.URL) > 2048 || len([]rune(source.Title)) > 300 || !room.ValidLyrics(source.Lyrics) {
 			continue
 		}
 		valid := false
+		videoID := ""
 		if strings.HasPrefix(source.URL, "/youtube/proxy?") {
 			parsed, err := url.Parse(source.URL)
 			if err == nil {
 				id := parsed.Query().Get("videoId")
 				if youtube.ParseVideoID(id) == id && len(id) == 11 {
-					source.URL = youtube.ProxyURL(id)
+					videoID = id
+					// Tối ưu cache: nếu đã có sẵn trong R2 cache, nâng cấp URL ngay thành link R2
+					if a.Store != nil {
+						if key := a.cachedYouTubeKey(ctx, id); key != "" {
+							source.URL = a.Store.PublicURL(key)
+						} else {
+							source.URL = youtube.ProxyURL(id)
+						}
+					} else {
+						source.URL = youtube.ProxyURL(id)
+					}
 					valid = true
 				}
 			}
 		} else if a.Store != nil {
 			key, ok := a.storageKey(source.URL)
 			valid = ok && (strings.HasPrefix(key, "room-") || strings.HasPrefix(key, "youtube-cache/") || strings.HasPrefix(key, "default/"))
+			if valid {
+				videoID = youtube.CachedVideoID(source.URL)
+			}
 		}
 		if valid {
 			state.AddAudioSource(source)
+			if videoID != "" {
+				tracksToPreload = append(tracksToPreload, struct {
+					id    string
+					title string
+				}{id: videoID, title: source.Title})
+			}
 		}
 	}
 	current, _, _, _, _, _, _ := state.State()
 	a.broadcastSources(client.RoomID, current)
 	go a.triggerAutoLyrics(client.RoomID, state)
+
+	// Sliding window preload: Đệm trước Track 1 và Track 2 lên R2 nếu chưa có
+	if a.Store != nil && len(tracksToPreload) > 0 {
+		preloadCount := min(2, len(tracksToPreload))
+		for i := 0; i < preloadCount; i++ {
+			t := tracksToPreload[i]
+			if a.cachedYouTubeKey(ctx, t.id) == "" {
+				a.queueStream(client.RoomID, state, t.id, t.title)
+			}
+		}
+	}
 }
 
 func (a *App) importSpotify(roomID string, state *room.Room, tracks []model.SpotifyTrack) {
-	for _, track := range tracks {
+	ctx, cancel := context.WithCancel(context.Background())
+	a.registerImportCancel(roomID, cancel)
+	defer a.unregisterImportCancel(roomID)
+
+	for i, track := range tracks {
+		select {
+		case <-ctx.Done():
+			log.Printf("spotify import cancelled for room=%s", roomID)
+			return
+		default:
+		}
 		if _, ok := a.Rooms.Get(roomID); !ok {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), a.Config.ExtractorTimeout)
-		var result map[string]any
-		err := a.dispatchHybrid(ctx, hybrid.KindYouTubeSearch, hybrid.YouTubeSearchInput{Query: track.Title + " " + track.Artist, Offset: 0}, &result)
-		if err != nil {
-			result, err = a.YouTube.Search(ctx, track.Title+" "+track.Artist, 0)
+		if state.ConnectionCount() == 0 {
+			log.Printf("stopping spotify import because room %s is empty", roomID)
+			return
 		}
-		cancel()
+
+		searchCtx, searchCancel := context.WithTimeout(ctx, a.Config.ExtractorTimeout)
+		var result map[string]any
+		err := a.dispatchHybrid(searchCtx, hybrid.KindYouTubeSearch, hybrid.YouTubeSearchInput{Query: track.Title + " " + track.Artist, Offset: 0}, &result)
+		if err != nil {
+			result, err = a.YouTube.Search(searchCtx, track.Title+" "+track.Artist, 0)
+		}
+		searchCancel()
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		if err == nil {
 			if id, title := firstSearchTrack(result); id != "" {
 				if title == "" {
@@ -450,7 +606,15 @@ func (a *App) importSpotify(roomID string, state *room.Room, tracks []model.Spot
 				a.queueStream(roomID, state, id, title)
 			}
 		}
-		time.Sleep(time.Second)
+
+		// Don't sleep before the first 2 tracks so the room can start playing immediately
+		if i >= 2 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(800 * time.Millisecond):
+			}
+		}
 	}
 }
 

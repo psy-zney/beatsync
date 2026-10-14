@@ -31,31 +31,32 @@ type Room struct {
 	mu sync.RWMutex
 	ID string
 
-	clients         map[string]*model.Client
-	connected       map[string]bool
-	audioSources    []model.AudioSource
-	playback        model.PlaybackState
-	globalVolume    float64
-	lowPassFreq     float64
-	metronome       bool
-	spatial         bool
-	spatialStart    float64
-	listening       model.Position
-	chat            []model.ChatMessage
-	nextChatID      int64
-	streamJobs      map[string]bool
-	demoReady       map[string]bool
-	pending         *PendingPlay
-	pendingToken    uint64
-	shuffled        bool
-	nextFrom        string
-	nextURL         string
-	playlistDirty   bool
-	playlistLoaded  bool
-	lastActivity    time.Time
-	lyricsJobs      map[string]uint64
-	lyricsToken     uint64
-	lastLyricsRetry map[string]time.Time
+	clients          map[string]*model.Client
+	connected        map[string]bool
+	audioSources     []model.AudioSource
+	playback         model.PlaybackState
+	globalVolume     float64
+	lowPassFreq      float64
+	metronome        bool
+	spatial          bool
+	spatialStart     float64
+	listening        model.Position
+	chat             []model.ChatMessage
+	nextChatID       int64
+	streamJobs       map[string]bool
+	demoReady        map[string]bool
+	pending          *PendingPlay
+	pendingToken     uint64
+	shuffled         bool
+	nextFrom         string
+	nextURL          string
+	playlistDirty    bool
+	playlistLoaded   bool
+	lastActivity     time.Time
+	lyricsJobs       map[string]uint64
+	lyricsToken      uint64
+	lastLyricsRetry  map[string]time.Time
+	playbackControls string
 }
 
 func New(id string) *Room {
@@ -64,6 +65,7 @@ func New(id string) *Room {
 		playback: model.PlaybackState{Type: "paused"}, globalVolume: 1, lowPassFreq: 20_000,
 		listening: model.Position{X: originX, Y: originY}, nextChatID: 1,
 		streamJobs: make(map[string]bool), demoReady: make(map[string]bool), lastActivity: time.Now(),
+		playbackControls: "ADMIN_ONLY",
 	}
 }
 
@@ -71,7 +73,13 @@ func (r *Room) AddClient(client model.Client) ([]model.Client, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if cached := r.clients[client.ClientID]; cached != nil {
-		client.Avatar, client.Location, client.JoinedAt, client.NudgeMS = cached.Avatar, cached.Location, cached.JoinedAt, cached.NudgeMS
+		client.Avatar, client.Location, client.JoinedAt, client.NudgeMS, client.IsAdmin = cached.Avatar, cached.Location, cached.JoinedAt, cached.NudgeMS, cached.IsAdmin
+	}
+	if client.IsCreator {
+		client.IsAdmin = true
+	}
+	if len(r.connected) == 0 && !client.IsAdmin {
+		client.IsAdmin = true
 	}
 	copy := client
 	r.clients[client.ClientID] = &copy
@@ -84,6 +92,10 @@ func (r *Room) AddClient(client model.Client) ([]model.Client, error) {
 func (r *Room) RemoveClient(id string) []model.Client {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	wasAdmin := false
+	if client := r.clients[id]; client != nil && client.IsAdmin {
+		wasAdmin = true
+	}
 	delete(r.connected, id)
 	delete(r.demoReady, id)
 	if client := r.clients[id]; client != nil {
@@ -91,6 +103,31 @@ func (r *Room) RemoveClient(id string) []model.Client {
 	}
 	if r.pending != nil {
 		delete(r.pending.Loaded, id)
+	}
+	if wasAdmin {
+		hasAdmin := false
+		for connID := range r.connected {
+			if c := r.clients[connID]; c != nil && c.IsAdmin {
+				hasAdmin = true
+				break
+			}
+		}
+		if !hasAdmin && len(r.connected) > 0 {
+			var nextAdminID string
+			var earliestJoined float64 = -1
+			for connID := range r.connected {
+				c := r.clients[connID]
+				if c != nil {
+					if earliestJoined == -1 || c.JoinedAt < earliestJoined {
+						earliestJoined = c.JoinedAt
+						nextAdminID = connID
+					}
+				}
+			}
+			if nextAdminID != "" && r.clients[nextAdminID] != nil {
+				r.clients[nextAdminID].IsAdmin = true
+			}
+		}
 	}
 	r.lastActivity = time.Now()
 	r.positionLocked()
@@ -521,6 +558,57 @@ func (r *Room) ReorderClient(id string) []model.Client {
 	return r.clientsLocked()
 }
 
+func (r *Room) SetAdmin(targetClientID string, isAdmin bool) ([]model.Client, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	client := r.clients[targetClientID]
+	if client == nil {
+		return r.clientsLocked(), false
+	}
+	client.IsAdmin = isAdmin
+	return r.clientsLocked(), true
+}
+
+func (r *Room) SetPlaybackControls(permissions string) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if permissions != "ADMIN_ONLY" && permissions != "EVERYONE" {
+		return r.playbackControlsPermissionsLocked(), false
+	}
+	r.playbackControls = permissions
+	return r.playbackControls, true
+}
+
+func (r *Room) PlaybackControls() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.playbackControlsPermissionsLocked()
+}
+
+func (r *Room) playbackControlsPermissionsLocked() string {
+	if r.playbackControls == "" {
+		return "ADMIN_ONLY"
+	}
+	return r.playbackControls
+}
+
+func (r *Room) IsAdmin(clientID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c := r.clients[clientID]
+	return c != nil && (c.IsAdmin || c.IsCreator)
+}
+
+func (r *Room) CanMutate(clientID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.playbackControlsPermissionsLocked() == "EVERYONE" {
+		return true
+	}
+	c := r.clients[clientID]
+	return c != nil && (c.IsAdmin || c.IsCreator)
+}
+
 func (r *Room) AddChat(clientID, text string, replyID *int64) (model.ChatMessage, error) {
 	text = strings.TrimSpace(text)
 	if text == "" || len([]rune(text)) > 1000 {
@@ -572,6 +660,11 @@ func (r *Room) RemoveStreamJob(id string) int {
 	delete(r.streamJobs, id)
 	return len(r.streamJobs)
 }
+func (r *Room) ClearStreamJobs() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.streamJobs = make(map[string]bool)
+}
 func (r *Room) StreamJobCount() int { r.mu.RLock(); defer r.mu.RUnlock(); return len(r.streamJobs) }
 
 func (r *Room) MarkDemoReady(id string) int {
@@ -599,7 +692,14 @@ func (r *Room) Snapshot() model.RoomBackup {
 	for _, c := range r.clients {
 		clients = append(clients, *c)
 	}
-	return model.RoomBackup{ClientDatas: clients, AudioSources: append([]model.AudioSource(nil), r.audioSources...), GlobalVolume: r.globalVolume, LowPassFreq: r.lowPassFreq, PlaybackState: r.playback}
+	return model.RoomBackup{
+		ClientDatas:      clients,
+		AudioSources:     append([]model.AudioSource(nil), r.audioSources...),
+		GlobalVolume:     r.globalVolume,
+		LowPassFreq:      r.lowPassFreq,
+		PlaybackState:    r.playback,
+		PlaybackControls: r.playbackControlsPermissionsLocked(),
+	}
 }
 func (r *Room) Restore(backup model.RoomBackup) {
 	r.mu.Lock()
@@ -608,6 +708,9 @@ func (r *Room) Restore(backup model.RoomBackup) {
 	r.resetLyricsLocked()
 	r.globalVolume = backup.GlobalVolume
 	r.lowPassFreq = backup.LowPassFreq
+	if backup.PlaybackControls != "" {
+		r.playbackControls = backup.PlaybackControls
+	}
 	r.playback = model.PlaybackState{Type: "paused"}
 	for _, source := range r.audioSources {
 		if source.URL == backup.PlaybackState.AudioSource {

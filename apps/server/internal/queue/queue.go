@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -99,6 +100,43 @@ func (q *Queue) Stats() Stats {
 }
 
 func (q *Queue) Close() { q.cancel() }
+
+// CancelJobsWithPrefix cancels all active running jobs whose ID starts with prefix
+// and drops all matching queued jobs from the queue channel so they never run.
+func (q *Queue) CancelJobsWithPrefix(prefix string) int {
+	q.mu.Lock()
+	canceled := 0
+	for id, cancel := range q.activeJobs {
+		if strings.HasPrefix(id, prefix) {
+			cancel()
+			canceled++
+		}
+	}
+	q.mu.Unlock()
+
+	q.drainJobsWithPrefix(prefix)
+	return canceled
+}
+
+func (q *Queue) drainJobsWithPrefix(prefix string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	n := len(q.jobs)
+	for i := 0; i < n; i++ {
+		select {
+		case job := <-q.jobs:
+			if strings.HasPrefix(job.ID, prefix) {
+				if job.Drop != nil {
+					job.Drop(ErrPaused)
+				}
+			} else {
+				q.jobs <- job
+			}
+		default:
+			return
+		}
+	}
+}
 
 func (q *Queue) worker() {
 	for {

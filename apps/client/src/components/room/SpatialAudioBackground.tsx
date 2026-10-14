@@ -88,7 +88,7 @@ export const SpatialAudioBackground = () => {
       />
       <motion.div
         style={{ opacity: visualGain * 0.7 }}
-        className="fixed bottom-[20%] right-[10%] w-[25vw] h-[25vw] rounded-full bg-purple-600/20 blur-3xl pointer-events-none -z-10 transition-opacity duration-100"
+        className="fixed bottom-[20%] right-[10%] w-[25vw] h-[25vw] rounded-full bg-white/5 blur-3xl pointer-events-none -z-10 transition-opacity duration-100"
       />
       <motion.div
         style={{ opacity: visualGain * 0.6 }}
@@ -100,7 +100,7 @@ export const SpatialAudioBackground = () => {
       />
       <motion.div
         style={{ opacity: visualGain * 0.5 }}
-        className="fixed bottom-[35%] left-[15%] w-[18vw] h-[18vw] rounded-full bg-indigo-500/20 blur-2xl pointer-events-none -z-10 transition-opacity duration-100"
+        className="fixed bottom-[35%] left-[15%] w-[18vw] h-[18vw] rounded-full bg-white/5 blur-2xl pointer-events-none -z-10 transition-opacity duration-100"
       />
     </>
   );

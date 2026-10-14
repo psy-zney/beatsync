@@ -67,7 +67,7 @@ func TestHealthAndAvatarWebSocketFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for range 8 {
+	for range 16 {
 		_, payload, readErr := connection.ReadMessage()
 		if readErr != nil {
 			t.Fatal(readErr)

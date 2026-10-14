@@ -115,7 +115,7 @@ function getProviderInfo(lyrics: TrackLyricsType) {
     case "lrclib":
       return {
         label: "LRCLIB",
-        className: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+        className: "bg-white/10 text-neutral-200 border-white/20",
         href: "https://lrclib.net",
       };
     case "import":

@@ -1,18 +1,18 @@
 "use client";
 import { useClientId } from "@/hooks/useClientId";
 import { useGlobalStore } from "@/store/global";
-import { TooltipPortal } from "@radix-ui/react-tooltip";
 import { Users } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "../ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { TooltipProvider } from "../ui/tooltip";
 import { ConnectedUserItem } from "./ConnectedUserItem";
 
 export const ConnectedUsersList = () => {
   const { clientId } = useClientId();
   const clients = useGlobalStore((state) => state.connectedClients);
-  // Get current user from global store
   const currentUser = useGlobalStore((state) => state.currentUser);
+  const isCurrentUserAdmin = currentUser?.isAdmin || currentUser?.isCreator || false;
+  const setAdminStatus = useGlobalStore((state) => state.setAdminStatus);
 
   // Memoize client data to avoid unnecessary recalculations
   const clientsWithData = useMemo(() => {
@@ -27,7 +27,7 @@ export const ConnectedUsersList = () => {
       <div>
         <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
           <div className="flex items-center gap-2 text-neutral-200">
-            <Users className="h-4 w-4 text-violet-300" />
+            <Users className="h-4 w-4 text-neutral-400" />
             <h2 className="text-sm font-medium">Connected Users</h2>
           </div>
           <Badge variant="outline" className="border-white/10 bg-white/5 text-xs font-mono text-neutral-300">
@@ -42,11 +42,13 @@ export const ConnectedUsersList = () => {
             <div className="space-y-1">
               <div className="relative">
                 <div className="space-y-1 overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted-foreground/10 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/20">
-                  {clientsWithData.map(({ client, isCurrentUser }) => (
+                  {clientsWithData.map(({ client }) => (
                     <ConnectedUserItem
                       key={client.clientId}
                       client={client}
                       isCurrentUser={client.clientId === currentUser?.clientId}
+                      isAdmin={isCurrentUserAdmin}
+                      onSetAdmin={setAdminStatus}
                     />
                   ))}
                 </div>

@@ -55,10 +55,11 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 	if _, ok := a.Rooms.Get(roomID); !ok {
 		return errors.New("room was released")
 	}
+	cachedVideoID := youtube.ParseVideoID(trackID)
 	// A persisted R2 object is the durable YouTube cache. Check it before
 	// resolving a fresh, short-lived Googlevideo URL; cache hits should not pay
 	// the extractor's cold-start and network cost.
-	if cachedVideoID := youtube.ParseVideoID(trackID); a.Store != nil && cachedVideoID != "" {
+	if cachedVideoID != "" && a.Store != nil {
 		if key := a.cachedYouTubeKey(ctx, cachedVideoID); key != "" {
 			if trackName == "" {
 				trackName = "YouTube Audio"
@@ -68,6 +69,31 @@ func (a *App) streamTrack(ctx context.Context, roomID string, state *room.Room, 
 			go a.triggerAutoLyrics(roomID, state)
 			log.Printf("stream cache hit: room=%s video=%s", roomID, cachedVideoID)
 			return nil
+		}
+
+		// Fast path for YouTube: download directly with yt-dlp to bypass doing
+		// an extra full resolution invocation first.
+		if a.YouTube != nil {
+			reader, cType, cleanup, dlErr := a.YouTube.DownloadAudio(ctx, cachedVideoID)
+			if dlErr == nil {
+				defer cleanup()
+				if trackName == "" {
+					if metaTitle, _, err := a.youtubeMetadata(ctx, cachedVideoID); err == nil && metaTitle != "" {
+						trackName = metaTitle
+					} else {
+						trackName = "YouTube Audio"
+					}
+				}
+				key := "youtube-cache/" + cachedVideoID + extensionFor(cType)
+				if err := a.Store.UploadStream(ctx, key, cType, reader, a.Config.MaxAudioDownloadBytes); err != nil {
+					return err
+				}
+				sources := state.AddAudioSource(model.AudioSource{URL: a.Store.PublicURL(key), Title: trackName})
+				a.broadcastSources(roomID, sources)
+				go a.triggerAutoLyrics(roomID, state)
+				return nil
+			}
+			log.Printf("yt-dlp direct download failed for %s: %v, falling back to stream resolution", cachedVideoID, dlErr)
 		}
 	}
 	streamURL, videoID, resolvedTitle, err := a.resolveProviderStream(ctx, trackID)

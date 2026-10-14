@@ -69,21 +69,27 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
   const measurementCount = useGlobalStore((state) => state.syncMeasurements.length);
   const isSyncComplete = useGlobalStore((state) => state.isSynced);
   const setIsInitingSystem = useGlobalStore((state) => state.setIsInitingSystem);
-  const hasUserStartedSystem = useGlobalStore((state) => state.hasUserStartedSystem);
-  const roundTripEstimate = useGlobalStore((state) => state.roundTripEstimate);
-  const offsetEstimate = useGlobalStore((state) => state.offsetEstimate);
   const reconnectionInfo = useGlobalStore((state) => state.reconnectionInfo);
   const audioLoadingCount = useGlobalStore((state) => state.audioSources.filter((s) => s.status === "loading").length);
   const audioLoadedCount = useGlobalStore((state) => state.audioSources.filter((s) => s.status === "loaded").length);
   const wsReadyState = useGlobalStore((state) => state.socket?.readyState ?? -1);
 
-  const [showComplete, setShowComplete] = useState(false);
-
   useEffect(() => {
     if (!isSyncComplete) return;
-    const timer = setTimeout(() => setShowComplete(true), 100);
+    // Auto-enter directly into dashboard once time is synchronized!
+    const timer = setTimeout(() => {
+      setIsInitingSystem(false);
+    }, 120);
     return () => clearTimeout(timer);
-  }, [isSyncComplete]);
+  }, [isSyncComplete, setIsInitingSystem]);
+
+  // Fallback failsafe: don't block user on high-jitter networks; enter after max 1.2s
+  useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      setIsInitingSystem(false);
+    }, 1200);
+    return () => clearTimeout(fallbackTimer);
+  }, [setIsInitingSystem]);
 
   const probeStats = useGlobalStore((state) => state.probeStats);
 
@@ -101,43 +107,43 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
     return (
       <OuterModal>
         <motion.div
-          className="relative flex flex-col items-center justify-center p-6 sm:p-8 bg-neutral-950/90 rounded-2xl border border-purple-900/40 shadow-2xl backdrop-blur-xl overflow-hidden text-center max-w-lg w-full"
+          className="relative flex flex-col items-center justify-center p-6 sm:p-8 bg-neutral-950/95 rounded-2xl border border-neutral-800 shadow-2xl backdrop-blur-xl overflow-hidden text-center max-w-lg w-full"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
         >
-          {/* Ambient space glow */}
-          <div className="absolute -top-24 -left-24 size-64 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 size-64 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+          {/* Subtle monochrome ambient glow */}
+          <div className="absolute -top-24 -left-24 size-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 size-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Lost in Space 404 Image with seamless container */}
+          {/* Lost in Space 404 Image with monochrome container */}
           <motion.div
-            className="w-full max-w-sm mb-4 rounded-xl overflow-hidden border border-purple-800/30 bg-[#06040a] p-1.5 shadow-lg shadow-purple-950/50 flex justify-center relative"
+            className="w-full max-w-sm mb-4 rounded-xl overflow-hidden border border-neutral-800 bg-[#06040a] p-1.5 shadow-lg shadow-black/50 flex justify-center relative"
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
           >
             <img
               src="/lost-in-space-404.png"
               alt="404 Lost in Space"
-              className="w-full h-auto max-h-44 object-contain rounded-lg drop-shadow-[0_0_20px_rgba(168,85,247,0.35)]"
+              className="w-full h-auto max-h-44 object-contain rounded-lg drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]"
             />
           </motion.div>
 
           <motion.h2
-            className="text-xl sm:text-2xl font-extrabold tracking-tight mb-2 text-white bg-gradient-to-r from-purple-100 via-white to-indigo-200 bg-clip-text text-transparent"
+            className="text-xl sm:text-2xl font-bold tracking-tight mb-2 text-white"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
+            transition={{ duration: 0.3, delay: 0.15 }}
           >
             The server is offline
           </motion.h2>
 
           <motion.p
-            className="text-purple-200/80 mb-6 text-center text-xs sm:text-sm leading-relaxed max-w-sm"
+            className="text-neutral-400 mb-6 text-center text-xs sm:text-sm leading-relaxed max-w-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
           >
             This app syncs music through a server hosted on a personal computer. The server is available during shared
             listening sessions. Contact the admin or room host to bring it online.
@@ -153,11 +159,11 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
                 });
                 window.location.reload();
               }}
-              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-full font-semibold text-xs tracking-wide cursor-pointer shadow-lg shadow-purple-600/30 transition-all duration-300 text-center"
+              className="flex-1 px-5 py-2.5 bg-white hover:bg-neutral-200 text-neutral-950 rounded-full font-semibold text-xs tracking-wide cursor-pointer shadow-md transition-all duration-300 text-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
               Retry connection
@@ -168,8 +174,8 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
               className="flex-1 px-5 py-2.5 bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700/60 text-neutral-200 rounded-full font-semibold text-xs tracking-wide cursor-pointer transition-all duration-300 text-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
               Back to home
@@ -177,10 +183,10 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           </div>
 
           <motion.p
-            className="text-purple-300/60 mt-5 text-center text-[11px]"
+            className="text-neutral-500 mt-5 text-center text-[11px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
           >
             Contact the host to start the server when you are ready to listen together.
           </motion.p>
@@ -194,13 +200,13 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
     return (
       <OuterModal>
         <motion.div
-          className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-2xl border border-neutral-800 shadow-xl text-center max-w-sm w-full"
+          className="flex flex-col items-center justify-center p-6 bg-neutral-900/95 backdrop-blur-md rounded-2xl border border-neutral-800 shadow-xl text-center max-w-sm w-full"
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
         >
           <motion.div
-            className="size-12 flex items-center justify-center mb-2 text-purple-400"
+            className="size-12 flex items-center justify-center mb-2 text-white"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.1 }}
@@ -211,7 +217,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
               viewBox="0 0 24 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              className="text-purple-500"
+              className="text-neutral-300"
             >
               <motion.circle
                 cx="6"
@@ -264,118 +270,27 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
     );
   }
 
-  if (showComplete) {
-    if (hasUserStartedSystem) {
-      return null;
-    }
-
-    return (
-      <OuterModal>
-        <motion.div
-          className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-md border border-neutral-800 shadow-lg"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-        >
-          <motion.div
-            className="w-12 h-12 flex items-center justify-center mb-3"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="text-primary"
-            >
-              <motion.path
-                d="M20 6L9 17L4 12"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 1 }}
-                transition={{ duration: 0.4, delay: 0.2 }}
-              />
-            </svg>
-          </motion.div>
-
-          <motion.h2
-            className="text-base font-medium tracking-tight mb-1 text-white"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-          >
-            Synchronization Complete
-          </motion.h2>
-
-          <motion.p
-            className="text-neutral-400 mb-5 text-center text-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-          >
-            Your device is now synchronized with this room.
-          </motion.p>
-
-          <motion.button
-            className="mt-4 px-5 py-4 md:py-2 bg-primary text-primary-foreground rounded-full font-medium text-sm md:text-xs tracking-wide cursor-pointer w-full shadow-lg shadow-zinc-50/50 md:shadow-none md:hover:shadow-lg md:hover:shadow-zinc-50/50 transition-shadow duration-500"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            whileHover={{ scale: 1.015 }}
-            whileTap={{ scale: 0.985 }}
-            transition={{ duration: 0.3 }}
-            onClick={() => setIsInitingSystem(false)}
-          >
-            Start System
-          </motion.button>
-
-          <motion.div
-            className="flex justify-center gap-6 mt-4 text-[11px] text-neutral-600 font-mono"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.35 }}
-          >
-            <span>
-              RTT <span className="text-neutral-500">{roundTripEstimate.toFixed(0)}ms</span>
-            </span>
-            <span>
-              Offset{" "}
-              <span className="text-neutral-500">
-                {offsetEstimate >= 0 ? "+" : ""}
-                {offsetEstimate.toFixed(1)}ms
-              </span>
-            </span>
-          </motion.div>
-        </motion.div>
-      </OuterModal>
-    );
-  }
-
   return (
     <OuterModal>
       <motion.div
-        className="flex flex-col items-center justify-center p-6 bg-neutral-900 rounded-md border border-neutral-800 shadow-lg"
-        initial={{ opacity: 0, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center justify-center p-6 sm:p-7 bg-neutral-900/95 backdrop-blur-md rounded-2xl border border-neutral-800 shadow-2xl max-w-sm w-full mx-auto"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
         <motion.h2
-          className="text-base font-medium tracking-tight mb-1 text-white relative"
+          className="text-base font-semibold tracking-tight mb-1 text-white relative flex items-center justify-center gap-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
           <WsStatusDot wsReadyState={wsReadyState} />
-          Beatsync calibrating
+          <span>Beatsync calibrating</span>
         </motion.h2>
 
         <motion.p
-          className="text-neutral-400 mb-5 text-center text-sm"
+          className="text-neutral-400 mb-5 text-center text-xs sm:text-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.15 }}
@@ -384,19 +299,18 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
         </motion.p>
 
         {/* Sync pills — 8 solid LED-style indicators */}
-        <div className="flex gap-2 mt-4 mb-3 w-full">
+        <div className="flex gap-2 mt-2 mb-3 w-full">
           {Array.from({ length: PILL_COUNT }, (_, i) => {
             const lit = litPills > i;
             return (
               <div
                 key={i}
-                className="h-[3px] flex-1 rounded-full"
+                className="h-[3px] flex-1 rounded-full transition-all duration-200"
                 style={{
-                  backgroundColor: lit ? "#ffffff" : "rgba(255, 255, 255, 0.08)",
+                  backgroundColor: lit ? "#ffffff" : "rgba(255, 255, 255, 0.12)",
                   boxShadow: lit
-                    ? "0 0 8px 2px rgba(255, 255, 255, 0.7), 0 0 20px 4px rgba(255, 255, 255, 0.25)"
+                    ? "0 0 8px 2px rgba(255, 255, 255, 0.8), 0 0 16px 3px rgba(255, 255, 255, 0.3)"
                     : "none",
-                  transition: "box-shadow 0.15s ease-out",
                 }}
               />
             );
@@ -404,7 +318,7 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
         </div>
 
         {/* Debug stats */}
-        <div className="mt-3 w-full font-mono text-[10px] text-neutral-500 leading-relaxed">
+        <div className="mt-3 w-full font-mono text-[10px] text-neutral-500 leading-relaxed bg-black/30 rounded-lg p-2.5 border border-white/5">
           <div className="flex justify-between">
             <span>pairs sent</span>
             <span className="text-neutral-400">{probeStats.totalSent}</span>
@@ -443,9 +357,9 @@ export const SyncProgress = ({ isLoading = false, loadingMessage = "Loading..." 
           </div>
         </div>
 
-        {/* Skip button for high-jitter connection / testing */}
+        {/* Skip button for high-jitter connection / instant entry */}
         <button
-          className="mt-4 px-4 py-1.5 text-[10px] text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-full transition-colors cursor-pointer"
+          className="mt-4 px-4 py-1.5 text-[11px] font-medium text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700/70 rounded-full transition-colors cursor-pointer"
           onClick={() => setIsInitingSystem(false)}
         >
           Skip calibration

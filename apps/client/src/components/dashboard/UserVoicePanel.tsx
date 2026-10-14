@@ -55,7 +55,7 @@ export const UserVoicePanel = ({ mobile = false }: { mobile?: boolean }) => {
           <div
             className={cn(
               "flex size-9 shrink-0 items-center justify-center rounded-xl",
-              isVoiceActive ? "bg-emerald-500/15 text-emerald-400" : "bg-violet-500/15 text-violet-300"
+              isVoiceActive ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-800 text-neutral-300"
             )}
           >
             <Headphones className="size-4" />
@@ -79,7 +79,7 @@ export const UserVoicePanel = ({ mobile = false }: { mobile?: boolean }) => {
               type="button"
               onClick={connect}
               disabled={isConnecting}
-              className="h-11 min-w-24 rounded-xl bg-violet-600 px-3 text-white hover:bg-violet-500"
+              className="h-11 min-w-24 rounded-xl bg-white px-3 font-semibold text-neutral-950 hover:bg-neutral-200 transition-colors"
               aria-label="Join voice chat"
             >
               {isConnecting ? (
@@ -147,9 +147,13 @@ export const UserVoicePanel = ({ mobile = false }: { mobile?: boolean }) => {
             {isDataAvatar ? (
               <AvatarImage src={roomAvatar} className="object-cover" alt={username} />
             ) : isEmojiAvatar ? (
-              <AvatarFallback className="bg-indigo-600 text-sm font-normal select-none">{roomAvatar}</AvatarFallback>
+              <AvatarFallback className="bg-neutral-800 text-neutral-200 border border-neutral-700 text-sm font-normal select-none">
+                {roomAvatar}
+              </AvatarFallback>
             ) : (
-              <AvatarFallback className="bg-indigo-500 text-white text-xs font-medium">{initials}</AvatarFallback>
+              <AvatarFallback className="bg-neutral-700 text-white border border-neutral-600 text-xs font-medium">
+                {initials}
+              </AvatarFallback>
             )}
           </Avatar>
           <div className="flex flex-col min-w-0 flex-1">

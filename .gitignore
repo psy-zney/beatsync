@@ -37,3 +37,7 @@ target/
 INFRASTRUCTURE_CONG_VPS.txt
 *cookies.txt
 cookies.txt
+
+output/
+.tmp/
+.playwright-cli/

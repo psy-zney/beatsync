@@ -41,6 +41,8 @@ export const ClientActionEnum = z.enum([
   "UPDATE_PROFILE", // Broadcast the local avatar to other room members
   "SET_TRACK_LYRICS", // Share lyrics and timing correction for a queued track
   "RETRY_TRACK_LYRICS",
+  "SET_ADMIN", // Set admin status
+  "SET_PLAYBACK_CONTROLS", // Set playback controls
 ]);
 
 export const NTPRequestPacketSchema = z.object({
@@ -111,6 +113,22 @@ const DeleteAudioSourcesSchema = z.object({
   type: z.literal(ClientActionEnum.enum.DELETE_AUDIO_SOURCES),
   urls: z.array(z.string()).min(1),
 });
+
+export const SetAdminSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.SET_ADMIN),
+  clientId: z.string(), // The client to set admin status for
+  isAdmin: z.boolean(), // The new admin status
+});
+export type SetAdminType = z.infer<typeof SetAdminSchema>;
+
+export const PlaybackControlsPermissionsEnum = z.enum(["ADMIN_ONLY", "EVERYONE"]);
+export type PlaybackControlsPermissionsType = z.infer<typeof PlaybackControlsPermissionsEnum>;
+
+export const SetPlaybackControlsSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.SET_PLAYBACK_CONTROLS),
+  permissions: PlaybackControlsPermissionsEnum,
+});
+export type SetPlaybackControlsType = z.infer<typeof SetPlaybackControlsSchema>;
 
 export const SendLocationSchema = z.object({
   type: z.literal(ClientActionEnum.enum.SEND_IP),
@@ -223,6 +241,8 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   SendLocationSchema,
   LoadDefaultTracksSchema,
   DeleteAudioSourcesSchema,
+  SetAdminSchema,
+  SetPlaybackControlsSchema,
   SearchMusicSchema,
   StreamMusicSchema,
   SetGlobalVolumeSchema,

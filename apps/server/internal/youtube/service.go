@@ -499,14 +499,13 @@ func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
 		}
 	}
 	strategies := [][]string{
-		{"--extractor-args", "youtube:player_client=ios,android,web"},
-		{"--extractor-args", "youtube:player_client=android,web"},
-		{"--extractor-args", "youtube:player_client=tv,web"},
-		{},
+		{"-f", "140/251/bestaudio/best"},
+		{"-f", "bestaudio/best"},
+		{"--extractor-args", "youtube:player_client=ios,android,web", "-f", "18/bestaudio/best"},
 	}
 	var lastErr error
 	for _, strategy := range strategies {
-		args := []string{"--dump-single-json", "-f", "bestaudio/best", "--no-warnings", "--no-cache-dir", "--no-playlist"}
+		args := []string{"--no-warnings", "--no-cache-dir", "--no-playlist", "--print", "%(url)j", "--print", "%(title)j"}
 		if cookiesPath != "" {
 			args = append(args, "--cookies", cookiesPath)
 		}
@@ -517,18 +516,19 @@ func (s *Service) extract(ctx context.Context, id string) (Resolved, error) {
 			lastErr = err
 			continue
 		}
-		var parsed struct {
-			URL   string `json:"url"`
-			Title string `json:"title"`
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		if len(lines) >= 2 {
+			var streamURL, title string
+			_ = json.Unmarshal([]byte(strings.TrimSpace(lines[0])), &streamURL)
+			_ = json.Unmarshal([]byte(strings.TrimSpace(lines[1])), &title)
+			if streamURL != "" {
+				if title == "" {
+					title = "YouTube Audio"
+				}
+				return Resolved{VideoID: id, Title: title, StreamURL: streamURL}, nil
+			}
 		}
-		if err := json.Unmarshal(output, &parsed); err != nil || parsed.URL == "" {
-			lastErr = errors.New("yt-dlp returned no stream URL")
-			continue
-		}
-		if parsed.Title == "" {
-			parsed.Title = "YouTube Audio"
-		}
-		return Resolved{VideoID: id, Title: parsed.Title, StreamURL: parsed.URL}, nil
+		lastErr = errors.New("yt-dlp returned no stream URL")
 	}
 	return Resolved{}, fmt.Errorf("failed to extract YouTube stream: %w", lastErr)
 }
@@ -620,7 +620,7 @@ func (s *Service) DownloadAudio(ctx context.Context, videoID string) (io.ReadClo
 		return nil, "", nil, fmt.Errorf("prepare YouTube cookies: %w", err)
 	}
 
-	tmpFile, err := os.CreateTemp("", "beatsync-yt-download-*.webm")
+	tmpFile, err := os.CreateTemp("", "beatsync-yt-download-*")
 	if err != nil {
 		cleanupCookies()
 		return nil, "", nil, err
@@ -640,7 +640,7 @@ func (s *Service) DownloadAudio(ctx context.Context, videoID string) (io.ReadClo
 		"--no-progress",
 		"--no-cache-dir",
 		"--force-overwrites",
-		"-f", "bestaudio/best",
+		"-f", "140/251/ba[ext=m4a]/ba[ext=webm]/bestaudio/best",
 	}
 	if cookiesPath != "" {
 		args = append(args, "--cookies", cookiesPath)
@@ -678,12 +678,29 @@ func (s *Service) DownloadAudio(ctx context.Context, videoID string) (io.ReadClo
 		return nil, "", nil, errors.New("downloaded audio file is empty")
 	}
 
+	header := make([]byte, 32)
+	n, _ := file.Read(header)
+	_, _ = file.Seek(0, io.SeekStart)
+
+	contentType := "audio/webm"
+	if n >= 8 {
+		if bytes.HasPrefix(header, []byte("\x1a\x45\xdf\xa3")) {
+			contentType = "audio/webm"
+		} else if bytes.Contains(header[:n], []byte("ftyp")) || bytes.Contains(header[:n], []byte("M4A ")) {
+			contentType = "audio/mp4"
+		} else if bytes.HasPrefix(header, []byte("ID3")) || (header[0] == 0xff && (header[1]&0xe0) == 0xe0) {
+			contentType = "audio/mpeg"
+		} else if bytes.HasPrefix(header, []byte("OggS")) {
+			contentType = "audio/ogg"
+		}
+	}
+
 	wrapped := &CleanupReader{
 		File:    file,
 		cleanup: cleanup,
 	}
 
-	return wrapped, "audio/webm", func() { _ = wrapped.Close() }, nil
+	return wrapped, contentType, func() { _ = wrapped.Close() }, nil
 }
 
 type cappedBuffer struct {

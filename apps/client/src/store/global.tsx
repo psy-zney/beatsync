@@ -34,6 +34,8 @@ import {
   PreloadNextAudioType,
   LOW_PASS_CONSTANTS,
   NTP_CONSTANTS,
+  PlaybackControlsPermissionsEnum,
+  PlaybackControlsPermissionsType,
   WebRTCSignalUnicastType,
   PositionType,
   SearchResponseType,
@@ -157,6 +159,9 @@ interface GlobalStateValues {
     maxAttempts: number;
   };
 
+  // Playback controls permissions
+  playbackControlsPermissions: PlaybackControlsPermissionsType;
+
   // Search results
   searchResults: SearchResponseType | null;
   isSearching: boolean;
@@ -189,6 +194,7 @@ interface GlobalState extends GlobalStateValues {
 
   setIsInitingSystem: (isIniting: boolean) => void;
   reorderClient: (clientId: string) => void;
+  setAdminStatus: (clientId: string, isAdmin: boolean) => void;
   changeAudioSource: (url: string) => boolean;
   findAudioIndexByUrl: (url: string) => number | null;
   schedulePlay: (data: { trackTimeSeconds: number; targetServerTime: number; audioSource: string }) => void;
@@ -229,6 +235,7 @@ interface GlobalState extends GlobalStateValues {
   applyFinalGain: (rampTime?: number) => void;
   resetStore: () => void;
   setReconnectionInfo: (info: { isReconnecting: boolean; currentAttempt: number; maxAttempts: number }) => void;
+  setPlaybackControlsPermissions: (permissions: PlaybackControlsPermissionsType) => void;
 
   // Search methods
   setSearchResults: (results: SearchResponseType | null, append?: boolean) => void;
@@ -315,6 +322,9 @@ const initialState: GlobalStateValues = {
     currentAttempt: 0,
     maxAttempts: 0,
   },
+
+  // Playback controls permissions
+  playbackControlsPermissions: PlaybackControlsPermissionsEnum.enum.ADMIN_ONLY,
 
   // Search results
   searchResults: null,
@@ -441,12 +451,16 @@ const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: 
 const initializationMutex = new Mutex();
 
 /**
- * Permission model: open — all users who have joined a room have full
- * mutation rights (play, pause, skip, queue management, volume, etc.).
- * No role distinction is enforced; isCreator is for badge display only.
+ * Selector for canMutate:
+ * True if the current user is host/admin/creator, or if playback controls are set to EVERYONE.
  */
 export const useCanMutate = () => {
-  return true;
+  const currentUser = useGlobalStore((state) => state.currentUser);
+  const playbackControlsPermissions = useGlobalStore((state) => state.playbackControlsPermissions);
+
+  const isAdmin = currentUser?.isAdmin || currentUser?.isCreator || false;
+  const isEveryoneMode = playbackControlsPermissions === PlaybackControlsPermissionsEnum.enum.EVERYONE;
+  return isAdmin || isEveryoneMode;
 };
 
 export const useGlobalStore = create<GlobalState>((set, get) => {
@@ -835,6 +849,20 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         request: {
           type: ClientActionEnum.enum.REORDER_CLIENT,
           clientId,
+        },
+      });
+    },
+
+    setAdminStatus: (clientId, isAdmin) => {
+      const state = get();
+      const { socket } = getSocket(state);
+
+      sendWSRequest({
+        ws: socket,
+        request: {
+          type: ClientActionEnum.enum.SET_ADMIN,
+          clientId,
+          isAdmin,
         },
       });
     },
@@ -1883,6 +1911,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       initializeAudioExclusively();
     },
     setReconnectionInfo: (info) => set({ reconnectionInfo: info }),
+    setPlaybackControlsPermissions: (permissions) => set({ playbackControlsPermissions: permissions }),
 
     // Search methods
     setSearchResults: (results, append = false) => {

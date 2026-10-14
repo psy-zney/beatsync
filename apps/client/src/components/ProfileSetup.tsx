@@ -238,7 +238,7 @@ export const ProfileSetup = ({
         {/* Current Avatar Preview & Trigger Actions */}
         <div className={`${showHeader ? "mt-5" : ""} flex items-center gap-3`}>
           <div className="relative group">
-            <Avatar className="size-11 border border-purple-500/40">
+            <Avatar className="size-11 border border-neutral-700">
               {avatar.startsWith("data:") ? <AvatarImage src={avatar} alt="Avatar" className="object-cover" /> : null}
               <AvatarFallback className="bg-neutral-800 text-xl font-normal select-none">
                 {avatar.startsWith("data:") ? "" : avatar}
@@ -251,7 +251,7 @@ export const ProfileSetup = ({
               title="Change avatar"
               aria-label="Change avatar"
               aria-expanded={showAvatarOptions}
-              className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-md"
+              className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-white hover:bg-neutral-200 text-neutral-950 shadow-md transition-colors"
             >
               <ImagePlus className="size-3.5" />
             </button>
@@ -269,7 +269,7 @@ export const ProfileSetup = ({
               disabled={disabled}
               onChange={(event) => setName(event.target.value)}
               placeholder="Enter your name"
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2 text-sm outline-none focus:border-purple-500"
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white/20"
             />
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
@@ -283,7 +283,7 @@ export const ProfileSetup = ({
                 onClick={() => fileInputRef.current?.click()}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
               >
-                <ImagePlus className="size-3.5 text-purple-400" />
+                <ImagePlus className="size-3.5 text-neutral-300" />
                 Upload photo
               </button>
               <button
@@ -291,7 +291,7 @@ export const ProfileSetup = ({
                 onClick={startCamera}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 border border-neutral-700 transition-colors"
               >
-                <Camera className="size-3.5 text-indigo-400" />
+                <Camera className="size-3.5 text-neutral-300" />
                 Use camera
               </button>
             </div>
@@ -305,7 +305,7 @@ export const ProfileSetup = ({
                   onClick={() => setAvatar(item)}
                   className={`rounded-lg px-2.5 py-1 text-base transition-all ${
                     avatar === item
-                      ? "bg-purple-600/40 ring-1 ring-purple-500 scale-105"
+                      ? "bg-white text-neutral-950 ring-2 ring-white scale-105 font-bold"
                       : "bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300"
                   }`}
                 >
@@ -320,7 +320,7 @@ export const ProfileSetup = ({
 
         {showSubmitButton && (
           <Button
-            className="mt-5 w-full rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold py-2.5 shadow-lg shadow-purple-600/20"
+            className="mt-5 w-full rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-semibold py-2.5 shadow-md transition-all"
             type="submit"
             disabled={disabled}
           >
@@ -363,7 +363,7 @@ export const ProfileSetup = ({
             <div className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 p-5 shadow-2xl flex flex-col items-center">
               <div className="flex items-center justify-between w-full mb-3">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Camera className="size-4 text-purple-400" />
+                  <Camera className="size-4 text-white" />
                   Take an avatar photo
                 </h3>
                 <button
@@ -375,7 +375,7 @@ export const ProfileSetup = ({
               </div>
 
               {/* Video Preview Frame */}
-              <div className="relative size-60 rounded-full overflow-hidden border-2 border-purple-500/50 bg-black flex items-center justify-center my-2 shadow-inner">
+              <div className="relative size-60 rounded-full overflow-hidden border-2 border-neutral-700 bg-black flex items-center justify-center my-2 shadow-inner">
                 <video ref={videoRef} playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                 {/* Circular overlay guide */}
                 <div className="absolute inset-0 rounded-full border-2 border-dashed border-white/40 pointer-events-none" />
@@ -391,7 +391,7 @@ export const ProfileSetup = ({
                 </Button>
                 <Button
                   onClick={capturePhoto}
-                  className="flex-1 bg-purple-600 hover:bg-purple-500 font-semibold text-white"
+                  className="flex-1 bg-white hover:bg-neutral-200 font-semibold text-neutral-950"
                 >
                   Take photo
                 </Button>
@@ -410,10 +410,10 @@ export const ProfileSetup = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-purple-900/40 p-5 shadow-2xl flex flex-col items-center">
+            <div className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 p-5 shadow-2xl flex flex-col items-center">
               <div className="flex items-center justify-between w-full mb-3">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Sliders className="size-4 text-purple-400" />
+                  <Sliders className="size-4 text-white" />
                   Crop and rotate avatar
                 </h3>
                 <button
@@ -425,7 +425,7 @@ export const ProfileSetup = ({
               </div>
 
               {/* Crop & Rotation Live Preview Box */}
-              <div className="relative size-56 rounded-full overflow-hidden border-2 border-purple-500/60 bg-black flex items-center justify-center my-3 shadow-xl">
+              <div className="relative size-56 rounded-full overflow-hidden border-2 border-neutral-700 bg-black flex items-center justify-center my-3 shadow-xl">
                 <img
                   src={rawImage}
                   alt="Raw preview"
@@ -449,7 +449,7 @@ export const ProfileSetup = ({
                     step="0.05"
                     value={zoom}
                     onChange={(e) => setZoom(parseFloat(e.target.value))}
-                    className="w-full accent-purple-500 h-1.5 bg-neutral-800 rounded-lg cursor-pointer"
+                    className="w-full accent-white h-1.5 bg-neutral-800 rounded-lg cursor-pointer"
                   />
                   <ZoomIn className="size-4 text-neutral-400" />
                 </div>
@@ -459,9 +459,9 @@ export const ProfileSetup = ({
                   <button
                     type="button"
                     onClick={() => setRotation((prev) => (prev + 90) % 360)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-purple-300 border border-neutral-700/80 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 border border-neutral-700/80 transition-colors"
                   >
-                    <RotateCw className="size-3.5 text-purple-400" />
+                    <RotateCw className="size-3.5 text-neutral-300" />
                     Rotate 90° ({rotation}°)
                   </button>
                 </div>
@@ -479,7 +479,7 @@ export const ProfileSetup = ({
                 <Button
                   onClick={applyCropAndCompress}
                   disabled={isProcessing}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-semibold text-white"
+                  className="flex-1 bg-white hover:bg-neutral-200 font-semibold text-neutral-950"
                 >
                   {isProcessing ? (
                     "Processing..."

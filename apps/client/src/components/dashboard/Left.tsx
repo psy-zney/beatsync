@@ -12,6 +12,7 @@ import { ConnectedUsersList } from "./ConnectedUsersList";
 import { RoomQRCode } from "./CopyRoom";
 import { GlobalVolumeControl } from "./GlobalVolumeControl";
 import { MobileNudgeControl } from "./MobileNudgeControl";
+import { PlaybackPermissions } from "./PlaybackPermissions";
 import { UserVoicePanel } from "./UserVoicePanel";
 
 interface LeftProps {
@@ -46,7 +47,7 @@ export const Left = ({ className }: LeftProps) => {
       <motion.div className="px-3.5 py-3 lg:py-2.5 lg:mt-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-medium text-neutral-200">
-            <Hash size={18} className="text-violet-400" />
+            <Hash size={18} className="text-neutral-400" />
             <span>Room {roomId}</span>
           </div>
 
@@ -67,7 +68,7 @@ export const Left = ({ className }: LeftProps) => {
         {/* 2. Audio Devices Card */}
         <details className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors">
           <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-4 text-sm font-medium text-neutral-200 [&::-webkit-details-marker]:hidden">
-            <Settings2 className="size-4 text-violet-300" />
+            <Settings2 className="size-4 text-neutral-400" />
             <span>Audio Devices</span>
             <ChevronDown className="ml-auto size-4 text-neutral-400 transition-transform duration-200 group-open:rotate-180" />
           </summary>
@@ -79,7 +80,7 @@ export const Left = ({ className }: LeftProps) => {
         {/* 3. Timing Adjustments Card */}
         <details className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors">
           <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-4 text-sm font-medium text-neutral-200 [&::-webkit-details-marker]:hidden">
-            <SlidersHorizontal className="size-4 text-violet-300" />
+            <SlidersHorizontal className="size-4 text-neutral-400" />
             <span>Timing Adjustments</span>
             <ChevronDown className="ml-auto size-4 text-neutral-400 transition-transform duration-200 group-open:rotate-180" />
           </summary>
@@ -93,7 +94,12 @@ export const Left = ({ className }: LeftProps) => {
           <ConnectedUsersList />
         </div>
 
-        {/* 5. Connection Diagnostics Card */}
+        {/* 5. Playback Permissions Card */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+          <PlaybackPermissions />
+        </div>
+
+        {/* 6. Connection Diagnostics Card */}
         <details className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-4 text-xs font-medium text-neutral-400 [&::-webkit-details-marker]:hidden">
             <Activity className="size-3.5 text-neutral-500" />
@@ -132,9 +138,11 @@ export const Left = ({ className }: LeftProps) => {
         <ConnectedUsersList />
       </div>
 
-      {/* Playback Permissions */}
+      <Separator className="bg-neutral-800/50 hidden lg:block" />
 
-      {/* <Separator className="bg-neutral-800/50" /> */}
+      <div className="hidden lg:block">
+        <PlaybackPermissions />
+      </div>
 
       <motion.div className="mt-auto pb-4 pt-2 text-neutral-400 hidden lg:block">
         <UserVoicePanel />

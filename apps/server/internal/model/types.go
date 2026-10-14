@@ -28,6 +28,7 @@ type Client struct {
 	NudgeMS         float64   `json:"nudgeMs"`
 	Position        Position  `json:"position"`
 	LastNTPResponse float64   `json:"lastNtpResponse"`
+	IsAdmin         bool      `json:"isAdmin"`
 	IsCreator       bool      `json:"isCreator"`
 	Location        *Location `json:"location,omitempty"`
 	JoinedAt        float64   `json:"joinedAt"`
@@ -142,6 +143,8 @@ type WSRequest struct {
 	Avatar                string          `json:"avatar"`
 	Lyrics                *TrackLyrics    `json:"lyrics"`
 	OnlyIfEmpty           bool            `json:"onlyIfEmpty"`
+	IsAdmin               bool            `json:"isAdmin"`
+	Permissions           string          `json:"permissions"`
 }
 
 type SpotifyTrack struct {
@@ -151,11 +154,12 @@ type SpotifyTrack struct {
 }
 
 type RoomBackup struct {
-	ClientDatas   []Client      `json:"clientDatas"`
-	AudioSources  []AudioSource `json:"audioSources"`
-	GlobalVolume  float64       `json:"globalVolume"`
-	LowPassFreq   float64       `json:"lowPassFreq"`
-	PlaybackState PlaybackState `json:"playbackState"`
+	ClientDatas      []Client      `json:"clientDatas"`
+	AudioSources     []AudioSource `json:"audioSources"`
+	GlobalVolume     float64       `json:"globalVolume"`
+	LowPassFreq      float64       `json:"lowPassFreq"`
+	PlaybackState    PlaybackState `json:"playbackState"`
+	PlaybackControls string        `json:"playbackControls,omitempty"`
 }
 
 type ServerBackup struct {

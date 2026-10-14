@@ -95,7 +95,7 @@ export const AudioDeviceSelector = () => {
           <select
             value={audioInputDeviceId || "default"}
             onChange={(event) => void switchAudioInputDevice(event.target.value)}
-            className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
+            className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-white/60"
           >
             <option value="none">Microphone off</option>
             <option value="default">System default</option>
@@ -116,7 +116,7 @@ export const AudioDeviceSelector = () => {
             <select
               value={audioOutputDeviceId || "default"}
               onChange={(event) => void switchAudioOutputDevice(event.target.value)}
-              className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-purple-500"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none focus:border-white/60"
             >
               <option value="default">System default</option>
               {audioOutputDevices.map((device) => (

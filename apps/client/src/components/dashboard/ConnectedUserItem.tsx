@@ -16,6 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 export interface ConnectedUserItemProps {
   client: ClientDataType;
   isCurrentUser: boolean;
+  isAdmin: boolean;
+  onSetAdmin: (clientId: string, isAdmin: boolean) => void;
 }
 
 // Location content shared between Tooltip and Popover - extracted outside render
@@ -23,7 +25,11 @@ const LocationContent = ({ client }: { client: ClientDataType }) => (
   <div className="space-y-1.5">
     <div className="flex items-center gap-2">
       <div className="w-3 flex justify-center">
-        <User className="h-3 w-3 text-muted-foreground" />
+        {client.isAdmin ? (
+          <Crown className="h-3 w-3 text-yellow-500" fill="currentColor" />
+        ) : (
+          <User className="h-3 w-3 text-muted-foreground" />
+        )}
       </div>
       <p className="font-medium text-xs text-foreground">{client.username}</p>
     </div>
@@ -59,7 +65,7 @@ const getInitials = (name: string) => {
   return name.slice(0, 2).toUpperCase();
 };
 
-export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser }) => {
+export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurrentUser, isAdmin, onSetAdmin }) => {
   const isMobile = useIsMobile();
   const [showLocation, setShowLocation] = useState(false);
   const { isConnected, isReconnecting, isMuted, voiceParticipantIds, mutedParticipantIds, deafenedParticipantIds } =
@@ -81,12 +87,14 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
         {isDataAvatar ? (
           <AvatarImage src={avatar} className="object-cover w-full h-full" alt={client.username} />
         ) : isEmojiAvatar ? (
-          <AvatarFallback className="bg-indigo-600/90 text-sm font-normal select-none">{avatar}</AvatarFallback>
+          <AvatarFallback className="bg-neutral-800 text-neutral-200 border border-neutral-700 text-sm font-normal select-none">
+            {avatar}
+          </AvatarFallback>
         ) : (
           <AvatarFallback
             className={
               isCurrentUser
-                ? "bg-indigo-600 text-white font-semibold text-xs"
+                ? "bg-white text-neutral-950 font-semibold text-xs"
                 : "bg-neutral-700 text-neutral-200 font-semibold text-xs"
             }
           >
@@ -94,6 +102,12 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
           </AvatarFallback>
         )}
       </Avatar>
+      {/* Admin / Host crown indicator */}
+      {client.isAdmin && (
+        <div className="absolute -top-1 -right-0.5 bg-yellow-500 rounded-full p-0.5 shadow-xs z-10" title="Chủ phòng">
+          <Crown className="h-2.5 w-2.5 text-yellow-950" fill="currentColor" />
+        </div>
+      )}
       {hasJoinedVoice && <MicMutedIndicator clientId={client.clientId} isCurrentUser={isCurrentUser} />}
     </div>
   );
@@ -160,16 +174,56 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
           )}
         </div>
       </div>
-      {(client.isCreator || isCurrentUser || hasJoinedVoice) && (
+      {(client.isCreator || client.isAdmin || isCurrentUser || hasJoinedVoice) && (
         <Badge
-          variant={client.isCreator ? "default" : isCurrentUser ? "default" : "outline"}
+          variant={client.isCreator ? "default" : client.isAdmin ? "secondary" : isCurrentUser ? "default" : "outline"}
           className={cn(
-            "ml-auto text-xs shrink-0 min-w-[60px] text-center py-0 h-5",
-            client.isCreator ? "bg-sky-600 text-sky-50" : isCurrentUser ? "bg-primary-600 text-primary-50" : ""
+            "ml-auto text-xs shrink-0 min-w-[50px] text-center py-0 h-5",
+            client.isCreator
+              ? "bg-sky-600 text-sky-50"
+              : client.isAdmin
+                ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                : isCurrentUser
+                  ? "bg-primary-600 text-primary-50"
+                  : ""
           )}
         >
-          {client.isCreator ? "Creator" : isCurrentUser ? "You" : "Connected"}
+          {client.isCreator ? "Creator" : client.isAdmin ? "Host" : isCurrentUser ? "You" : "Connected"}
         </Badge>
+      )}
+      {/* Admin controls dropdown - only show if current user is admin and not targeting self */}
+      {isAdmin && !isCurrentUser && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-neutral-800 text-neutral-400 hover:text-white"
+              aria-label="User actions"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44 bg-neutral-900 border-neutral-800 text-neutral-200">
+            {client.isAdmin ? (
+              <DropdownMenuItem
+                onClick={() => onSetAdmin(client.clientId, false)}
+                className="text-xs cursor-pointer text-red-400 focus:text-red-300 focus:bg-red-500/10"
+              >
+                <Crown className="h-3.5 w-3.5 mr-2 text-red-400" />
+                Bỏ quyền chủ phòng
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={() => onSetAdmin(client.clientId, true)}
+                className="text-xs cursor-pointer text-yellow-400 focus:text-yellow-300 focus:bg-yellow-500/10"
+              >
+                <Crown className="h-3.5 w-3.5 mr-2 text-yellow-400" />
+                Chuyển làm chủ phòng
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </motion.div>
   );
