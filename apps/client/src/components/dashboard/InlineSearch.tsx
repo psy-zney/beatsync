@@ -5,18 +5,12 @@ import { cn } from "@/lib/utils";
 import { useCanMutate, useGlobalStore } from "@/store/global";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum } from "@beatsync/shared";
-import { ArrowDown, Search as SearchIcon, X, ZapIcon } from "lucide-react";
+import { ArrowDown, FolderDown, Search as SearchIcon, X, ZapIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { SearchResults } from "./SearchResults";
 import { useRoomStore } from "@/store/room";
-
-const SpotifyLogo = ({ className = "size-4" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm5.521 17.341c-.217.357-.68.473-1.037.256-2.856-1.745-6.452-2.14-10.686-1.171-.406.092-.811-.161-.904-.567-.092-.406.161-.811.567-.904 4.636-1.06 8.599-.607 11.804 1.353.357.217.473.68.256 1.037zm1.472-3.275c-.273.443-.852.584-1.295.312-3.268-2.008-8.25-2.59-12.115-1.417-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.417-1.341 9.9-0.7 13.644 1.6.443.273.584.852.312 1.295zm.143-3.411c-3.921-2.328-10.39-2.544-14.154-1.399-.608.185-1.249-.166-1.434-.774-.185-.608.166-1.249.774-1.434 4.319-1.311 11.458-1.052 15.965 1.624.547.324.726 1.034.402 1.581-.324.547-1.034.726-1.581.402z" />
-  </svg>
-);
 
 interface SearchForm {
   query: string;
@@ -325,15 +319,15 @@ export function InlineSearch() {
           </div>
         </form>
 
-        {/* Spotify Import Trigger Button */}
+        {/* Import Trigger Button */}
         <button
           type="button"
           onClick={() => setPlaylistImportOpen(true)}
-          title="Import a saved playlist or Spotify playlist"
-          aria-label="Import a saved playlist or Spotify playlist"
+          title="Import audio, saved playlists, or Spotify"
+          aria-label="Import audio, saved playlists, or Spotify"
           className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 border border-emerald-500/30 text-xs font-semibold shadow-lg hover:shadow-emerald-500/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"
         >
-          <SpotifyLogo className="size-4" />
+          <FolderDown className="size-4" />
           <span>Import</span>
         </button>
       </div>

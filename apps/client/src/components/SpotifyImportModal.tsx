@@ -1,23 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { resolveSpotifyPlaylist, type SpotifyResolveResponse } from "@/lib/api";
-import { useGlobalStore } from "@/store/global";
+import { useRef, useState } from "react";
+import { resolveSpotifyPlaylist, uploadAudioFile, type SpotifyResolveResponse } from "@/lib/api";
+import { useCanMutate, useGlobalStore } from "@/store/global";
+import { useRoomStore } from "@/store/room";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum } from "@beatsync/shared";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { CheckSquare, ListMusic, Loader2, Plus, Square, X } from "lucide-react";
+import { CheckSquare, CloudUpload, FolderDown, ListMusic, Loader2, Plus, Square, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { SavedPlaylistPicker } from "./SavedPlaylistPicker";
-import { readSavedPlaylists } from "@/lib/browserLibrary";
-
-// Spotify Green Brand Color SVG Icon
-const SpotifyLogo = ({ className = "size-4" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm5.521 17.341c-.217.357-.68.473-1.037.256-2.856-1.745-6.452-2.14-10.686-1.171-.406.092-.811-.161-.904-.567-.092-.406.161-.811.567-.904 4.636-1.06 8.599-.607 11.804 1.353.357.217.473.68.256 1.037zm1.472-3.275c-.273.443-.852.584-1.295.312-3.268-2.008-8.25-2.59-12.115-1.417-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.417-1.341 9.9-0.7 13.644 1.6.443.273.584.852.312 1.295zm.143-3.411c-3.921-2.328-10.39-2.544-14.154-1.399-.608.185-1.249-.166-1.434-.774-.185-.608.166-1.249.774-1.434 4.319-1.311 11.458-1.052 15.965 1.624.547.324.726 1.034.402 1.581-.324.547-1.034.726-1.581.402z" />
-  </svg>
-);
+import { cn } from "@/lib/utils";
 
 interface SpotifyImportModalProps {
   isOpen: boolean;
@@ -25,14 +19,66 @@ interface SpotifyImportModalProps {
 }
 
 export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps) {
-  const [tab, setTab] = useState<"saved" | "spotify">(() => (readSavedPlaylists().length ? "saved" : "spotify"));
+  const [tab, setTab] = useState<"upload" | "saved" | "spotify">("upload");
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resolvedData, setResolvedData] = useState<SpotifyResolveResponse["data"] | null>(null);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
 
+  // Upload tab states
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+    currentFileName?: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const socket = useGlobalStore((state) => state.socket);
+  const canMutate = useCanMutate();
+  const roomId = useRoomStore((state) => state.roomId);
+
+  const handleFilesUpload = async (files: FileList | File[]) => {
+    if (!canMutate) {
+      toast.error("Only room admins can upload audio files.");
+      return;
+    }
+    const audioFiles = Array.from(files).filter(
+      (file) => file.type.startsWith("audio/") || file.name.match(/\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i)
+    );
+
+    if (audioFiles.length === 0) {
+      toast.error("Please select valid audio files (.mp3, .wav, .m4a, etc.)");
+      return;
+    }
+
+    setIsUploading(true);
+    let successCount = 0;
+    try {
+      for (let i = 0; i < audioFiles.length; i++) {
+        const file = audioFiles[i];
+        setUploadProgress({ current: i + 1, total: audioFiles.length, currentFileName: file.name });
+        await uploadAudioFile({ file, roomId });
+        successCount++;
+      }
+      toast.success(
+        audioFiles.length === 1
+          ? `Uploaded ${audioFiles[0].name}`
+          : `Successfully uploaded ${successCount} audio tracks`
+      );
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to upload audio file");
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   const handleAnalyze = async () => {
     const cleanUrl = spotifyUrl.trim();
@@ -138,18 +184,18 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
         <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900/50">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <SpotifyLogo className="size-5" />
+              <FolderDown className="size-5" />
             </div>
             <div>
-              <DialogTitle className="text-base font-bold text-white">Import playlist</DialogTitle>
+              <DialogTitle className="text-base font-bold text-white">Import music & playlists</DialogTitle>
               <DialogDescription className="mt-1 text-xs text-neutral-400">
-                Reuse a saved playlist or import from Spotify
+                Upload audio files, reuse saved playlists, or import from Spotify
               </DialogDescription>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close playlist import"
+            aria-label="Close import modal"
             className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition-colors"
           >
             <X className="size-4" />
@@ -158,12 +204,28 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
         {/* Modal Body */}
         <div className="p-4 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
-          <div className="grid grid-cols-2 gap-2" aria-label="Playlist source">
+          <div className="grid grid-cols-3 gap-2" aria-label="Import source">
+            <button
+              type="button"
+              aria-pressed={tab === "upload"}
+              onClick={() => setTab("upload")}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                tab === "upload"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
+              }`}
+            >
+              Upload audio
+            </button>
             <button
               type="button"
               aria-pressed={tab === "saved"}
               onClick={() => setTab("saved")}
-              className={`rounded-lg px-3 py-2 text-xs font-medium ${tab === "saved" ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-900 text-neutral-400"}`}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                tab === "saved"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
+              }`}
             >
               Saved playlists
             </button>
@@ -171,14 +233,113 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
               type="button"
               aria-pressed={tab === "spotify"}
               onClick={() => setTab("spotify")}
-              className={`rounded-lg px-3 py-2 text-xs font-medium ${tab === "spotify" ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-900 text-neutral-400"}`}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                tab === "spotify"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
+              }`}
             >
               Spotify
             </button>
           </div>
-          {tab === "saved" ? (
-            <SavedPlaylistPicker onClose={onClose} />
-          ) : (
+
+          {tab === "upload" && (
+            <div className="space-y-4">
+              <div
+                onDragOver={(e) => {
+                  if (!canMutate || isUploading) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  if (!canMutate || isUploading) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  if (!canMutate || isUploading) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  if (e.dataTransfer?.files?.length) {
+                    handleFilesUpload(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => {
+                  if (!canMutate || isUploading) return;
+                  fileInputRef.current?.click();
+                }}
+                className={cn(
+                  "relative flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-dashed transition-all cursor-pointer text-center select-none",
+                  isDragging
+                    ? "border-emerald-500 bg-emerald-500/10 scale-[1.01]"
+                    : "border-neutral-800 bg-neutral-900/40 hover:bg-neutral-900/80 hover:border-neutral-700",
+                  (!canMutate || isUploading) && "cursor-not-allowed opacity-60"
+                )}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      handleFilesUpload(e.target.files);
+                    }
+                  }}
+                  disabled={!canMutate || isUploading}
+                  className="hidden"
+                />
+
+                <div className="size-14 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mb-3 shadow-lg shadow-emerald-500/5">
+                  {isUploading ? (
+                    <Loader2 className="size-7 animate-spin text-emerald-400" />
+                  ) : (
+                    <CloudUpload className="size-7" />
+                  )}
+                </div>
+
+                <div className="space-y-1 max-w-sm">
+                  <h4 className="text-sm font-semibold text-white">
+                    {isUploading
+                      ? `Uploading (${uploadProgress?.current}/${uploadProgress?.total})...`
+                      : "Choose audio files or drag & drop"}
+                  </h4>
+                  <p className="text-xs text-neutral-400">
+                    {isUploading && uploadProgress?.currentFileName
+                      ? uploadProgress.currentFileName
+                      : "Supports MP3, WAV, M4A, AAC, OGG, FLAC, WEBM"}
+                  </p>
+                </div>
+
+                {!isUploading && canMutate && (
+                  <div className="mt-4 px-3.5 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 text-xs font-medium border border-emerald-500/30">
+                    Browse local files
+                  </div>
+                )}
+
+                {!canMutate && (
+                  <p className="mt-3 text-xs text-amber-400/90 font-medium">
+                    Only the room host or admin can upload audio files.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-3 text-xs text-neutral-400 space-y-1">
+                <div className="font-medium text-neutral-300">💡 Tips</div>
+                <ul className="list-disc list-inside space-y-0.5 text-neutral-400 text-[11px]">
+                  <li>Files are uploaded directly to the room queue and synchronized with all listeners.</li>
+                  <li>You can select or drop multiple audio tracks at once.</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {tab === "saved" && <SavedPlaylistPicker onClose={onClose} />}
+
+          {tab === "spotify" && (
             <>
               {/* Input Section */}
               <div className="flex gap-2">
@@ -257,8 +418,6 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                         idx: number
                       ) => {
                         const isSelected = selectedIndices.has(idx);
-                        // In the new flow, we don't have youtubeTrack yet.
-                        // Fallback for old cached data just in case
                         const title = item.title || item.spotify?.title;
                         const artist = item.artist || item.spotify?.artist;
 

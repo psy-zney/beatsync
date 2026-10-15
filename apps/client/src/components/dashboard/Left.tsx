@@ -6,7 +6,6 @@ import { MAX_NTP_MEASUREMENTS, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { Activity, ChevronDown, Hash, Settings2, SlidersHorizontal } from "lucide-react";
 import { motion } from "motion/react";
-import { AudioUploaderMinimal } from "../AudioUploaderMinimal";
 import { Separator } from "../ui/separator";
 import { AudioDeviceSelector } from "./AudioDeviceSelector";
 import { ConnectedUsersList } from "./ConnectedUsersList";
@@ -100,11 +99,6 @@ export const Left = ({ className }: LeftProps) => {
           <ConnectedUsersList />
         </div>
 
-        {/* 6. Upload Audio Card */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
-          <AudioUploaderMinimal />
-        </div>
-
         {/* 7. Connection Diagnostics Card */}
         <details className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-4 text-xs font-medium text-neutral-400 [&::-webkit-details-marker]:hidden">
@@ -148,17 +142,13 @@ export const Left = ({ className }: LeftProps) => {
         </div>
       </div>
 
-      {/* Tips Section & Audio Uploader */}
+      {/* Tips Section */}
       <motion.div className="mt-auto text-neutral-400 hidden lg:block">
         <div className="flex flex-col gap-2 p-4 border-t border-neutral-800/50">
           <h5 className="text-xs font-medium text-neutral-300">Tips</h5>
           <ul className="list-disc list-outside pl-4 space-y-1.5">
             <li className="text-xs leading-relaxed">{"Play on speaker directly. Don't use Bluetooth."}</li>
           </ul>
-        </div>
-
-        <div className="pb-3">
-          <AudioUploaderMinimal />
         </div>
 
         <UserVoicePanel />
