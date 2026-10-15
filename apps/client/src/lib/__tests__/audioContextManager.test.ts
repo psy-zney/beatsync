@@ -89,4 +89,33 @@ describe("Fly pan automation", () => {
     });
     expect(() => manager.disableFly()).not.toThrow();
   });
+
+  it("switches output device between headphones and speakers cleanly", () => {
+    const { manager } = makeManager();
+    const hpGain = {
+      gain: {
+        cancelScheduledValues: mock(() => {}),
+        setValueAtTime: mock(() => {}),
+        linearRampToValueAtTime: mock(() => {}),
+        value: 1,
+      },
+    };
+    const spkGain = {
+      gain: {
+        cancelScheduledValues: mock(() => {}),
+        setValueAtTime: mock(() => {}),
+        linearRampToValueAtTime: mock(() => {}),
+        value: 0,
+      },
+    };
+    Object.assign(manager, { flyHeadphonesGain: hpGain, flySpeakersGain: spkGain });
+
+    expect(() => manager.setFlyOutputDevice("speakers")).not.toThrow();
+    expect(spkGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(1, 5.03);
+    expect(hpGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 5.03);
+
+    expect(() => manager.setFlyOutputDevice("headphones")).not.toThrow();
+    expect(hpGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(1, 5.03);
+    expect(spkGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 5.03);
+  });
 });

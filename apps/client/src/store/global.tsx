@@ -20,6 +20,7 @@ import {
 } from "@/utils/ntp";
 import { sendWSRequest } from "@/utils/ws";
 import { mergeLyricsUpdate } from "@/lib/lyricsUpdates";
+import { getLyricsLines } from "@/lib/lrc";
 import { getPlaybackWindow, planAudioPreload, trimAudioCache } from "@/lib/audioPreload";
 import {
   AudioSourceSchema,
@@ -1064,7 +1065,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         newSourceNode.buffer = audioSourceState.buffer;
         newSourceNode.connect(inputNode);
         newSourceNode.start(startTime, data.trackTimeSeconds);
-        audioContextManager.setFlyTrack(audioSourceState.buffer, startTime, data.trackTimeSeconds);
+        const demoLyrics = audioSourceState.source?.lyrics ? getLyricsLines(audioSourceState.source.lyrics) : undefined;
+        audioContextManager.setFlyTrack(audioSourceState.buffer, startTime, data.trackTimeSeconds, demoLyrics);
 
         console.log(
           `[DemoPlay] sync start: ctx=${ctx.currentTime.toFixed(3)} startTime=${startTime.toFixed(3)} offset=${data.trackTimeSeconds}`
@@ -1513,8 +1515,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         }
       };
 
+      const currentTrackSource = state.audioSources[audioIndex]?.source;
+      const lyricsLines = currentTrackSource?.lyrics ? getLyricsLines(currentTrackSource.lyrics) : undefined;
       newSourceNode.start(startTime, data.offset);
-      audioContextManager.setFlyTrack(audioBuffer, startTime, data.offset);
+      audioContextManager.setFlyTrack(audioBuffer, startTime, data.offset, lyricsLines);
       console.log("Started playback at offset:", data.offset, "with delay:", data.when, "audio index:", audioIndex);
 
       // Update state with the new source node and tracking info
@@ -1755,12 +1759,17 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     },
 
     handleLyricsUpdate: (update) =>
-      set((state) => ({
-        audioSources: state.audioSources.map((entry) => {
+      set((state) => {
+        const nextSources = state.audioSources.map((entry) => {
           const source = mergeLyricsUpdate(entry.source, update);
           return source === entry.source ? entry : { ...entry, source };
-        }),
-      })),
+        });
+        const currentEntry = nextSources.find((as) => as.source.url === state.selectedAudioUrl);
+        if (currentEntry?.source?.lyrics) {
+          audioContextManager.setFlyLyrics(getLyricsLines(currentEntry.source.lyrics));
+        }
+        return { audioSources: nextSources };
+      }),
 
     async handleSetAudioSources({ sources, currentAudioSource }) {
       // Wait for audio initialization to complete if it's in progress

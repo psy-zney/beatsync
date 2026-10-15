@@ -1,4 +1,6 @@
-/** A compact, local analysis of the decoded track for music-driven stereo motion. */
+import type { LrcLine } from "./lrc";
+
+/** A compact, local analysis of the decoded track for music-driven stereo/3D motion. */
 export interface MusicMotionBuffer {
   duration: number;
   length: number;
@@ -12,7 +14,10 @@ export interface MusicMotionProfile {
   stepSeconds: number;
   pan: Float32Array;
   activity: Float32Array;
+  elevation: Float32Array;
+  depth: Float32Array;
   boundaries: number[];
+  isLyricsSynced: boolean;
 }
 
 const MAX_FRAMES = 12_000;
@@ -38,14 +43,25 @@ const movingDifference = (values: Float32Array, radius: number) => {
   return differences;
 };
 
-export const buildMusicMotionProfile = (buffer: MusicMotionBuffer): MusicMotionProfile => {
+export const buildMusicMotionProfile = (buffer: MusicMotionBuffer, lyricsLines?: LrcLine[]): MusicMotionProfile => {
   const duration = Math.max(0, buffer.duration);
   const stepSeconds = Math.max(BASE_STEP_SECONDS, duration / (MAX_FRAMES - 1));
   const frameCount = Math.max(2, Math.ceil(duration / stepSeconds) + 1);
   const pan = new Float32Array(frameCount);
   const activity = new Float32Array(frameCount);
+  const elevation = new Float32Array(frameCount);
+  const depth = new Float32Array(frameCount);
   const boundaries: number[] = [];
-  const profile = { duration, stepSeconds, pan, activity, boundaries };
+  const profile: MusicMotionProfile = {
+    duration,
+    stepSeconds,
+    pan,
+    activity,
+    elevation,
+    depth,
+    boundaries,
+    isLyricsSynced: false,
+  };
   if (!buffer.length || !buffer.sampleRate || duration < 0.2) return profile;
 
   const channels = Array.from({ length: Math.min(2, buffer.numberOfChannels ?? 1) }, (_, i) =>
@@ -55,7 +71,9 @@ export const buildMusicMotionProfile = (buffer: MusicMotionBuffer): MusicMotionP
   const energy = new Float32Array(frameCount);
 
   // Three broad bands retain bass accents, vocal/melodic body and bright attacks.
-  // Sampling is capped so a long track cannot make analysis unbounded on mobile.
+  // Band 0: Lows / Kick & Sub-bass (< 180Hz)
+  // Band 1: Mids / Vocal core (180Hz - 1800Hz)
+  // Band 2: Highs / Air & Cymbals (> 1800Hz)
   for (let frame = 0; frame < frameCount; frame++) {
     const center = Math.min(duration, frame * stepSeconds);
     const start = Math.max(0, Math.floor((center - 0.045) * buffer.sampleRate));
@@ -100,8 +118,7 @@ export const buildMusicMotionProfile = (buffer: MusicMotionBuffer): MusicMotionP
     for (let i = 0; i < frameCount; i++) band[i] = clamp01(band[i] / scale);
   }
 
-  // Positive multi-band change is an onset cue. Compare the average timbre and
-  // loudness before/after each moment to find phrase-like structural changes.
+  // Multi-band spectral flux is an onset cue.
   const flux = new Float32Array(frameCount);
   for (let i = 1; i < frameCount; i++) {
     flux[i] =
@@ -119,37 +136,122 @@ export const buildMusicMotionProfile = (buffer: MusicMotionBuffer): MusicMotionP
   }
   const noveltyScale = Math.max(0.12, percentile(novelty, 0.9));
 
-  let direction = 1;
-  let lastBoundary = -Math.ceil(3 / stepSeconds);
-  let previousPan = 0;
-  const smoothing = 1 - Math.exp(-stepSeconds / 0.35);
-  for (let i = 0; i < frameCount; i++) {
-    const accent = clamp01(flux[i] / fluxScale);
-    const change = clamp01(novelty[i] / noveltyScale);
-    const sinceBoundary = (i - lastBoundary) * stepSeconds;
-    const phrasePeak =
-      i >= windowFrames && i < frameCount - windowFrames && novelty[i] >= novelty[i - 1] && novelty[i] > novelty[i + 1];
-    const strongTransition = change > 0.62 && accent > 0.22;
-    const resumedAfterBreak = i > 3 && energy[i - 3] < 0.16 && energy[i] > 0.4 && accent > 0.4;
-    const importantAccent = sinceBoundary > 6 && change > 0.28 && accent > 0.85;
-    if (sinceBoundary > 2.4 && ((phrasePeak && (strongTransition || importantAccent)) || resumedAfterBreak)) {
-      direction *= -1;
-      lastBoundary = i;
-      boundaries.push(i * stepSeconds);
-    }
+  // Determine if valid timed lyrics are available (Method B: Lyrics Sync)
+  const validLyrics = lyricsLines?.filter(
+    (l) => Number.isFinite(l.time) && l.time >= 0 && l.text?.trim() && !l.text.startsWith("[")
+  );
+  const hasTimedLyrics = Boolean(validLyrics && validLyrics.length >= 2);
+  profile.isLyricsSynced = hasTimedLyrics;
 
-    activity[i] = clamp01(energy[i] * 0.72 + accent * 0.28);
-    const target = energy[i] < 0.06 ? 0 : direction * Math.min(1, 0.16 + energy[i] * 0.56 + accent * 0.28);
-    previousPan += (target - previousPan) * smoothing;
-    pan[i] = previousPan;
+  if (hasTimedLyrics && validLyrics) {
+    // --- Method B: Alternating per lyric line + Method C: Dynamic Energy ---
+    let previousPan = 0;
+    const baseSmoothing = 1 - Math.exp(-stepSeconds / 0.28);
+
+    for (let i = 0; i < frameCount; i++) {
+      const time = i * stepSeconds;
+      const accent = clamp01(flux[i] / fluxScale);
+      const bassEnergy = bands[0][i];
+
+      // Find active lyric line
+      let lineIndex = -1;
+      for (let idx = 0; idx < validLyrics.length; idx++) {
+        const line = validLyrics[idx];
+        const nextLine = validLyrics[idx + 1];
+        const endTime = line.end ?? (nextLine ? nextLine.time - 0.15 : line.time + 4.0);
+        if (time >= line.time && time <= endTime) {
+          lineIndex = idx;
+          break;
+        }
+      }
+
+      let target = 0;
+      if (lineIndex !== -1) {
+        // Line active: alternate Left (-1) and Right (+1)
+        const side = lineIndex % 2 === 0 ? -1 : 1;
+        const lineAmp = 0.7 + 0.25 * energy[i];
+        // Dynamic rhythmic kick pulse in high energy sections (Method C)
+        const microBeat = Math.sin(time * 6.28) * 0.12 * bassEnergy;
+        target = side * lineAmp + microBeat;
+        if (
+          boundaries.length === 0 ||
+          Math.abs(boundaries[boundaries.length - 1] - validLyrics[lineIndex].time) > 0.5
+        ) {
+          boundaries.push(validLyrics[lineIndex].time);
+        }
+      } else {
+        // Instrumental break / pause between lines: gentle floating center
+        target = Math.sin(time * 0.8) * 0.2 * energy[i];
+      }
+
+      // Faster adaptation during high bass energy drops
+      const speedMultiplier = bassEnergy > 0.7 ? 2.2 : bassEnergy > 0.4 ? 1.4 : 0.9;
+      const smoothing = clamp01(baseSmoothing * speedMultiplier);
+      previousPan += (target - previousPan) * smoothing;
+      pan[i] = Math.max(-1, Math.min(1, previousPan));
+
+      activity[i] = clamp01(energy[i] * 0.72 + accent * 0.28);
+      const angle = pan[i] * (Math.PI / 2.2);
+      depth[i] = -2.0 * Math.cos(angle);
+      elevation[i] = (bassEnergy - 0.5) * 0.5;
+    }
+  } else {
+    // --- Method A: Silence / Envelope Onset + Method C: Dynamic Energy ---
+    let direction = 1;
+    let lastBoundary = -Math.ceil(3 / stepSeconds);
+    let previousPan = 0;
+
+    for (let i = 0; i < frameCount; i++) {
+      const accent = clamp01(flux[i] / fluxScale);
+      const change = clamp01(novelty[i] / noveltyScale);
+      const sinceBoundary = (i - lastBoundary) * stepSeconds;
+      const bassEnergy = bands[0][i];
+
+      const phrasePeak =
+        i >= windowFrames &&
+        i < frameCount - windowFrames &&
+        novelty[i] >= novelty[i - 1] &&
+        novelty[i] > novelty[i + 1];
+      const strongTransition = change > 0.62 && accent > 0.22;
+      const resumedAfterBreak = i > 3 && energy[i - 3] < 0.16 && energy[i] > 0.4 && accent > 0.4;
+      const importantAccent = sinceBoundary > 6 && change > 0.28 && accent > 0.85;
+
+      // Vocal onset detection (Method A): vocal gap followed by sudden onset
+      const vocalOnset = i > 2 && bands[1][i - 2] < 0.15 && bands[1][i] > 0.35 && accent > 0.3 && sinceBoundary > 2.0;
+
+      if (
+        sinceBoundary > 2.4 &&
+        ((phrasePeak && (strongTransition || importantAccent)) || resumedAfterBreak || vocalOnset)
+      ) {
+        direction *= -1;
+        lastBoundary = i;
+        boundaries.push(i * stepSeconds);
+      }
+
+      activity[i] = clamp01(energy[i] * 0.72 + accent * 0.28);
+
+      // In drops/chorus with high bass, add beat-synced snapping/pulse
+      const dynamicSpeed = bassEnergy > 0.75 ? 2.5 : bassEnergy > 0.45 ? 1.5 : 0.8;
+      const smoothing = 1 - Math.exp((-stepSeconds * dynamicSpeed) / 0.35);
+
+      const target = energy[i] < 0.06 ? 0 : direction * Math.min(1, 0.16 + energy[i] * 0.56 + accent * 0.28);
+
+      previousPan += (target - previousPan) * smoothing;
+      pan[i] = Math.max(-1, Math.min(1, previousPan));
+
+      const angle = pan[i] * (Math.PI / 2.2);
+      depth[i] = -2.0 * Math.cos(angle);
+      elevation[i] = (bassEnergy - 0.5) * 0.5;
+    }
   }
+
   return profile;
 };
 
-export const getMusicMotionProfile = (buffer: MusicMotionBuffer) => {
+export const getMusicMotionProfile = (buffer: MusicMotionBuffer, lyricsLines?: LrcLine[]) => {
   let profile = cache.get(buffer);
-  if (!profile) {
-    profile = buildMusicMotionProfile(buffer);
+  if (!profile || (lyricsLines && lyricsLines.length >= 2 && !profile.isLyricsSynced)) {
+    profile = buildMusicMotionProfile(buffer, lyricsLines);
     cache.set(buffer, profile);
   }
   return profile;
@@ -163,5 +265,8 @@ export const sampleMusicMotion = (profile: MusicMotionProfile, timeSeconds: numb
   return {
     pan: profile.pan[index] * (1 - fraction) + profile.pan[next] * fraction,
     activity: profile.activity[index] * (1 - fraction) + profile.activity[next] * fraction,
+    elevation: profile.elevation ? profile.elevation[index] * (1 - fraction) + profile.elevation[next] * fraction : 0,
+    depth: profile.depth ? profile.depth[index] * (1 - fraction) + profile.depth[next] * fraction : -2,
+    isLyricsSynced: profile.isLyricsSynced ?? false,
   };
 };

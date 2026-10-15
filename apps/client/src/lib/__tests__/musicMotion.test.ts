@@ -56,4 +56,22 @@ describe("music-driven Fly motion", () => {
 
     expect(sampleMusicMotion(profile, 4).activity).toBeGreaterThan(0.2);
   });
+
+  it("alternates pan direction based on synchronized lyrics lines", () => {
+    const track = makeTrack(20, (time) => 0.35 * Math.sin(2 * Math.PI * 440 * time));
+    const lyricsLines = [
+      { time: 2, end: 6, text: "First lyric sentence" },
+      { time: 8, end: 12, text: "Second lyric sentence" },
+      { time: 14, end: 18, text: "Third lyric sentence" },
+    ];
+    const profile = buildMusicMotionProfile(track, lyricsLines);
+
+    expect(profile.isLyricsSynced).toBe(true);
+    // Line 0 (even) -> Left side (negative pan)
+    expect(sampleMusicMotion(profile, 4).pan).toBeLessThan(-0.4);
+    // Line 1 (odd) -> Right side (positive pan)
+    expect(sampleMusicMotion(profile, 10).pan).toBeGreaterThan(0.4);
+    // Line 2 (even) -> Left side (negative pan)
+    expect(sampleMusicMotion(profile, 16).pan).toBeLessThan(-0.4);
+  });
 });
