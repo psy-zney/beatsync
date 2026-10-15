@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useGlobalStore } from "@/store/global";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum, PlaybackControlsPermissionsEnum } from "@beatsync/shared";
-import { Crown, Shield, Users } from "lucide-react";
+import { Crown, Play, Users } from "lucide-react";
 import { motion } from "motion/react";
 
 export const PlaybackPermissions = () => {
@@ -38,10 +38,9 @@ export const PlaybackPermissions = () => {
     <div className="py-1">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <h2 className="text-xs font-semibold tracking-wider text-neutral-400 flex items-center gap-1.5 uppercase">
-          <Shield className="h-3.5 w-3.5 text-yellow-500/80" />
-          <span>Quyền điều khiển</span>
+          <Play className="h-3.5 w-3.5 fill-current" />
+          <span>Playback Permissions</span>
         </h2>
-        {!isAdmin && <span className="text-[10px] text-neutral-500 font-medium">Chỉ chủ phòng chỉnh</span>}
       </div>
 
       <div className="px-4 pb-3">
@@ -83,7 +82,7 @@ export const PlaybackPermissions = () => {
             )}
           >
             <Users className="h-3.5 w-3.5" />
-            <span>Mọi người</span>
+            <span>Everyone</span>
           </div>
 
           {/* Admin Only Option */}
@@ -94,7 +93,7 @@ export const PlaybackPermissions = () => {
             )}
           >
             <Crown className="h-3.5 w-3.5" />
-            <span>Chủ phòng</span>
+            <span>Admins</span>
           </div>
         </button>
       </div>

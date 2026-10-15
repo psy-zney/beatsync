@@ -31,7 +31,7 @@ export const TopBar = ({ roomId }: TopBarProps) => {
       <div className="h-8 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-4 border-b border-zinc-800">
         <div className="flex items-center space-x-4 text-xs text-neutral-400 py-2 md:py-0">
           {isAdmin && (
-            <div className="flex items-center" title="Chủ phòng (Host)">
+            <div className="flex items-center" title="Admin">
               <Crown className="h-3.5 w-3.5 text-yellow-500" fill="currentColor" />
             </div>
           )}

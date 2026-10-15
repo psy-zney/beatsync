@@ -104,7 +104,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
       </Avatar>
       {/* Admin / Host crown indicator */}
       {client.isAdmin && (
-        <div className="absolute -top-1 -right-0.5 bg-yellow-500 rounded-full p-0.5 shadow-xs z-10" title="Chủ phòng">
+        <div className="absolute -top-1 -right-0.5 bg-yellow-500 rounded-full p-0.5 shadow-xs z-10" title="Admin">
           <Crown className="h-2.5 w-2.5 text-yellow-950" fill="currentColor" />
         </div>
       )}
@@ -188,7 +188,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
                   : ""
           )}
         >
-          {client.isCreator ? "Creator" : client.isAdmin ? "Host" : isCurrentUser ? "You" : "Connected"}
+          {client.isCreator ? "Creator" : client.isAdmin ? "Admin" : isCurrentUser ? "You" : "Connected"}
         </Badge>
       )}
       {/* Admin controls dropdown - only show if current user is admin and not targeting self */}
@@ -211,7 +211,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
                 className="text-xs cursor-pointer text-red-400 focus:text-red-300 focus:bg-red-500/10"
               >
                 <Crown className="h-3.5 w-3.5 mr-2 text-red-400" />
-                Bỏ quyền chủ phòng
+                Remove admin
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem
@@ -219,7 +219,7 @@ export const ConnectedUserItem = memo<ConnectedUserItemProps>(({ client, isCurre
                 className="text-xs cursor-pointer text-yellow-400 focus:text-yellow-300 focus:bg-yellow-500/10"
               >
                 <Crown className="h-3.5 w-3.5 mr-2 text-yellow-400" />
-                Chuyển làm chủ phòng
+                Make admin
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

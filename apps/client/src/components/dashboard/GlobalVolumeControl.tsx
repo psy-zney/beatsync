@@ -222,7 +222,7 @@ export const GlobalVolumeControl = ({ className, isMobile = false }: GlobalVolum
                   targetVolumeRef.current = newVolume;
                   sendGlobalVolumeUpdate(newVolume);
                 }}
-                title={canMutate ? (displayVolume > 0 ? "Mute room" : "Unmute room") : "Synced with room host"}
+                title={canMutate ? (displayVolume > 0 ? "Mute room" : "Unmute room") : "Synced with room admin"}
               >
                 {volumeIcon}
               </button>

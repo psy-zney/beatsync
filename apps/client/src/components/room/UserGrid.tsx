@@ -65,7 +65,7 @@ const ClientAvatar = memo<ClientAvatarProps>(({ client, isCurrentUser, animation
             )}
             {/* Admin / Host crown indicator */}
             {client.isAdmin && (
-              <div className="absolute -top-0 -right-0 bg-yellow-500 rounded-full p-0.5 shadow-xs" title="Chủ phòng">
+              <div className="absolute -top-0 -right-0 bg-yellow-500 rounded-full p-0.5 shadow-xs" title="Admin">
                 <Crown className="h-2.5 w-2.5 text-yellow-950" fill="currentColor" />
               </div>
             )}
@@ -76,7 +76,7 @@ const ClientAvatar = memo<ClientAvatarProps>(({ client, isCurrentUser, animation
         <div className="text-xs font-medium">{client.username}</div>
         <div className="text-xs text-muted-foreground">
           {isCurrentUser ? "You" : "Connected"}
-          {client.isAdmin && " • Chủ phòng (Host)"}
+          {client.isAdmin && " • Admin"}
         </div>
       </TooltipContent>
     </Tooltip>

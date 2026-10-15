@@ -32,6 +32,7 @@ export const AudioUploaderMinimal = () => {
         roomId,
       });
 
+      toast.success(`Uploaded ${file.name}`);
       setTimeout(() => setFileName(null), 3000);
     } catch (err) {
       console.error("Error during upload:", err);
@@ -72,8 +73,8 @@ export const AudioUploaderMinimal = () => {
     const file = event.dataTransfer?.files?.[0];
     if (!file) return;
     // make sure we only allow audio files
-    if (!file.type.startsWith("audio/")) {
-      toast.error("Please select an audio file");
+    if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i)) {
+      toast.error("Please select an audio file (e.g. .mp3)");
       return;
     }
 
@@ -99,7 +100,7 @@ export const AudioUploaderMinimal = () => {
           <div
             className={cn(
               "p-1.5 rounded-md flex-shrink-0",
-              isDisabled ? "bg-neutral-600 text-neutral-400" : "bg-primary-700 text-white"
+              isDisabled ? "bg-neutral-600 text-neutral-400" : "bg-emerald-600 text-white"
             )}
           >
             {isUploading ? <CloudUpload className="h-4 w-4 animate-pulse" /> : <Plus className="h-4 w-4" />}

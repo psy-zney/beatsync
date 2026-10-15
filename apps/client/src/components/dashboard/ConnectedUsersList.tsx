@@ -25,11 +25,11 @@ export const ConnectedUsersList = () => {
   return (
     <TooltipProvider>
       <div>
-        <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5">
-          <div className="flex items-center gap-2 text-neutral-200">
-            <Users className="h-4 w-4 text-neutral-400" />
-            <h2 className="text-sm font-medium">Connected Users</h2>
-          </div>
+        <div className="flex items-center justify-between px-4 pt-3 pb-1">
+          <h2 className="text-xs font-semibold tracking-wider text-neutral-400 flex items-center gap-1.5 uppercase">
+            <Users className="h-3.5 w-3.5" />
+            <span>Connected Users</span>
+          </h2>
           <Badge variant="outline" className="border-white/10 bg-white/5 text-xs font-mono text-neutral-300">
             {clients.length}
           </Badge>

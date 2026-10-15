@@ -6,6 +6,7 @@ import { MAX_NTP_MEASUREMENTS, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { Activity, ChevronDown, Hash, Settings2, SlidersHorizontal } from "lucide-react";
 import { motion } from "motion/react";
+import { AudioUploaderMinimal } from "../AudioUploaderMinimal";
 import { Separator } from "../ui/separator";
 import { AudioDeviceSelector } from "./AudioDeviceSelector";
 import { ConnectedUsersList } from "./ConnectedUsersList";
@@ -89,17 +90,22 @@ export const Left = ({ className }: LeftProps) => {
           </div>
         </details>
 
-        {/* 4. Connected Users Card */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
-          <ConnectedUsersList />
-        </div>
-
-        {/* 5. Playback Permissions Card */}
+        {/* 4. Playback Permissions Card */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
           <PlaybackPermissions />
         </div>
 
-        {/* 6. Connection Diagnostics Card */}
+        {/* 5. Connected Users Card */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+          <ConnectedUsersList />
+        </div>
+
+        {/* 6. Upload Audio Card */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
+          <AudioUploaderMinimal />
+        </div>
+
+        {/* 7. Connection Diagnostics Card */}
         <details className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-4 text-xs font-medium text-neutral-400 [&::-webkit-details-marker]:hidden">
             <Activity className="size-3.5 text-neutral-500" />
@@ -134,17 +140,27 @@ export const Left = ({ className }: LeftProps) => {
       </div>
 
       {/* --- DESKTOP CONTENT (lg:flex) --- */}
-      <div className="hidden lg:block mt-0 flex-1">
-        <ConnectedUsersList />
-      </div>
-
-      <Separator className="bg-neutral-800/50 hidden lg:block" />
-
-      <div className="hidden lg:block">
+      <div className="hidden lg:flex lg:flex-col lg:flex-1 min-h-0">
         <PlaybackPermissions />
+        <Separator className="bg-neutral-800/50" />
+        <div className="flex-1 overflow-y-auto">
+          <ConnectedUsersList />
+        </div>
       </div>
 
-      <motion.div className="mt-auto pb-4 pt-2 text-neutral-400 hidden lg:block">
+      {/* Tips Section & Audio Uploader */}
+      <motion.div className="mt-auto text-neutral-400 hidden lg:block">
+        <div className="flex flex-col gap-2 p-4 border-t border-neutral-800/50">
+          <h5 className="text-xs font-medium text-neutral-300">Tips</h5>
+          <ul className="list-disc list-outside pl-4 space-y-1.5">
+            <li className="text-xs leading-relaxed">{"Play on speaker directly. Don't use Bluetooth."}</li>
+          </ul>
+        </div>
+
+        <div className="pb-3">
+          <AudioUploaderMinimal />
+        </div>
+
         <UserVoicePanel />
       </motion.div>
     </motion.div>
