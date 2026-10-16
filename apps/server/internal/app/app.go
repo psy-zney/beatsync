@@ -126,11 +126,11 @@ func (a *App) RunBackground(ctx context.Context) {
 				}
 				removed := a.Rooms.CleanupIdle(a.Config.RoomIdleTTL, func(room *room.Room) {
 					if room.ID == persistentRoomID {
-						// Note phòng đặc biệt 090624: lưu playlist và bảo toàn vĩnh viễn trên R2
+						// Persistent room 090624: save playlist and preserve permanently on R2
 						a.savePlaylist(context.Background(), room)
 						log.Printf("[Special Room] %s preserved on R2", room.ID)
 					} else {
-						// Phòng thường trống > 5 phút: xoá sạch toàn bộ dữ liệu trên R2
+						// Regular empty room (> 5 minutes): purge room storage on R2
 						a.wipeRoomR2Storage(context.Background(), room.ID, room)
 					}
 					a.cancelRoomJobs(room.ID)

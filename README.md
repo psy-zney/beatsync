@@ -1,29 +1,29 @@
 # BeatSync
 
-BeatSync là ứng dụng nghe nhạc đồng bộ theo thời gian thực giữa nhiều thiết bị. Một phòng có thể cùng phát nhạc, quản lý hàng chờ, chat, dùng avatar, voice chat và hiệu ứng Fly/3D Audio.
+BeatSync is a real-time synchronized music playback application across multiple devices. A room can play music together, manage a shared queue, chat, use avatars, voice chat, and Fly/3D Spatial Audio effects.
 
-## Tính năng chính
+## Key Features
 
-- Đồng bộ play, pause, chuyển bài và vị trí phát qua WebSocket.
-- Hàng chờ dùng chung, tìm kiếm YouTube và nhập playlist Spotify.
+- Synchronized play, pause, seek, and track transitions via WebSocket.
+- Shared room queue, YouTube search, and Spotify playlist import.
 - Create multiple rooms with 6-digit codes, suggest recent rooms, and save personal playlists in the browser.
-- Chat, avatar, vị trí người nghe và voice chat qua LiveKit.
-- Fly/3D Audio với chuyển âm trái/phải và điều chỉnh thủ công.
-- Upload nhạc theo luồng lên S3/R2, không giữ toàn bộ file trong RAM.
-- Backend tự giới hạn hàng chờ, giảm tải khi thiếu RAM và khôi phục state từ backup.
-- Spotify API key là tùy chọn; khi không có key, backend dùng metadata public.
+- Chat, avatar, listener positioning, and voice chat via LiveKit.
+- Fly/3D Spatial Audio with left/right transitions and manual controls.
+- Streaming audio uploads to S3/R2 without buffering whole files in RAM.
+- Self-limiting queue on the backend, shedding load under memory pressure and recovering state from backups.
+- Spotify API keys are optional; without credentials, public metadata resolution is used.
 
 ## Lyrics
 
-Lời được lấy tự động ở backend khi thêm bài, khôi phục playlist hoặc phát nhạc; không cần mở hộp thoại hay nhập tìm kiếm. Hệ thống chuẩn bị bài đang phát và hai bài tiếp theo, ưu tiên phụ đề gốc do tác giả đăng trên YouTube, rồi [LRCLIB](https://lrclib.net/docs) khi khớp bài, nghệ sĩ và thời lượng. Phụ đề nhận dạng giọng hát tự động của YouTube bị loại khỏi luồng lấy lời vì có thể sai nhiều từ. Nhạc Việt dùng lời Việt; các bài khác dùng lời gốc, không tự chọn phụ đề dịch máy.
+Lyrics are automatically resolved on the backend when adding tracks, restoring playlists, or playing music; no modal search required. The system prepares the currently playing track and the next two tracks, prioritizing original creator subtitles on YouTube, followed by [LRCLIB](https://lrclib.net/docs) when track, artist, and duration match. YouTube auto-generated speech recognition subtitles are excluded from automatic resolution due to inaccuracies. Original lyrics are used without auto-selecting machine-translated subtitles.
 
-Bấm **Lyrics** dưới trình phát. Lời tự cuộn, tô sáng câu đang hát, hỗ trợ tô từng từ khi nguồn có timestamp thật; bấm vào câu để tua. Đoạn nhạc không có lời được hiển thị riêng. Lời thường vẫn đọc được; không có timestamp thì hiển thị tĩnh. Mỗi bản lời tối đa 40 KB.
+Click **Lyrics** below the player. Lyrics auto-scroll, highlight the active line, and support word-by-word highlighting when source timestamps are available; click any line to seek. Instrumental sections are displayed cleanly. Plain lyrics remain readable statically when timestamps are not provided. Each lyric payload is capped at 40 KB.
 
-Lỗi mạng được tự thử lại với backoff; có nút **Retry lyrics**. Mục **Edit lyrics** cho phép tùy chọn bản khác hoặc nhập `.lrc` như `[00:12.50]Lyric line`. Backend giữ nguyên bản đã chỉnh tay. Không đủ bằng chứng khớp bài/phiên bản/ngôn ngữ thì hiển thị chưa tìm thấy, tránh gắn lời nhầm.
+Network errors retry automatically with backoff; a **Retry lyrics** button is available. **Edit lyrics** allows picking an alternate version or pasting custom `.lrc` text like `[00:12.50]Lyric line`. Hand-edited lyrics are preserved by the backend. If metadata confidence is insufficient, lyrics remain unset to prevent mismatched songs.
 
-Lời được chia sẻ cho cả phòng, kể cả người vào sau. Các nút **− / +** chỉnh lời sớm hoặc muộn 0,1 giây; bấm số độ trễ để đặt lại. **Save** trong trình phát lưu cả lời đã chọn cùng playlist. Nhạc nền vẫn là bản âm thanh đang phát.
+Lyrics are shared with everyone in the room, including listeners joining later. The **− / +** buttons adjust lyrics timing earlier or later by 0.1 seconds; click the offset indicator to reset. **Save** in the player preserves selected lyrics alongside the playlist. Background audio remains the currently playing track.
 
-Production mặc định chỉ chạy một tác vụ lấy lời (`LYRICS_MAX_CONCURRENCY=1`, cho phép 1–4). Kết quả dùng cache theo video ID, giới hạn 512 bản và lưu trong `lyrics-cache` cạnh file backup; lỗi mạng không bị lưu thành thiếu lời. `/health` có mục `lyrics` để theo dõi tải. Khi có hybrid worker, tác vụ `youtube.lyrics` được chuyển sang worker và tự fallback nếu worker không sẵn sàng.
+Production defaults to a single lyric resolver worker (`LYRICS_MAX_CONCURRENCY=1`, configurable 1–4). Results are cached by video ID up to 512 entries in `lyrics-cache` next to backup files; transient network failures are not cached. `/health` includes a `lyrics` section for monitoring. When a hybrid worker is active, `youtube.lyrics` jobs offload to the worker with automatic fallback if unavailable.
 
 ## Rooms and saved playlists
 
@@ -37,59 +37,59 @@ Creating a new room with saved playlists in the browser prompts the listener to 
 
 The browser library contains track metadata. Uploads, audio caches, and operational backups still use S3/R2; this change does not impose a storage limit on those files. Deleted uploads must be uploaded again. Clearing browser data removes locally saved playlists and room history.
 
-## Kiến trúc
+## Architecture
 
-| Thành phần                      | Công nghệ                       | Vai trò                                               |
+| Component                       | Technology                      | Role                                                  |
 | ------------------------------- | ------------------------------- | ----------------------------------------------------- |
-| `apps/client`                   | Next.js 16, React 19, Web Audio | Giao diện, player, chat, voice và 3D audio            |
-| `apps/server`                   | Go                              | HTTP, WebSocket, room state, queue, backup và S3/R2   |
-| `apps/server/yt-rust-extractor` | Rust + yt-dlp                   | Lấy URL audio YouTube với output và RAM được giới hạn |
-| `packages/shared`               | TypeScript + Zod                | Schema và kiểu dữ liệu dùng bởi client                |
+| `apps/client`                   | Next.js 16, React 19, Web Audio | User interface, player, chat, voice, and 3D audio     |
+| `apps/server`                   | Go                              | HTTP, WebSocket, room state, queue, backup, and S3/R2 |
+| `apps/server/yt-rust-extractor` | Rust + yt-dlp                   | YouTube audio extraction with bounded RAM and output  |
+| `packages/shared`               | TypeScript + Zod                | Schemas and data types shared with client             |
 
-Production giữ backend trong một process để room/WebSocket state không bị chia cắt. GitHub Actions build sẵn Go, Rust và yt-dlp; VPS không cần cài Node, Bun, Go hay Rust.
+Production keeps the backend in a single process to prevent partitioned room/WebSocket state. GitHub Actions pre-builds Go, Rust, and yt-dlp; the host VPS does not need Node, Bun, Go, or Rust installed.
 
-## Yêu cầu phát triển
+## Development Requirements
 
 - [Bun](https://bun.sh/) 1.3.8+
 - [Go](https://go.dev/) 1.26+
-- Rust 1.90+ nếu cần sửa hoặc build extractor
-- `yt-dlp` trong `PATH` nếu kiểm tra luồng YouTube ngoài Docker
-- Docker Compose v2 nếu chạy backend bằng container
+- Rust 1.90+ if modifying or building the extractor
+- `yt-dlp` in `PATH` if testing YouTube extraction outside Docker
+- Docker Compose v2 if running backend in a container
 
-Các phiên bản khuyến nghị cũng được khai báo trong `mise.toml`.
+Recommended tool versions are defined in `mise.toml`.
 
-## Chạy local
+## Running Locally
 
-Tạo file cấu hình:
+Create configuration files:
 
 ```powershell
 Copy-Item apps/server/.env.example apps/server/.env
 Copy-Item apps/client/.env.example apps/client/.env.local
 ```
 
-Trên macOS/Linux dùng `cp` thay cho `Copy-Item`. Sau đó cài dependency và chạy cả client lẫn server:
+On macOS/Linux use `cp` instead of `Copy-Item`. Then install dependencies and run both client and server:
 
 ```bash
 bun install
 bun dev
 ```
 
-Lệnh `bun dev` khởi động cả client và backend. Backend tự tìm Go trong `PATH`, hoặc dùng bản có sẵn tại `local/tooling/go/bin`; không cần thêm PATH thủ công. Trên Windows, có thể mở `start_servers.bat`. Binary backend local được build vào `apps/server/dist` để tránh lỗi Windows chặn executable trong thư mục tạm.
+`bun dev` launches both frontend and backend. The backend automatically locates Go in `PATH` or uses `local/tooling/go/bin`; no manual PATH modifications required. On Windows, `start_servers.bat` can be used. Local backend binaries build to `apps/server/dist` to avoid Windows temporary directory execution blocks.
 
 - Client: `http://localhost:3001`
 - Backend: `http://127.0.0.1:1001`
 - Health check: `http://127.0.0.1:1001/health`
 
-Có thể chạy riêng từng phần:
+Individual components can also be run independently:
 
 ```bash
 bun client
 bun server
 ```
 
-## Chạy backend bằng Docker
+## Running Backend with Docker
 
-Docker image chỉ chứa runtime backend: binary Go, Rust extractor và bản `yt-dlp_musllinux` đã kiểm tra SHA-256. Container chạy non-root, filesystem chỉ đọc, RAM tối đa 420 MiB và state được giữ trong volume `beatsync-data`. File tạm dùng volume `beatsync-tmp` trên đĩa thay vì `tmpfs`, tránh lấy RAM của VPS khi tải nhạc.
+The Docker image contains only the backend runtime: Go binary, Rust extractor, and SHA-256 verified `yt-dlp_musllinux`. The container runs as non-root, read-only root filesystem, 420 MiB RAM limit, and state persisted in volume `beatsync-data`. Temporary files use disk-backed `beatsync-tmp` volume instead of `tmpfs` to avoid consuming VPS RAM during downloads.
 
 ```bash
 cp apps/server/.env.example apps/server/.env
@@ -98,7 +98,7 @@ docker compose ps
 docker compose logs -f server
 ```
 
-Hoặc dùng script Bun tương ứng:
+Or using Bun scripts:
 
 ```bash
 bun run docker:up
@@ -106,19 +106,19 @@ bun run docker:logs
 bun run docker:down
 ```
 
-Mặc định host mở cổng `1001`. Có thể đổi cổng phía máy chủ mà không đổi cổng trong container:
+By default the host exposes port `1001`. The host port can be adjusted without changing the container port:
 
 ```bash
 BEATSYNC_PORT=8080 docker compose up --build -d
 ```
 
-Phiên bản yt-dlp mặc định được pin trong `Dockerfile` để build có thể tái lập. Khi cần nâng phiên bản:
+The yt-dlp version is pinned in the `Dockerfile` for reproducible builds. To upgrade:
 
 ```bash
 docker build --build-arg YTDLP_VERSION=YYYY.MM.DD -t beatsync-server:local .
 ```
 
-## Kiểm tra trước khi đưa lên main
+## Pre-merge Verification
 
 ```bash
 cd apps/server
@@ -144,33 +144,31 @@ docker compose config --quiet
 docker build --tag beatsync-server:ci .
 ```
 
-## Cấu hình và bảo mật
+## Configuration & Security
 
-Danh sách biến backend nằm trong `apps/server/.env.example`; biến public của frontend nằm trong `apps/client/.env.example`.
+Backend environment variables are listed in `apps/server/.env.example`; frontend public variables in `apps/client/.env.example`.
 
-- Không commit `.env`, private key SSH, LiveKit secret hoặc S3/R2 secret.
-- Frontend chỉ được chứa biến có tiền tố `NEXT_PUBLIC_` và không được nhận backend secret.
-- `SPOTIFY_CLIENT_ID` và `SPOTIFY_CLIENT_SECRET` không bắt buộc.
-- Dữ liệu backup local của Docker nằm trong volume; production VPS lưu tại `/opt/beatsync/data`.
+- Never commit `.env`, SSH private keys, LiveKit secrets, or S3/R2 credentials.
+- Frontend must only contain variables prefixed with `NEXT_PUBLIC_` and never receive backend secrets.
+- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are optional.
+- Docker local backup data resides in a named volume; production VPS stores backups at `/opt/beatsync/data`.
 
-## Deploy
+## Deployment
 
-Mỗi push lên `main` kích hoạt `.github/workflows/deploy.yml`:
+Every push to `main` triggers `.github/workflows/deploy.yml`:
 
-1. test và build Go/Rust trên GitHub runner;
-2. tải yt-dlp và xác minh checksum chính thức;
-3. gửi bundle qua SSH đã pin host fingerprint;
-4. cài release mới, restart systemd và gọi `/health`;
-5. tự rollback nếu health check thất bại;
-6. chỉ giữ release hiện tại và một bản rollback để tiết kiệm ổ đĩa VPS.
+1. Tests and builds Go/Rust on GitHub runners;
+2. Downloads yt-dlp and verifies official checksums;
+3. Transfers bundle over SSH with pinned host fingerprint;
+4. Deploys release, restarts systemd service, and queries `/health`;
+5. Automatically rolls back if health check fails;
+6. Keeps only current release and one rollback copy to conserve VPS disk space.
 
-Frontend được deploy riêng qua Vercel. Hướng dẫn giới hạn RAM, swap, backup, systemd và xử lý sự cố nằm trong [`OPERATIONS.md`](OPERATIONS.md).
+Frontend deploys separately via Vercel. Guidance for memory limits, swap, backup, systemd, and troubleshooting is documented in [`OPERATIONS.md`](OPERATIONS.md).
 
-## Hybrid worker: VPS ổn định, máy local xử lý việc nặng
+## Hybrid Worker: Stable VPS, Heavy Jobs Offloaded to Local Machine
 
-Không chuyển CNAME qua lại giữa VPS và máy local. Hostname backend public vẫn
-trỏ duy nhất tới Cloudflare Tunnel trên VPS; máy local chỉ tạo một kết nối
-WebSocket outbound đã xác thực tới VPS:
+Never flip DNS CNAME back and forth between VPS and local machines. The public backend hostname always points exclusively to Cloudflare Tunnel on the VPS; the local machine only establishes an authenticated outbound WebSocket connection to the VPS:
 
 ```text
 User ──HTTPS/WSS──> Cloudflare Tunnel ──> VPS Go backend
@@ -181,32 +179,22 @@ Local worker ──outbound WSS + heartbeat──────┘
        └─ Spotify resolve, YouTube search/metadata/extract
 ```
 
-Cách tách này giữ room state và kết nối nhẹ ở một nơi. Broker chỉ giao job khi
-worker còn online và còn slot. Mỗi job có lease; nếu local tắt, mất mạng hoặc
-quá deadline, job đang thuê được trả lỗi ngay cho caller và chạy lại trên VPS.
-Các stream job chưa bắt đầu vẫn nằm trong queue RAM của VPS. Khi local vừa bật,
-job mới và job đang chờ sẽ ưu tiên local; job nặng đã chạy trên VPS không bị
-preempt giữa chừng. Playlist/audio đã hoàn tất tiếp tục nằm trên R2.
+This separation keeps room state and lightweight connections centralized. The broker only assigns jobs when a worker is online and has available capacity. Each job has a lease; if the local worker disconnects, loses network, or exceeds its deadline, the leased job immediately returns an error to caller and retries on the VPS. Unstarted stream jobs stay in the VPS RAM queue. When the local worker connects, new and pending jobs favor local execution; heavy jobs already running on the VPS are not preempted midway. Completed audio and playlists remain on R2.
 
-### 1. Giữ DNS/Tunnel ở VPS
+### 1. Maintain DNS/Tunnel on VPS
 
-Trong Cloudflare DNS, CNAME của backend phải tiếp tục trỏ tới
-`<UUID-VPS>.cfargotunnel.com`. Không cần Tunnel hay CNAME cho máy local. Theo
-[Cloudflare Tunnel routing](https://developers.cloudflare.com/tunnel/routing/),
-DNS record ánh xạ hostname vào một tunnel; WebSocket được Cloudflare proxy hỗ
-trợ theo [tài liệu WebSockets](https://developers.cloudflare.com/network/websockets/).
+In Cloudflare DNS, the backend CNAME must point to `<UUID-VPS>.cfargotunnel.com`. No Tunnel or CNAME is needed for the local machine. Under [Cloudflare Tunnel routing](https://developers.cloudflare.com/tunnel/routing/), DNS records map the hostname to a tunnel; WebSockets are proxied by Cloudflare per [WebSockets documentation](https://developers.cloudflare.com/network/websockets/).
 
-### 2. Bật broker trên VPS
+### 2. Enable Broker on VPS
 
-Tạo secret ngẫu nhiên tối thiểu 32 byte, thêm vào
-`apps/server/.env` trên VPS rồi restart service:
+Generate a random secret of at least 32 bytes, add it to `apps/server/.env` on the VPS, and restart the service:
 
 ```bash
 openssl rand -base64 48
 ```
 
 ```dotenv
-HYBRID_WORKER_SECRET=<cùng-một-secret-với-local>
+HYBRID_WORKER_SECRET=<same-secret-as-local>
 HYBRID_JOB_LEASE=20s
 ```
 
@@ -215,210 +203,154 @@ sudo systemctl restart beatsync.service
 curl -fsS http://127.0.0.1:3001/health
 ```
 
-Khi chưa có local, health trả `hybridWorker.workers: 0`; backend vẫn xử lý toàn
-bộ job trên VPS như trước. Không đưa secret này vào Git hoặc frontend.
+Without a connected worker, health returns `hybridWorker.workers: 0`; the backend handles all jobs on the VPS as before. Never expose this secret in Git or frontend bundles.
 
-### 3. Bật worker trên máy local
+### 3. Launch Worker on Local Machine
 
 ```powershell
 Copy-Item apps/server/.env.worker.example apps/server/.env.worker
 ```
 
-Điền cấu hình sau; URL là hostname backend hiện đang đi vào Tunnel/VPS:
+Configure with the public backend hostname routed to the Tunnel/VPS:
 
 ```dotenv
 WORKER_SERVER_URL=https://backend.example.com
-HYBRID_WORKER_SECRET=<cùng-secret-trên-VPS>
+HYBRID_WORKER_SECRET=<same-secret-as-VPS>
 WORKER_ID=local-primary
 WORKER_CONCURRENCY=2
 ```
 
-Đặt đường dẫn `YT_EXTRACTOR_PATH`, `YTDLP_PATH` trong `.env.worker` nếu các file
-không nằm cạnh binary/không có trong `PATH`, sau đó chạy `start_worker.bat`.
-Cùng binary `cmd/beatsync` tự chuyển sang worker mode khi có
-`WORKER_SERVER_URL`; nó không mở cổng public trên máy local.
+Configure `YT_EXTRACTOR_PATH` and `YTDLP_PATH` in `.env.worker` if binaries are not adjacent or not in `PATH`, then run `start_worker.bat`. The same `cmd/beatsync` binary automatically switches to worker mode when `WORKER_SERVER_URL` is set; it does not expose any local public ports.
 
-`WORKER_CONCURRENCY=2` là mức khởi đầu hợp lý: local nhận tối đa hai job nặng,
-job vượt capacity lập tức fallback VPS thay vì xếp hàng vô hạn. Có thể quan sát
-`workers`, `capacity`, `inflight` và `pendingOnVps` trong `/health` hoặc `/stats`.
+`WORKER_CONCURRENCY=2` is a safe starting point: the local worker accepts up to two heavy jobs, and jobs exceeding capacity immediately fall back to the VPS rather than queueing indefinitely. Monitor `workers`, `capacity`, `inflight`, and `pendingOnVps` via `/health` or `/stats`.
 
-### 4. Lớp bảo vệ Cloudflare Access tùy chọn
+### 4. Optional Cloudflare Access Layer
 
-Có thể tạo Access application chỉ cho đường dẫn `/internal/worker*`, policy
-Service Auth và service token cho máy local. Điền cặp token vào
-`CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET`; worker sẽ gửi hai header trong
-WebSocket handshake. Cloudflare mô tả quy trình tạo và thu hồi token tại
-[Service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/).
-Origin vẫn kiểm tra `HYBRID_WORKER_SECRET`, nên đây là hai lớp xác thực độc lập.
+You can configure a Cloudflare Access application scoped strictly to `/internal/worker*`, using Service Auth policy and a service token for the local machine. Supply the token credentials in `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`; the worker includes these headers during the WebSocket handshake. See [Service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/). The origin still verifies `HYBRID_WORKER_SECRET` as an independent authentication layer.
 
-Không áp policy Access của worker lên toàn hostname nếu frontend/user hiện cần
-truy cập public, vì như vậy có thể chặn cả `/ws`, `/spotify/resolve` và health.
+Do not apply worker Access policies across the entire hostname if public users need access to `/ws`, `/spotify/resolve`, and health endpoints.
 
 <!-- AUTO-GENERATED: go-vs-bun-benchmark:start -->
 
-## Đánh giá chuyển đổi backend từ Bun sang Go
+## Backend Migration Assessment: Bun to Go
 
-> Benchmark ngày 2026-08-22 giữa `backup/bun-backend` (`a282e6b`) và
-> `migration/go-backend` (`0987e39`). Kết luận: **Go là hướng chuyển đổi phù
-> hợp cho VPS yếu, đặc biệt khi RAM/OOM là nút thắt; nhánh Go chưa nên phát
-> hành nguyên trạng cho đến khi sửa WebSocket burst và hoàn tất API parity.**
+> Benchmark dated 2026-08-22 comparing `backup/bun-backend` (`a282e6b`) and
+> `migration/go-backend` (`0987e39`). Conclusion: **Go is the right direction
+> for memory-constrained VPS deployments, especially where RAM/OOM is the primary
+> bottleneck; the Go branch required resolving WebSocket burst handling and API parity before deployment.**
 
-### Phương pháp
+### Methodology
 
-- Chạy hai backend trên cùng máy Windows x64, i5-12450HX, Bun 1.3.14 và Go 1.26.5.
-- Mỗi lượt dùng process mới, chạy xen kẽ Bun/Go và loại warm-up khỏi kết quả.
-- Năm lượt dùng toàn CPU; ba lượt ép server còn một core để làm proxy cho VPS một vCPU.
-- HTTP dùng `GET /health` ở concurrency 1 và 32.
-- WebSocket dùng 200 client với cả hai kịch bản: kết nối đồng thời và ramp đều trong 5 giây.
-- Số liệu dưới đây là median; báo cáo đầy đủ còn lưu MAD, min/max và raw measurements.
+- Both backends evaluated on the same Windows x64 machine, i5-12450HX, Bun 1.3.14 and Go 1.26.5.
+- Fresh process per run, alternating Bun/Go with warm-up excluded from measurements.
+- 5 runs using all CPUs; 3 runs pinning the server to 1 core as a proxy for 1-vCPU VPS environments.
+- HTTP measured with `GET /health` at concurrency 1 and 32.
+- WebSocket measured with 200 clients under two scenarios: concurrent burst and uniform 5-second ramp.
+- Figures below reflect medians; full reports retain MAD, min/max, and raw data.
 
-Đây là benchmark của chính BeatSync tại hai commit trên, không phải kết luận
-chung rằng Go luôn nhanh hơn Bun. Môi trường đo không thay thế phép thử cuối
-cùng trên VPS Linux thật.
+This benchmark reflects BeatSync itself across these two commits, not a generic claim that Go is universally faster than Bun.
 
-### Footprint và khả năng vận hành trên VPS yếu
+### Footprint & Low-Spec VPS Viability
 
-| Chỉ số | Bun | Go | Chênh lệch của Go |
+| Metric | Bun | Go | Go Delta |
 | --- | ---: | ---: | ---: |
-| Startup process | 175,61 ms | 22,00 ms | **-87,5%**, nhanh hơn khoảng 8× |
-| RSS idle | 91,17 MiB | 9,79 MiB | **-89,3%** |
-| RSS với 200 WebSocket sống | 91,43 MiB | 24,26 MiB | **-73,5%** |
-| Artifact tự chứa | 96,04 MiB | 7,61 MiB | **-92,1%**, nhỏ hơn khoảng 12,6× |
-| Production source | 5.713 dòng | 3.809 dòng | **-33,3%** |
-| Direct production dependencies | 14 | 1 | Bề mặt dependency nhỏ hơn |
+| Process startup | 175.61 ms | 22.00 ms | **-87.5%**, ~8× faster |
+| Idle RSS | 91.17 MiB | 9.79 MiB | **-89.3%** |
+| RSS with 200 live WebSockets | 91.43 MiB | 24.26 MiB | **-73.5%** |
+| Self-contained artifact | 96.04 MiB | 7.61 MiB | **-92.1%**, ~12.6× smaller |
+| Production source lines | 5,713 lines | 3,809 lines | **-33.3%** |
+| Direct production dependencies | 14 | 1 | Smaller surface area |
 
-Với 200 WebSocket sống, process Go dùng ít hơn khoảng 67 MiB. Nếu chỉ quy đổi
-RSS process theo ngân sách 256 MiB, workload này chiếm khoảng 9,5% ở Go và
-35,7% ở Bun. Phép quy đổi chưa bao gồm OS, reverse proxy, extractor, `yt-dlp`,
-audio cache hoặc các service khác.
+With 200 live WebSockets, the Go process uses ~67 MiB less memory. Under a 256 MiB budget, this workload accounts for ~9.5% with Go versus 35.7% with Bun (excluding OS, reverse proxy, extractor, `yt-dlp`, and audio cache).
 
-Go tăng khoảng 14,42 MiB khi thêm 200 socket, trong khi Bun chỉ tăng khoảng
-1,19 MiB do phần lớn chi phí đã nằm trong runtime base. Vì vậy không được
-ngoại suy tuyến tính lên hàng nghìn client; cần benchmark riêng ở
-500/1.000/2.000 client trên Linux.
+Go adds ~14.42 MiB across 200 sockets, whereas Bun adds ~1.19 MiB because base runtime overhead already covers most allocations. Avoid linear extrapolation to thousands of clients without dedicated Linux benchmarks at 500 / 1,000 / 2,000 connections.
 
-### HTTP trên proxy một vCPU
+### HTTP on 1-vCPU Proxy
 
-| Chỉ số | Bun | Go | Chênh lệch của Go |
+| Metric | Bun | Go | Go Delta |
 | --- | ---: | ---: | ---: |
-| Throughput, concurrency 1 | 10.731 req/s | 11.998 req/s | **+11,8%** |
-| p99, concurrency 1 | 0,898 ms | 0,527 ms | **-41,3%** |
-| Throughput, concurrency 32 | 41.953 req/s | 39.463 req/s | -5,9% |
-| p95, concurrency 32 | 1,594 ms | 1,848 ms | +15,9% |
-| p99, concurrency 32 | 3,031 ms | 3,393 ms | +11,9% |
-| Request/CPU-second, concurrency 32 | 51.307 | 50.334 | -1,9% |
+| Throughput, concurrency 1 | 10,731 req/s | 11,998 req/s | **+11.8%** |
+| p99, concurrency 1 | 0.898 ms | 0.527 ms | **-41.3%** |
+| Throughput, concurrency 32 | 41,953 req/s | 39,463 req/s | -5.9% |
+| p95, concurrency 32 | 1.594 ms | 1.848 ms | +15.9% |
+| p99, concurrency 32 | 3.031 ms | 3.393 ms | +11.9% |
+| Requests/CPU-second, concurrency 32 | 51,307 | 50,334 | -1.9% |
 
-Khi bị giới hạn một core, hiệu quả CPU giữa hai bản gần tương đương. Go đổi
-một lượng tail latency nhỏ ở tải concurrent lấy mức RAM thấp hơn rất lớn. Đây
-là trade-off thuận lợi cho VPS yếu nếu RAM/OOM là vấn đề chính. Tất cả HTTP
-workload ở cả hai backend có tổng lỗi bằng 0.
+Under 1-core constraints, CPU efficiency between backends is virtually identical. Go exchanges a minor tail latency difference under high concurrency for dramatically lower RAM usage—a favorable trade-off for low-spec VPS hosts where OOM is the main hazard. All HTTP workloads on both backends completed with zero errors.
 
-Khi được dùng toàn bộ 12 logical CPU, Go đạt throughput concurrency 32 cao hơn
-18,8% nhưng dùng khoảng 4,25× CPU time và có request/CPU-second thấp hơn 72,1%.
-Do đó lập luận đúng cho migration là **giảm mạnh RAM và footprint trong khi
-hiệu suất một vCPU gần tương đương**, không phải “Go luôn nhanh hơn Bun”.
+When utilizing all 12 logical cores, Go achieved 18.8% higher throughput at concurrency 32, but consumed ~4.25× CPU time with 72.1% lower requests/CPU-second. The core justification for migration is **drastically reduced RAM and footprint with comparable 1-vCPU performance**.
 
 ### WebSocket
 
-Kịch bản ramp 200 client trong 5 giây đạt kết quả ổn định ở cả ba lượt:
+Under the 5-second ramp of 200 clients, both backends achieved stable performance across all runs:
 
-| Chỉ số | Bun | Go |
+| Metric | Bun | Go |
 | --- | ---: | ---: |
-| Handshake mở | 200/200 | 200/200 |
-| Socket còn sống sau 1 giây | 200/200 | 200/200 |
-| NTP probe thành công | 200/200 | 200/200 |
-| NTP RTT p50 | 2,592 ms | 2,040 ms |
+| Handshakes completed | 200/200 | 200/200 |
+| Sockets alive after 1s | 200/200 | 200/200 |
+| NTP probes successful | 200/200 | 200/200 |
+| NTP RTT p50 | 2.592 ms | 2.040 ms |
 
-Kịch bản burst 200 kết nối đồng thời phát hiện một blocker:
+Under concurrent 200-connection burst, a backpressure bottleneck was identified:
 
-- Bun trả lời 5.000/5.000 NTP probe qua năm lượt.
-- Go mở handshake nhưng trả lời 0/5.000 NTP probe qua năm lượt toàn CPU.
-- Queue gửi Go chỉ có 8 phần tử và đóng socket khi queue đầy. Nhiều state
-  message cộng broadcast user count khi client cùng vào tạo ra burst vượt quá
-  tốc độ writer drain.
+- Bun answered 5,000/5,000 NTP probes across 5 runs.
+- Go completed handshakes but answered 0/5,000 NTP probes across 5 full-CPU runs.
+- The outbound queue in Go was bounded to 8 entries, disconnecting clients upon queue overflow. Multiple initial state messages plus user count broadcasts exceeded writer drain capacity.
 
-Đây là lỗi backpressure/broadcast, không phải lỗi protocol NTP: cùng code Go
-đạt 100% khi client được ramp trong 5 giây. VPS yếu còn nhạy hơn với lỗi này
-do writer drain chậm hơn.
+> Post-benchmark status: the outbound queue was increased from 8 to 64 with bounded retention, maintaining fail-closed behavior for persistently slow clients, and covered with integration tests verifying NTP survival after 40-message bursts.
 
-> Trạng thái sau benchmark: working tree hiện tại đã tăng queue có giới hạn từ
-> 8 lên 64, vẫn fail-closed khi client chậm kéo dài, và có integration test gửi
-> burst 40 message rồi xác nhận NTP tiếp tục hoạt động. Đây là remediation có
-> regression coverage, chưa thay thế gate chạy lại 200/500 client trên VPS.
+Production deployment checklist:
+1. Coalesce "latest wins" state (especially user counts).
+2. Avoid immediate socket teardown on brief bursts of non-essential messages.
+3. Use bounded queue sizing based on memory measurements (never unbounded).
+4. Add metrics for queue-full, forced-close, queue depth, and dropped/coalesced frames.
+5. Include both burst and ramp tests in continuous integration.
 
-Trước khi deploy cần:
+### Correctness and API Parity
 
-1. Coalesce state có tính “latest wins”, đặc biệt user count.
-2. Không đóng socket ngay vì burst ngắn của message không quan trọng.
-3. Tăng queue có giới hạn sau khi đo memory; không dùng queue vô hạn.
-4. Thêm metric queue-full, forced-close, queue depth và dropped/coalesced message.
-5. Đưa cả burst test và ramp test vào CI.
+- Bun passed 112/114 tests; 2 failures related to active room filtering.
+- Go passed 14/14 tests in initial benchmark suite (323 lines vs Bun's 2,131 lines).
+- Both backends passed smoke tests for health, stats, active/discover/default, unconfigured voice, disabled uploads, and core WebSocket/NTP.
+- Bun returns plain text errors; Go returns JSON `{ "error": ... }`.
+- CORS preflight transitioned from HTTP 200 to 204.
+- Go test suite has since expanded from 14 to 40+ tests covering room cleanup, audio timeouts, multi-room backups, hub backpressure, and hybrid worker auth/failover.
 
-### Correctness và API parity
+### Release Gates
 
-- Bun đạt 112/114 test; hai test lỗi liên quan việc lọc active rooms.
-- Go đạt 14/14 test, nhưng chỉ có 323 dòng test so với 2.131 dòng test Bun.
-- Cả hai smoke test thành công cho health, stats, active/discover/default,
-  voice-unconfigured, upload-disabled và WebSocket/NTP cơ bản.
-- Bun trả error body dạng plain text; Go trả JSON `{ "error": ... }`.
-- CORS preflight đổi từ HTTP 200 sang 204.
-- `/stats` Go chưa có storage totals, orphaned rooms và file size/count như Bun.
-- Schema memory và thứ tự một số WebSocket initialization message đã thay đổi.
+1. 200-connection burst and 500-client ramp achieve 100% socket survival with <0.1% error rate.
+2. Backward compatibility maintained for error schema.
+3. Operational metrics available in `/stats`.
+4. Extended Go test coverage matching Bun edge cases.
+5. Linux VPS soak test (1 vCPU, 512 MiB cgroup) for 30–60 minutes.
+6. Canary deployment with 5% traffic, monitoring RSS, CPU throttling, GC pauses, NTP latency, and dropped frames.
 
-Không nên dùng tỷ lệ test pass để nói Go đúng hơn: suite Go còn nhỏ. Cần port
-các regression test về room lifecycle, backup/restore, stale client, audio
-coordination và WebSocket close/message trước khi bỏ backend Bun.
+Reports and source data:
 
-Sau benchmark, suite Go đã tăng từ 14 lên 40 hàm test, bổ sung room cleanup,
-audio loading/disconnect/timeout, backup nhiều room và dữ liệu lỗi, Hub
-replacement/backpressure, WebSocket burst, cùng broker hybrid auth/capacity/
-disconnect failover. Con số lịch sử 14/14 phía trên vẫn được giữ để báo cáo
-đúng trạng thái của commit đã benchmark.
-
-### Kết luận và release gates
-
-Hướng chuyển Go được dữ liệu ủng hộ cho VPS thiếu RAM: RSS idle giảm khoảng
-89%, RSS ở 200 WebSocket giảm khoảng 73,5%, startup nhanh hơn khoảng 8× và
-artifact nhỏ hơn khoảng 12,6×, trong khi hiệu suất một vCPU chỉ dao động từ
-`+11,8%` đến `-5,9%` tùy mức concurrency.
-
-Chỉ chuyển traffic production sau khi đạt đủ các gate:
-
-1. Burst 200 và ramp 500 đạt 100% socket survival, error dưới 0,1%.
-2. Giữ backward compatibility cho error body/schema hoặc version client và API đồng thời.
-3. Phục hồi các trường `/stats` cần cho vận hành và cảnh báo memory pressure.
-4. Mở rộng test suite Go tới các hành vi quan trọng của suite Bun.
-5. Chạy lại trên VPS thật với cgroup 1 vCPU/512 MiB và soak test 30–60 phút.
-6. Canary 5% traffic, theo dõi RSS, CPU throttling, GC, reconnect, NTP p95/p99,
-   queue-full và forced-close; luôn giữ rollback về Bun.
-
-Báo cáo và dữ liệu nguồn:
-
-- [Báo cáo đầy đủ](.ecc/benchmarks/go-vs-bun/REPORT.vi.md)
-- [Bảng tổng hợp median/MAD](.ecc/benchmarks/go-vs-bun/summary.json)
-- [Raw runtime measurements](.ecc/benchmarks/go-vs-bun/raw-windows.json)
-- [Raw WebSocket ramp](.ecc/benchmarks/go-vs-bun/raw-ws-ramp.json)
-- [API parity smoke test](.ecc/benchmarks/go-vs-bun/parity-smoke.json)
+- [Full Report (Vietnamese)](.ecc/benchmarks/go-vs-bun/REPORT.vi.md)
+- [Median & MAD Summary](.ecc/benchmarks/go-vs-bun/summary.json)
+- [Raw Runtime Measurements](.ecc/benchmarks/go-vs-bun/raw-windows.json)
+- [Raw WebSocket Ramp Data](.ecc/benchmarks/go-vs-bun/raw-ws-ramp.json)
+- [API Parity Smoke Test](.ecc/benchmarks/go-vs-bun/parity-smoke.json)
 
 <!-- AUTO-GENERATED: go-vs-bun-benchmark:end -->
 
-## Cấu trúc repo
+## Repository Structure
 
 ```text
 beatsync/
 ├── apps/
 │   ├── client/                 # Next.js frontend
 │   ├── server/                 # Go backend
-│   │   ├── cmd/beatsync/       # entrypoint
-│   │   ├── internal/           # application core
-│   │   └── yt-rust-extractor/  # helper gọi yt-dlp
-│   └── storage/                # cấu hình CORS cho object storage
-├── packages/shared/            # schema TypeScript phía client
-├── scripts/                    # cài đặt và giới hạn tài nguyên VPS
+│   │   ├── cmd/beatsync/       # Entrypoint
+│   │   ├── internal/           # Application core
+│   │   └── yt-rust-extractor/  # yt-dlp helper binary
+│   └── storage/                # Object storage CORS configuration
+├── packages/shared/            # Shared TypeScript/Zod schemas
+├── scripts/                    # VPS setup and cgroup limits
 ├── compose.yml
 └── Dockerfile
 ```
 
-## Giấy phép
+## License
 
-Dự án sử dụng giấy phép [MIT](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

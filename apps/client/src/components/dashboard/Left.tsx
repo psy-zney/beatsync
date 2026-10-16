@@ -32,16 +32,6 @@ export const Left = ({ className }: LeftProps) => {
         className
       )}
     >
-      {/* Header section */}
-      {/* <div className="px-3 py-2 flex items-center gap-2">
-        <div className="bg-neutral-800 rounded-md p-1.5">
-          <Music className="h-4 w-4 text-white" />
-        </div>
-        <h1 className="font-semibold text-white">Beatsync</h1>
-      </div>
-
-
-      <Separator className="bg-neutral-800/50" /> */}
 
       {/* Navigation menu */}
       <motion.div className="px-3.5 py-3 lg:py-2.5 lg:mt-1">

@@ -518,7 +518,7 @@ func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, s
 				id := parsed.Query().Get("videoId")
 				if youtube.ParseVideoID(id) == id && len(id) == 11 {
 					videoID = id
-					// Tối ưu cache: nếu đã có sẵn trong R2 cache, nâng cấp URL ngay thành link R2
+					// Cache optimization: upgrade URL to direct R2 link if already present in cache
 					if a.Store != nil {
 						if key := a.cachedYouTubeKey(ctx, id); key != "" {
 							source.URL = a.Store.PublicURL(key)
@@ -552,7 +552,7 @@ func (a *App) importBrowserPlaylist(client *realtime.Client, state *room.Room, s
 	a.broadcastSources(client.RoomID, current)
 	go a.triggerAutoLyrics(client.RoomID, state)
 
-	// Sliding window preload: Đệm trước Track 1 và Track 2 lên R2 nếu chưa có
+	// Sliding window preload: buffer Track 1 and Track 2 to R2 if not already cached
 	if a.Store != nil && len(tracksToPreload) > 0 {
 		preloadCount := min(2, len(tracksToPreload))
 		for i := 0; i < preloadCount; i++ {

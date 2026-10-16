@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useCanMutate, useGlobalStore } from "@/store/global";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum } from "@beatsync/shared";
-import { ArrowDown, FolderDown, Search as SearchIcon, X, ZapIcon } from "lucide-react";
+import { ArrowDown, FolderDown, Search as SearchIcon, X } from "lucide-react";
 import { FaYoutube } from "react-icons/fa";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
@@ -369,11 +369,6 @@ export function InlineSearch() {
         </button>
       </div>
 
-      {/* Beta Disclaimer */}
-      <div className="mt-2 flex items-center gap-1 text-[10px] font-mono text-neutral-500 ml-0.5">
-        <ZapIcon className="size-3 text-neutral-400 stroke-1" />
-        <span>[EXPERIMENTAL FREE BETA]</span>
-      </div>
 
       {/* Search Results Dropdown */}
       <AnimatePresence>

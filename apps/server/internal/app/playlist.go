@@ -33,7 +33,7 @@ func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
 		return
 	}
 	if len(saved) > 0 {
-		// Nâng cấp các track sang link R2 trực tiếp nếu đã có sẵn trong cache
+		// Upgrade tracks to direct R2 links if already present in cache
 		for i := range saved {
 			if id := youtube.ParseVideoID(saved[i].URL); id != "" {
 				if key := a.cachedYouTubeKey(parent, id); key != "" {
@@ -45,7 +45,7 @@ func (a *App) loadPlaylist(parent context.Context, state *room.Room) {
 		state.MarkPlaylistSaved()
 		go a.triggerAutoLyrics(state.ID, state)
 
-		// Sliding window preload: Đệm sẵn 2 bài đầu tiên cho phòng đặc biệt 090624
+		// Sliding window preload: buffer the first 2 tracks for persistent room 090624
 		preloadCount := min(2, len(saved))
 		for i := 0; i < preloadCount; i++ {
 			if id := youtube.ParseVideoID(saved[i].URL); id != "" {
@@ -113,7 +113,7 @@ func (a *App) wipeRoomR2Storage(parent context.Context, roomID string, state *ro
 	if a.Store == nil || a.Config.Demo {
 		return
 	}
-	// Note phòng đặc biệt 090624: Tuyệt đối không xoá dữ liệu trên R2
+	// Persistent room 090624: strictly protected from storage wipe
 	if roomID == persistentRoomID {
 		log.Printf("[Special Room] %s is preserved; skipping R2 storage wipe", roomID)
 		return

@@ -326,19 +326,6 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 text-[11px] text-neutral-400 space-y-1">
-                  <p className="font-medium text-neutral-300">Supported formats:</p>
-                  <p className="text-neutral-500">
-                    • Standard video: <span className="font-mono text-neutral-400">youtube.com/watch?v=...</span>
-                  </p>
-                  <p className="text-neutral-500">
-                    • Short link: <span className="font-mono text-neutral-400">youtu.be/...</span> or Shorts
-                  </p>
-                  <p className="text-neutral-500">
-                    • Length limit: <span className="font-mono text-emerald-400 font-medium">Up to 6m12s (372s)</span>
-                  </p>
-                </div>
-
                 <Button
                   type="submit"
                   disabled={!canMutate || isYoutubeImporting || !youtubeUrl.trim()}
@@ -444,13 +431,6 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
                 )}
               </div>
 
-              <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-3 text-xs text-neutral-400 space-y-1">
-                <div className="font-medium text-neutral-300">💡 Tips</div>
-                <ul className="list-disc list-inside space-y-0.5 text-neutral-400 text-[11px]">
-                  <li>Files are uploaded directly to the room queue and synchronized with all listeners.</li>
-                  <li>You can select or drop multiple audio tracks at once.</li>
-                </ul>
-              </div>
             </div>
           )}
 
