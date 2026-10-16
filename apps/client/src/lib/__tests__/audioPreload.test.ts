@@ -27,9 +27,22 @@ describe("automatic continuation preloading", () => {
     expect(plan).toEqual({ loadUrl: "d", evictedUrls: ["a"] });
   });
 
-  it("starts the next download while the selected track is still loading", () => {
+  it("does not start background preload while the selected track is still loading", () => {
     const plan = planAudioPreload([source("a", "loading"), source("b", "idle"), source("c", "idle")], "a", [], 3, 1);
-    expect(plan.loadUrl).toBe("b");
+    expect(plan.loadUrl).toBeUndefined();
+  });
+
+  it("does not start background preload when playback has not started yet", () => {
+    const plan = planAudioPreload(
+      [source("a", "loaded"), source("b", "idle"), source("c", "idle")],
+      "a",
+      ["a"],
+      3,
+      1,
+      undefined,
+      false
+    );
+    expect(plan.loadUrl).toBeUndefined();
   });
 
   it("limits background downloads and does not keep downloading unrelated evicted tracks", () => {
@@ -67,20 +80,22 @@ describe("automatic continuation preloading", () => {
     });
   });
 
-  it("frees enough slots after manually selecting a track outside a full cache", () => {
+  it("frees enough slots after selecting a track outside a full cache", () => {
     const plan = planAudioPreload(
       [
         source("a", "loaded"),
         source("b", "loaded"),
         source("c", "loaded"),
-        source("d", "loading"),
+        source("d", "loaded"),
         source("e", "idle"),
         source("f", "idle"),
       ],
       "d",
       ["c", "b", "a"],
       3,
-      1
+      1,
+      undefined,
+      true
     );
     expect(plan).toEqual({ loadUrl: "e", evictedUrls: ["a", "b"] });
   });

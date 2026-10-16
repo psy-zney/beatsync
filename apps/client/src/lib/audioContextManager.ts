@@ -34,7 +34,7 @@ function createAmbienceImpulse(context: AudioContext, durationSeconds = 0.5, dec
  * Singleton AudioContext Manager
  *
  * Manages the single AudioContext instance with:
- * 1. "Giữ trụ": 200Hz Frequency Splitting (Bass/Kick center, Mids/Highs 3D fly)
+ * 1. Bass Anchor: 200Hz Frequency Splitting (Bass/Kick center, Mids/Highs 3D fly)
  * 2. Device optimization: Headphones (HRTF 3D Panner) vs Speakers (Stereo + Haas delay)
  * 3. Producer subtle room ambience reverb
  * 4. Lyrics sync & music-driven dynamic automation
@@ -76,7 +76,7 @@ class AudioContextManager {
   } | null = null;
   private flyRelease: { pan: number; startTime: number } | null = null;
 
-  private stateChangeCallback: ((state: AudioContextState) => void) | null = null;
+  private stateChangeCallbacks: Set<(state: AudioContextState) => void> = new Set();
   private wakeLock: WakeLockSentinel | null = null;
   private hasVisibilityListener = false;
   private silentAudioElement: HTMLAudioElement | null = null;
@@ -115,9 +115,17 @@ class AudioContextManager {
 
     const resumeOnGesture = () => {
       if (this.audioContext && isAudioContextPaused(this.audioContext.state)) {
-        this.audioContext.resume().catch((err) => {
-          console.warn("[AudioContextManager] Resume on gesture failed:", err);
-        });
+        this.audioContext
+          .resume()
+          .then(() => {
+            const state = this.audioContext?.state as AudioContextState | undefined;
+            if (state === "running") {
+              this.notifyStateChange("running");
+            }
+          })
+          .catch((err) => {
+            console.warn("[AudioContextManager] Resume on gesture failed:", err);
+          });
       }
     };
 
@@ -188,10 +196,14 @@ class AudioContextManager {
 
   async resume(): Promise<void> {
     if (!this.audioContext) return;
-    if (this.audioContext.state === "suspended") {
+    if (isAudioContextPaused(this.audioContext.state)) {
       try {
         await this.audioContext.resume();
-        console.log(`[AudioContextManager] Resumed, state: ${this.audioContext.state}`);
+        const state = this.audioContext.state as AudioContextState;
+        console.log(`[AudioContextManager] Resumed, state: ${state}`);
+        if (state === "running") {
+          this.notifyStateChange("running");
+        }
       } catch (error) {
         console.error("[AudioContextManager] Resume failed:", error);
         throw error;
@@ -204,6 +216,10 @@ class AudioContextManager {
     if (isAudioContextPaused(ctx.state)) {
       try {
         await ctx.resume();
+        const state = ctx.state as AudioContextState;
+        if (state === "running") {
+          this.notifyStateChange("running");
+        }
       } catch (e) {
         console.warn("[AudioContextManager] resume() on unlock failed:", e);
       }
@@ -243,15 +259,25 @@ class AudioContextManager {
     return this.audioContext?.state ?? "uninitialized";
   }
 
+  private notifyStateChange(state: AudioContextState): void {
+    this.stateChangeCallbacks.forEach((cb) => {
+      try {
+        cb(state);
+      } catch (e) {
+        console.error("[AudioContextManager] State change callback error:", e);
+      }
+    });
+  }
+
   onStateChange(callback: (state: AudioContextState) => void): () => void {
-    this.stateChangeCallback = callback;
+    this.stateChangeCallbacks.add(callback);
     return () => {
-      this.stateChangeCallback = null;
+      this.stateChangeCallbacks.delete(callback);
     };
   }
 
   setStateChangeCallback(callback: (state: AudioContextState) => void): void {
-    this.stateChangeCallback = callback;
+    this.stateChangeCallbacks.add(callback);
   }
 
   getMasterGain(): GainNode {
@@ -279,8 +305,8 @@ class AudioContextManager {
     if (!this.audioContext) return;
     this.audioContext.onstatechange = () => {
       const state = this.audioContext?.state;
-      if (state && this.stateChangeCallback) {
-        this.stateChangeCallback(state);
+      if (state) {
+        this.notifyStateChange(state);
       }
       if (isAudioContextPaused(state)) {
         console.warn(`[AudioContextManager] AudioContext ${state} - user interaction required to resume`);
@@ -308,7 +334,7 @@ class AudioContextManager {
     this.flyBypassGain = this.audioContext.createGain();
     this.flyBypassGain.gain.value = 1.0; // Fly is OFF by default -> 100% bypass
 
-    // 1. "Giữ trụ": 200Hz Lows branch (Bass & Kick stays firmly CENTER)
+    // 1. Bass Anchor: 200Hz Lows branch (Bass & Kick stays firmly CENTER)
     this.flyBassFilter = this.audioContext.createBiquadFilter();
     this.flyBassFilter.type = "lowpass";
     this.flyBassFilter.frequency.value = 200;

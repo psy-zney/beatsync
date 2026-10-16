@@ -28,6 +28,7 @@ const (
 	maxSearchItems  = 64
 	searchCacheTTL  = 2 * time.Minute
 	maxProcessBytes = 2 << 20
+	maxDurationSecs = 372 // 6m12s
 )
 
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
@@ -265,7 +266,7 @@ func (s *Service) searchWithYTDLP(ctx context.Context, query string, offset int)
 			}
 			return nil, err
 		}
-		if item.ID == "" || item.Duration <= 0 || item.Duration > 360 {
+		if item.ID == "" || item.Duration <= 0 || item.Duration > maxDurationSecs {
 			continue
 		}
 		index := total
@@ -388,7 +389,7 @@ func parseSearchPage(body []byte) ([]searchItem, error) {
 func searchItemFromRenderer(renderer map[string]any) (searchItem, bool) {
 	id, _ := renderer["videoId"].(string)
 	duration := parseDurationText(textValue(renderer["lengthText"]))
-	if !videoIDPattern.MatchString(id) || duration <= 0 || duration > 360 {
+	if !videoIDPattern.MatchString(id) || duration <= 0 || duration > maxDurationSecs {
 		return searchItem{}, false
 	}
 	title := html.UnescapeString(strings.TrimSpace(textValue(renderer["title"])))

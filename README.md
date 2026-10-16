@@ -13,15 +13,15 @@ BeatSync là ứng dụng nghe nhạc đồng bộ theo thời gian thực giữ
 - Backend tự giới hạn hàng chờ, giảm tải khi thiếu RAM và khôi phục state từ backup.
 - Spotify API key là tùy chọn; khi không có key, backend dùng metadata public.
 
-## Lyrics và Karaoke
+## Lyrics
 
 Lời được lấy tự động ở backend khi thêm bài, khôi phục playlist hoặc phát nhạc; không cần mở hộp thoại hay nhập tìm kiếm. Hệ thống chuẩn bị bài đang phát và hai bài tiếp theo, ưu tiên phụ đề gốc do tác giả đăng trên YouTube, rồi [LRCLIB](https://lrclib.net/docs) khi khớp bài, nghệ sĩ và thời lượng. Phụ đề nhận dạng giọng hát tự động của YouTube bị loại khỏi luồng lấy lời vì có thể sai nhiều từ. Nhạc Việt dùng lời Việt; các bài khác dùng lời gốc, không tự chọn phụ đề dịch máy.
 
-Bấm **Lời bài hát** hoặc **Karaoke** dưới trình phát. Lời tự cuộn, tô sáng câu đang hát, hỗ trợ tô từng từ khi nguồn có timestamp thật; bấm vào câu để tua. Đoạn nhạc không có lời được hiển thị riêng. Karaoke mở chữ lớn trên máy tính và điện thoại. Lời thường vẫn đọc được; không có timestamp thì hiển thị tĩnh. Mỗi bản lời tối đa 40 KB.
+Bấm **Lyrics** dưới trình phát. Lời tự cuộn, tô sáng câu đang hát, hỗ trợ tô từng từ khi nguồn có timestamp thật; bấm vào câu để tua. Đoạn nhạc không có lời được hiển thị riêng. Lời thường vẫn đọc được; không có timestamp thì hiển thị tĩnh. Mỗi bản lời tối đa 40 KB.
 
-Lỗi mạng được tự thử lại với backoff; có nút **Thử lấy lời lại**. Mục **Sửa lời** cho phép tùy chọn bản khác hoặc nhập `.lrc` như `[00:12.50]Lời bài hát`. Backend giữ nguyên bản đã chỉnh tay. Không đủ bằng chứng khớp bài/phiên bản/ngôn ngữ thì hiển thị chưa tìm thấy, tránh gắn lời nhầm.
+Lỗi mạng được tự thử lại với backoff; có nút **Retry lyrics**. Mục **Edit lyrics** cho phép tùy chọn bản khác hoặc nhập `.lrc` như `[00:12.50]Lyric line`. Backend giữ nguyên bản đã chỉnh tay. Không đủ bằng chứng khớp bài/phiên bản/ngôn ngữ thì hiển thị chưa tìm thấy, tránh gắn lời nhầm.
 
-Lời được chia sẻ cho cả phòng, kể cả người vào sau. Các nút **− / +** chỉnh lời sớm hoặc muộn 0,1 giây; bấm số độ trễ để đặt lại. **Save** trong trình phát lưu cả lời đã chọn cùng playlist. Chế độ này hiển thị lời karaoke; nhạc nền vẫn là bản âm thanh đang phát.
+Lời được chia sẻ cho cả phòng, kể cả người vào sau. Các nút **− / +** chỉnh lời sớm hoặc muộn 0,1 giây; bấm số độ trễ để đặt lại. **Save** trong trình phát lưu cả lời đã chọn cùng playlist. Nhạc nền vẫn là bản âm thanh đang phát.
 
 Production mặc định chỉ chạy một tác vụ lấy lời (`LYRICS_MAX_CONCURRENCY=1`, cho phép 1–4). Kết quả dùng cache theo video ID, giới hạn 512 bản và lưu trong `lyrics-cache` cạnh file backup; lỗi mạng không bị lưu thành thiếu lời. `/health` có mục `lyrics` để theo dõi tải. Khi có hybrid worker, tác vụ `youtube.lyrics` được chuyển sang worker và tự fallback nếu worker không sẵn sàng.
 

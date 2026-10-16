@@ -12,7 +12,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   FileUp,
   Loader2,
-  Mic2,
   Minus,
   Music2,
   Pause,
@@ -26,13 +25,11 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-type LyricsMode = "lyrics" | "karaoke";
-
 function shareLyrics(url: string, lyrics: TrackLyricsType | null, onlyIfEmpty = false): boolean {
   if (lyrics && !onlyIfEmpty) lyrics = { ...lyrics, automatic: false, resolverVersion: 6 };
   const ws = useGlobalStore.getState().socket;
   if (!ws || !sendWSRequest({ ws, request: { type: "SET_TRACK_LYRICS", audioSource: url, lyrics, onlyIfEmpty } })) {
-    if (!onlyIfEmpty) toast.error("Kết nối lại phòng trước khi chỉnh sửa lời.");
+    if (!onlyIfEmpty) toast.error("Reconnect to the room before editing lyrics.");
     return false;
   }
   return true;
@@ -40,10 +37,9 @@ function shareLyrics(url: string, lyrics: TrackLyricsType | null, onlyIfEmpty = 
 
 export function LyricsControls() {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<LyricsMode>("lyrics");
   const url = useGlobalStore((state) => state.selectedAudioUrl);
   const source = useGlobalStore((state) => state.audioSources.find((track) => track.source.url === url)?.source);
-  const title = source?.title || (url ? extractFileNameFromUrl(url) : "Chọn một bài hát");
+  const title = source?.title || (url ? extractFileNameFromUrl(url) : "Select a track");
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -54,46 +50,20 @@ export function LyricsControls() {
             variant="ghost"
             className="h-7 gap-1.5 text-xs text-neutral-400 hover:text-white"
             disabled={!source}
-            onClick={() => setMode("lyrics")}
           >
-            <Music2 className="size-3.5" /> Lời bài hát
-          </Button>
-        </DialogTrigger>
-        <DialogTrigger asChild>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1.5 text-xs text-neutral-400 hover:text-white"
-            disabled={!source}
-            onClick={() => setMode("karaoke")}
-          >
-            <Mic2 className="size-3.5" /> Karaoke
+            <Music2 className="size-3.5" /> Lyrics
           </Button>
         </DialogTrigger>
       </div>
-      <DialogContent
-        className={cn(
-          "flex h-[min(42rem,85dvh)] flex-col overflow-hidden border-neutral-800 bg-neutral-950 p-4 text-white sm:max-w-3xl sm:p-6",
-          mode === "karaoke" &&
-            "h-dvh max-h-dvh w-screen max-w-none rounded-none border-0 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:max-w-none"
-        )}
-      >
+      <DialogContent className="flex h-[min(42rem,85dvh)] flex-col overflow-hidden border-neutral-800 bg-neutral-950 p-4 text-white sm:max-w-3xl sm:p-6">
         <div className="shrink-0 pr-8">
           <DialogTitle className="truncate leading-normal">{title}</DialogTitle>
-          <DialogDescription>Lời bài hát và karaoke tự động đồng bộ theo tiến trình phát của phòng.</DialogDescription>
+          <DialogDescription>Lyrics automatically sync with the room&apos;s playback.</DialogDescription>
         </div>
         {source ? (
-          <LyricsSession
-            key={url}
-            url={url}
-            title={title}
-            lyrics={source.lyrics}
-            lyricsState={source.lyricsState}
-            mode={mode}
-            setMode={setMode}
-          />
+          <LyricsSession key={url} url={url} title={title} lyrics={source.lyrics} lyricsState={source.lyricsState} />
         ) : (
-          <p className="my-auto text-center text-neutral-400">Chọn một bài trong danh sách để xem lời bài hát.</p>
+          <p className="my-auto text-center text-neutral-400">Select a track from the playlist to view lyrics.</p>
         )}
       </DialogContent>
     </Dialog>
@@ -104,12 +74,12 @@ function getProviderInfo(lyrics: TrackLyricsType) {
   switch (lyrics.provider) {
     case "youtube-manual":
       return {
-        label: "Phụ đề YouTube (Tác giả)",
+        label: "YouTube Subtitles (Creator)",
         className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
       };
     case "youtube-auto":
       return {
-        label: "Phụ đề YouTube (Tự động)",
+        label: "YouTube Subtitles (Auto)",
         className: "bg-sky-500/10 text-sky-400 border-sky-500/20",
       };
     case "lrclib":
@@ -120,12 +90,12 @@ function getProviderInfo(lyrics: TrackLyricsType) {
       };
     case "import":
       return {
-        label: "File .lrc tải lên",
+        label: "Uploaded .lrc file",
         className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
       };
     default:
       return {
-        label: lyrics.provider || "Chỉnh tay",
+        label: lyrics.provider || "Custom",
         className: "bg-neutral-800 text-neutral-300 border-neutral-700",
       };
   }
@@ -136,15 +106,11 @@ function LyricsSession({
   title,
   lyrics,
   lyricsState,
-  mode,
-  setMode,
 }: {
   url: string;
   title: string;
   lyrics?: TrackLyricsType;
   lyricsState?: string;
-  mode: LyricsMode;
-  setMode: (mode: LyricsMode) => void;
 }) {
   const canMutate = useCanMutate();
   const [editing, setEditing] = useState(false);
@@ -173,7 +139,7 @@ function LyricsSession({
     try {
       if (shareLyrics(url, lyricsFromRecord(record))) setEditing(false);
     } catch {
-      toast.error("Lời bài hát này vượt quá 40 KB. Vui lòng chọn bản khác hoặc tải file .lrc lên.");
+      toast.error("Lyrics exceed 40 KB. Please choose another version or upload a .lrc file.");
     }
   }
 
@@ -194,27 +160,13 @@ function LyricsSession({
   return (
     <>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1" role="group" aria-label="Chế độ hiển thị lời">
-          <Button
-            size="sm"
-            variant={mode === "lyrics" ? "secondary" : "ghost"}
-            aria-pressed={mode === "lyrics"}
-            onClick={() => setMode("lyrics")}
-          >
-            <Music2 className="size-4" /> Lời bài hát
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "karaoke" ? "secondary" : "ghost"}
-            aria-pressed={mode === "karaoke"}
-            onClick={() => setMode("karaoke")}
-          >
-            <Mic2 className="size-4" /> Karaoke
-          </Button>
+        <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-300">
+          <Music2 className="size-4 text-primary-400" />
+          <span>Lyrics</span>
         </div>
         {canMutate && (
           <Button variant="ghost" size="sm" onClick={() => setEditing(!editing)}>
-            {editing ? (lyrics ? "Quay lại lời bài hát" : "Đóng tìm kiếm") : "Sửa lời"}
+            {editing ? (lyrics ? "Back to lyrics" : "Close search") : "Edit lyrics"}
           </Button>
         )}
       </div>
@@ -223,30 +175,30 @@ function LyricsSession({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           <form onSubmit={submitSearch} className="flex gap-2">
             <input
-              aria-label="Tên bài hát và ca sĩ"
+              aria-label="Track and artist name"
               className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
               value={query}
               maxLength={200}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Nhập tên bài hát và ca sĩ..."
+              placeholder="Enter track and artist name..."
             />
             <Button type="submit" size="sm" disabled={!query.trim() || isFetching}>
-              <Search className="size-4" /> Tìm kiếm
+              <Search className="size-4" /> Search
             </Button>
           </form>
           {isFetching && (
             <p role="status" className="flex items-center gap-2 text-sm text-neutral-400">
-              <Loader2 className="size-4 animate-spin" /> Đang tìm kiếm lời bài hát…
+              <Loader2 className="size-4 animate-spin" /> Searching lyrics…
             </p>
           )}
           {isError && (
             <p role="alert" className="text-sm text-amber-300">
-              Không thể tìm kiếm lời lúc này. Bạn có thể thử lại hoặc tải file .lrc lên bên dưới.
+              Unable to search lyrics right now. Try again or upload a .lrc file below.
             </p>
           )}
           {!isFetching && !isError && records.length === 0 && (
             <p className="text-sm text-neutral-400">
-              Chưa tìm thấy kết quả. Thử tìm với từ khóa khác hoặc nhập file .lrc bên dưới.
+              No results found. Try searching with different keywords or import a .lrc file below.
             </p>
           )}
           <div className="space-y-2">
@@ -265,7 +217,7 @@ function LyricsSession({
                   </span>
                 </span>
                 <span className={cn("shrink-0 text-xs", record.syncedLyrics ? "text-primary-400" : "text-neutral-400")}>
-                  {record.syncedLyrics ? "Khớp thời gian" : "Lời thường"}
+                  {record.syncedLyrics ? "Synced" : "Plain"}
                 </span>
               </button>
             ))}
@@ -274,25 +226,14 @@ function LyricsSession({
         </div>
       ) : lyrics ? (
         synced ? (
-          <TimedLyrics key={lyrics.synced} lines={lines} offset={lyrics.offset} mode={mode} />
-        ) : mode === "karaoke" ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto rounded-2xl bg-gradient-to-b from-primary-950/20 to-neutral-900/40 p-6 text-center sm:p-10">
-            <div className="flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
-              <span>Lời tĩnh (Chưa có timestamp theo thời gian)</span>
-            </div>
-            <div className="max-h-[60vh] max-w-4xl overflow-y-auto px-4">
-              <p className="whitespace-pre-line text-xl font-medium leading-relaxed text-neutral-200 sm:text-2xl sm:leading-loose">
-                {lyrics.plain || "Không có nội dung lời bài hát."}
-              </p>
-            </div>
-          </div>
+          <TimedLyrics key={lyrics.synced} lines={lines} offset={lyrics.offset} />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-neutral-900/30 p-4 sm:p-8">
             <p className="mb-4 text-xs text-amber-300/80">
-              Lời bài hát dạng văn bản (chưa có timestamp). Có thể chỉnh sửa hoặc tải file .lrc lên để chạy chữ tự động.
+              Plain text lyrics (no timestamps). You can edit or upload a .lrc file for auto-scroll.
             </p>
             <p className="whitespace-pre-line text-lg leading-relaxed text-neutral-300">
-              {lyrics.plain || "Không có nội dung lời bài hát."}
+              {lyrics.plain || "No lyrics available."}
             </p>
           </div>
         )
@@ -303,12 +244,12 @@ function LyricsSession({
           </div>
           <div className="space-y-1">
             <p className="text-base font-semibold text-white">
-              {lyricsState === "error" ? "Tạm thời chưa lấy được lời" : "Chưa tìm được lời phù hợp"}
+              {lyricsState === "error" ? "Unable to load lyrics" : "No matching lyrics found"}
             </p>
             <p className="text-xs text-neutral-400 max-w-md">
               {lyricsState === "error"
-                ? "Hệ thống sẽ tự thử lại. Bạn vẫn có thể nghe nhạc bình thường."
-                : "Chưa có lời khớp bài hát và ngôn ngữ gốc từ YouTube hoặc kho lời."}
+                ? "The system will retry automatically. You can continue listening normally."
+                : "No matching lyrics found from YouTube or lyrics database."}
             </p>
           </div>
           {canMutate && (
@@ -320,12 +261,12 @@ function LyricsSession({
                 if (ws) sendWSRequest({ ws, request: { type: "RETRY_TRACK_LYRICS", audioSource: url } });
               }}
             >
-              <RotateCw className="size-4" /> Thử lấy lời lại
+              <RotateCw className="size-4" /> Retry lyrics
             </Button>
           )}
           {canMutate && (
             <Button variant="secondary" size="sm" className="mt-2 gap-1.5" onClick={() => setEditing(true)}>
-              <Search className="size-4" /> Tìm kiếm & Sửa lời thủ công
+              <Search className="size-4" /> Search & Edit manually
             </Button>
           )}
         </div>
@@ -338,9 +279,9 @@ function LyricsSession({
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-base font-semibold text-white">Đang tự động lấy lời bài hát…</p>
+            <p className="text-base font-semibold text-white">Fetching lyrics automatically…</p>
             <p className="text-xs text-neutral-400 max-w-md">
-              Ưu tiên lời gốc từ YouTube, sau đó tìm bản phù hợp trong kho lời.
+              Prioritizing YouTube original subtitles, then searching the lyrics database.
             </p>
           </div>
           {canMutate && (
@@ -350,7 +291,7 @@ function LyricsSession({
               className="mt-2 text-xs border-neutral-700 hover:bg-neutral-800"
               onClick={() => setEditing(true)}
             >
-              <Search className="size-3.5 mr-1.5" /> Tìm kiếm thủ công / Nhập .lrc
+              <Search className="size-3.5 mr-1.5" /> Manual search / Import .lrc
             </Button>
           )}
         </div>
@@ -381,16 +322,16 @@ function LyricsSession({
                 {lyrics.language}
               </span>
             )}
-            <span className="text-neutral-500">· Đồng bộ cả phòng</span>
+            <span className="text-neutral-500">· Synced room-wide</span>
           </div>
           {synced && (
-            <div className="flex items-center gap-1" role="group" aria-label="Hiệu chỉnh độ trễ lời">
+            <div className="flex items-center gap-1" role="group" aria-label="Adjust lyrics sync offset">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
-                aria-label="Hiển thị lời sớm hơn 0.1 giây"
-                title="Lời đang chậm: bấm để hiện sớm hơn 0.1 giây"
+                aria-label="Show lyrics 0.1s earlier"
+                title="Lyrics delayed: click to show 0.1s earlier"
                 disabled={!canMutate || lyrics.offset <= -30}
                 onClick={() => adjustOffset(-0.1)}
               >
@@ -400,7 +341,7 @@ function LyricsSession({
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2 font-mono text-xs"
-                aria-label="Đặt lại thời gian lời"
+                aria-label="Reset lyrics sync offset"
                 disabled={!canMutate || lyrics.offset === 0}
                 onClick={() => adjustOffset(-lyrics.offset)}
               >
@@ -411,8 +352,8 @@ function LyricsSession({
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
-                aria-label="Hiển thị lời muộn hơn 0.1 giây"
-                title="Lời đang nhanh: bấm để hiện muộn hơn 0.1 giây"
+                aria-label="Show lyrics 0.1s later"
+                title="Lyrics too fast: click to show 0.1s later"
                 disabled={!canMutate || lyrics.offset >= 30}
                 onClick={() => adjustOffset(0.1)}
               >
@@ -435,14 +376,14 @@ function LyricsImport({ url, onSaved, disabled }: { url: string; onSaved: () => 
   async function readFile(file?: File) {
     if (!file) return;
     if (file.size > MAX_LYRICS_BYTES) {
-      toast.error("Vui lòng chọn file lời bài hát dưới 40 KB.");
+      toast.error("Please choose a lyrics file under 40 KB.");
       return;
     }
     setReading(true);
     try {
       setText(await file.text());
     } catch {
-      toast.error("Không thể đọc file này. Bạn có thể dán nội dung lời trực tiếp vào ô bên dưới.");
+      toast.error("Cannot read this file. You can paste the lyrics directly into the box below.");
     } finally {
       setReading(false);
     }
@@ -453,7 +394,7 @@ function LyricsImport({ url, onSaved, disabled }: { url: string; onSaved: () => 
       if (shareLyrics(url, lyricsFromText(text))) onSaved();
     } catch (error) {
       toast.error(
-        error instanceof Error && !error.message.startsWith("[") ? error.message : "Lời bài hát phải nhỏ hơn 40 KB."
+        error instanceof Error && !error.message.startsWith("[") ? error.message : "Lyrics must be under 40 KB."
       );
     }
   }
@@ -462,14 +403,14 @@ function LyricsImport({ url, onSaved, disabled }: { url: string; onSaved: () => 
     <div className="space-y-2 border-t border-neutral-800 pt-4">
       <div className="flex items-center justify-between gap-2">
         <label htmlFor="lyrics-import" className="text-sm font-medium">
-          Tải lên file lời bài hát (.lrc)
+          Upload lyrics file (.lrc)
         </label>
         <Button variant="outline" size="sm" disabled={disabled || reading} onClick={() => inputRef.current?.click()}>
-          <FileUp className="size-4 mr-1.5" /> Chọn file .lrc
+          <FileUp className="size-4 mr-1.5" /> Choose .lrc file
         </Button>
         <input
           ref={inputRef}
-          aria-label="Tải lên file LRC"
+          aria-label="Upload LRC file"
           type="file"
           accept=".lrc,.txt,text/plain"
           className="hidden"
@@ -487,19 +428,19 @@ function LyricsImport({ url, onSaved, disabled }: { url: string; onSaved: () => 
         maxLength={MAX_LYRICS_BYTES}
         rows={4}
         className="w-full resize-y rounded-md border border-neutral-700 bg-neutral-900 p-3 font-mono text-xs"
-        placeholder={"[00:12.50]Câu hát đầu tiên\n[00:16.00]Câu hát tiếp theo"}
+        placeholder={"[00:12.50]First lyric line\n[00:16.00]Second lyric line"}
       />
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-neutral-400">Dùng mốc thời gian [mm:ss.xx] để lời chạy tự động theo nhạc.</p>
+        <p className="text-xs text-neutral-400">Use [mm:ss.xx] timestamps to automatically sync lyrics with music.</p>
         <Button size="sm" disabled={disabled || reading || !text.trim()} onClick={save}>
-          Áp dụng lời bài hát
+          Apply lyrics
         </Button>
       </div>
     </div>
   );
 }
 
-function TimedLyrics({ lines, offset, mode }: { lines: LrcLine[]; offset: number; mode: LyricsMode }) {
+function TimedLyrics({ lines, offset }: { lines: LrcLine[]; offset: number }) {
   const isPlaying = useGlobalStore((state) => state.isPlaying);
   const currentTime = useGlobalStore((state) => state.currentTime);
   const playbackStartTime = useGlobalStore((state) => state.playbackStartTime);
@@ -511,8 +452,6 @@ function TimedLyrics({ lines, offset, mode }: { lines: LrcLine[]; offset: number
   const activeRef = useRef<HTMLButtonElement>(null);
   const time = (isPlaying ? playingPosition : currentTime) - offset;
   const index = getCurrentLineIndex({ lines, timeSeconds: time });
-  const current = lines[index];
-  const next = index >= 0 ? lines[index + 1] : lines.find((line) => line.time > time);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -520,8 +459,7 @@ function TimedLyrics({ lines, offset, mode }: { lines: LrcLine[]; offset: number
     let previous = Number.NaN;
     const update = () => {
       const position = useGlobalStore.getState().getCurrentTrackPosition();
-      // Check on every display frame, but render only when visible text or the
-      // karaoke clock changes. Long playlists do not need 60 React renders/sec.
+      // Check on every display frame, but render only when visible text changes.
       if (getLyricFrameKey(lines, previous - offset) !== getLyricFrameKey(lines, position - offset)) {
         setPlayingPosition(position);
         previous = position;
@@ -546,7 +484,7 @@ function TimedLyrics({ lines, offset, mode }: { lines: LrcLine[]; offset: number
       top: Math.max(0, top),
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
     });
-  }, [index, mode]);
+  }, [index]);
 
   function seek(targetTime: number) {
     if (!canMutate || duration <= 0) return;
@@ -559,44 +497,20 @@ function TimedLyrics({ lines, offset, mode }: { lines: LrcLine[]; offset: number
     }
   }
 
-  if (mode === "karaoke") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto rounded-2xl bg-gradient-to-b from-primary-950/30 to-neutral-900/20 p-4 text-center sm:gap-10 sm:p-10">
-        <p className="text-xs uppercase tracking-widest text-neutral-500">
-          {time < (lines[0]?.time ?? 0) ? "Chuẩn bị vào bài" : current?.text ? "Hát cùng BeatSync" : "Đoạn dạo nhạc ♪"}
-        </p>
-        <p
-          aria-live="off"
-          className="max-w-5xl whitespace-pre-line text-3xl font-bold leading-snug text-primary-300 sm:text-5xl lg:text-6xl"
-        >
-          {current ? <LyricText line={current} time={time} /> : "♪"}
-        </p>
-        {next?.text && (
-          <p className="max-w-4xl whitespace-pre-line text-xl leading-snug text-neutral-400 sm:text-3xl lg:text-4xl">
-            {next.text}
-          </p>
-        )}
-        <span className="font-mono text-xs text-neutral-500">
-          {formatTime(Math.max(0, time + offset))} / {formatTime(duration)}
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={scrollRef}
       className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-neutral-900/30 px-3 py-6 sm:px-8"
-      aria-label="Lời bài hát đồng bộ"
+      aria-label="Synced lyrics"
     >
-      {index < 0 && <p className="mb-4 text-center text-sm text-neutral-500">Lời bài hát sẽ bắt đầu cùng giai điệu.</p>}
+      {index < 0 && <p className="mb-4 text-center text-sm text-neutral-500">Lyrics will start with the melody.</p>}
       {lines.map((line, lineIndex) => (
         <button
           key={`${line.time}-${lineIndex}`}
           ref={lineIndex === index ? activeRef : undefined}
           type="button"
           aria-current={lineIndex === index ? "true" : undefined}
-          aria-label={`${formatTime(Math.max(0, line.time + offset))}: ${line.text || "Giai điệu"}`}
+          aria-label={`${formatTime(Math.max(0, line.time + offset))}: ${line.text || "Melody"}`}
           disabled={!canMutate || duration <= 0}
           onClick={() => seek(line.time)}
           className={cn(
@@ -648,14 +562,14 @@ function LyricsPlaybackControls() {
         }}
       >
         {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-        {isPlaying ? "Tạm dừng" : "Phát nhạc"}
+        {isPlaying ? "Pause" : "Play"}
       </Button>
       <Button
         variant="ghost"
         disabled={!canMutate || count < 2}
         onClick={() => useGlobalStore.getState().skipToNextTrack()}
       >
-        <SkipForward className="size-4" /> Bài tiếp theo
+        <SkipForward className="size-4" /> Next track
       </Button>
     </div>
   );

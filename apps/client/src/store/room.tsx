@@ -8,6 +8,7 @@ interface RoomStateValues {
   avatar: string;
   isLoadingRoom: boolean;
   playlistImportOpen: boolean;
+  playlistImportTab: "upload" | "saved" | "spotify" | "youtube";
 }
 
 interface RoomState extends RoomStateValues {
@@ -15,7 +16,8 @@ interface RoomState extends RoomStateValues {
   setUsername: (username: string) => void;
   setAvatar: (avatar: string) => void;
   setIsLoading: (isLoading: boolean) => void;
-  setPlaylistImportOpen: (open: boolean) => void;
+  setPlaylistImportOpen: (open: boolean, tab?: "upload" | "saved" | "spotify" | "youtube") => void;
+  setPlaylistImportTab: (tab: "upload" | "saved" | "spotify" | "youtube") => void;
   reset: () => void;
 }
 
@@ -26,6 +28,7 @@ const initialState: RoomStateValues = {
   avatar: "🎧",
   isLoadingRoom: false,
   playlistImportOpen: false,
+  playlistImportTab: "upload",
 };
 
 export const useRoomStore = create<RoomState>()((set) => ({
@@ -37,7 +40,12 @@ export const useRoomStore = create<RoomState>()((set) => ({
   setUsername: (username) => set({ username }),
   setAvatar: (avatar) => set({ avatar }),
   setIsLoading: (isLoading) => set({ isLoadingRoom: isLoading }),
-  setPlaylistImportOpen: (playlistImportOpen) => set({ playlistImportOpen }),
+  setPlaylistImportOpen: (playlistImportOpen, tab) =>
+    set({
+      playlistImportOpen,
+      ...(tab ? { playlistImportTab: tab } : {}),
+    }),
+  setPlaylistImportTab: (playlistImportTab) => set({ playlistImportTab }),
 
   // Reset to initial state
   reset: () =>

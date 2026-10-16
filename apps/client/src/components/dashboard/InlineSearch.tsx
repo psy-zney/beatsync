@@ -6,11 +6,14 @@ import { useCanMutate, useGlobalStore } from "@/store/global";
 import { sendWSRequest } from "@/utils/ws";
 import { ClientActionEnum } from "@beatsync/shared";
 import { ArrowDown, FolderDown, Search as SearchIcon, X, ZapIcon } from "lucide-react";
+import { FaYoutube } from "react-icons/fa";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { SearchResults } from "./SearchResults";
 import { useRoomStore } from "@/store/room";
+import { uploadYoutubeLink } from "@/lib/api";
+import { toast } from "sonner";
 
 interface SearchForm {
   query: string;
@@ -20,6 +23,7 @@ export function InlineSearch() {
   const [showResults, setShowResults] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const setPlaylistImportOpen = useRoomStore((state) => state.setPlaylistImportOpen);
+  const roomId = useRoomStore((state) => state.roomId);
   const [showCheckmark, setShowCheckmark] = React.useState(false);
   const isMobile = useIsMobile();
   const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,7 +40,6 @@ export function InlineSearch() {
     defaultValues: { query: "" },
   });
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() API is incompatible with React Compiler memoization by design
   const watchedQuery = watch("query");
 
   // Cleanup timeout on unmount
@@ -96,27 +99,49 @@ export function InlineSearch() {
       return;
     }
 
+    if (!data.query || !data.query.trim()) return;
+    const trimmed = data.query.trim();
+
+    // Check if the query is a direct YouTube video or shorts link
+    const isYtUrl = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/i.test(trimmed);
+    if (isYtUrl) {
+      void (async () => {
+        try {
+          setIsSearching(true);
+          toast.info("Importing track from YouTube URL...");
+          const res = await uploadYoutubeLink({ url: trimmed, roomId });
+          reset({ query: "" });
+          setShowResults(false);
+          toast.success(res?.title ? `Added "${res.title}" to room` : "Added YouTube audio to queue");
+        } catch (err: unknown) {
+          console.error("YouTube import error:", err);
+          toast.error(err instanceof Error ? err.message : "Failed to import YouTube track");
+        } finally {
+          setIsSearching(false);
+        }
+      })();
+      return;
+    }
+
     if (!socket) {
       console.error("WebSocket not connected");
       return;
     }
 
-    if (!data.query || !data.query.trim()) return;
-
-    console.log("Sending search request", data.query);
+    console.log("Sending search request", trimmed);
 
     // Reset pagination state for new search and set loading state
     setSearchOffset(0);
     setHasMoreResults(false);
     setIsSearching(true);
-    setSearchQuery(data.query);
+    setSearchQuery(trimmed);
     setShowResults(true);
 
     sendWSRequest({
       ws: socket,
       request: {
         type: ClientActionEnum.enum.SEARCH_MUSIC,
-        query: data.query,
+        query: trimmed,
       },
     });
   };
@@ -254,7 +279,7 @@ export function InlineSearch() {
               {...register("query")}
               type="text"
               disabled={!canMutate}
-              placeholder={canMutate ? "Search track name..." : "Admin only"}
+              placeholder={canMutate ? "Search song or paste YouTube link..." : "Admin only"}
               onFocus={handleFocus}
               onBlur={() => setIsFocused(false)}
               className={cn(
@@ -319,10 +344,22 @@ export function InlineSearch() {
           </div>
         </form>
 
+        {/* YouTube Import Button */}
+        <button
+          type="button"
+          onClick={() => setPlaylistImportOpen(true, "youtube")}
+          title="Import song from YouTube link"
+          aria-label="Import song from YouTube link"
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/35 text-red-400 border border-red-500/30 text-xs font-semibold shadow-lg hover:shadow-red-500/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"
+        >
+          <FaYoutube className="size-4 text-red-500" />
+          <span className="hidden sm:inline">YouTube</span>
+        </button>
+
         {/* Import Trigger Button */}
         <button
           type="button"
-          onClick={() => setPlaylistImportOpen(true)}
+          onClick={() => setPlaylistImportOpen(true, "upload")}
           title="Import audio, saved playlists, or Spotify"
           aria-label="Import audio, saved playlists, or Spotify"
           className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 border border-emerald-500/30 text-xs font-semibold shadow-lg hover:shadow-emerald-500/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"

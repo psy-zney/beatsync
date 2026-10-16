@@ -32,20 +32,45 @@ export function planAudioPreload(
   accessQueue: string[],
   maxBuffers: number,
   maxBackgroundLoads: number,
-  nextUrl?: string
+  nextUrl?: string,
+  isPlaying?: boolean
 ): { loadUrl?: string; evictedUrls: string[] } {
+  if (!sources.length) return { evictedUrls: [] };
+
+  const byUrl = new Map(sources.map((item) => [item.source.url, item]));
+
+  // If a track is selected to be played:
+  if (selectedUrl) {
+    const selected = byUrl.get(selectedUrl);
+    // 1. The selected track has absolute priority.
+    // If the selected track is not yet loaded, secondary preloads must NEVER run concurrently.
+    if (selected && selected.status !== "loaded") {
+      if (selected.status === "idle") {
+        return { loadUrl: selectedUrl, evictedUrls: [] };
+      }
+      return { evictedUrls: [] };
+    }
+
+    // 2. Secondary loading tracks must only load after the playing track has loaded AND started playing.
+    if (isPlaying === false) {
+      return { evictedUrls: [] };
+    }
+  }
+
+  // Any ongoing load occupies the slot.
+  const activeLoads = sources.filter((item) => item.status === "loading");
+  if (activeLoads.length >= maxBackgroundLoads) return { evictedUrls: [] };
+
   const window = getPlaybackWindow(
     sources.map((item) => item.source.url),
     selectedUrl,
     maxBuffers,
     nextUrl
   );
-  const byUrl = new Map(sources.map((item) => [item.source.url, item]));
-  // Loading the selected track must not prevent starting its successor early.
-  const backgroundLoads = sources.filter((item) => item.status === "loading" && item.source.url !== selectedUrl);
-  if (backgroundLoads.length >= maxBackgroundLoads) return { evictedUrls: [] };
+
   const loadUrl = window.find((url) => byUrl.get(url)?.status === "idle");
   if (!loadUrl) return { evictedUrls: [] };
+
   const activeCount = sources.filter((item) => item.status === "loaded" || item.status === "loading").length;
   if (activeCount < maxBuffers) return { loadUrl, evictedUrls: [] };
 

@@ -183,6 +183,9 @@ interface GlobalStateValues {
   // Whether nudge has been restored from server this connection (prevents re-restore on subsequent CLIENT_CHANGE)
   didRestoreNudge: boolean;
 
+  isWaitingForRoom: boolean;
+  isAudioContextSuspended: boolean;
+
   onWebRTCSignal: ((msg: WebRTCSignalUnicastType) => void) | null;
 }
 
@@ -345,6 +348,8 @@ const initialState: GlobalStateValues = {
   lowPassFreq: LOW_PASS_CONSTANTS.MAX_FREQ,
 
   didRestoreNudge: false,
+  isWaitingForRoom: false,
+  isAudioContextSuspended: false,
 
   onWebRTCSignal: null,
 };
@@ -389,9 +394,14 @@ const getWaitTimeSeconds = (state: GlobalState, targetServerTime: number) => {
 
 const resolveAudioUrl = (url: string): string => (url.startsWith("/") ? `${getApiUrl()}${url}` : url);
 
-const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: number, total: number) => void }) => {
+const downloadBufferFromURL = async (data: {
+  url: string;
+  signal?: AbortSignal;
+  onProgress?: (loaded: number, total: number) => void;
+}) => {
   const fetchAudio = async (urlToFetch: string) => {
     return await fetch(resolveAudioUrl(urlToFetch), {
+      signal: data.signal,
       headers: {
         "ngrok-skip-browser-warning": "69420",
         "bypass-tunnel-reminder": "true",
@@ -425,12 +435,23 @@ const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: 
     let loaded = 0;
     data.onProgress(0, contentLength);
 
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      loaded += value.byteLength;
-      data.onProgress(loaded, contentLength);
+    try {
+      for (;;) {
+        if (data.signal?.aborted) {
+          await reader.cancel().catch(() => {});
+          throw new DOMException("Aborted", "AbortError");
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        data.onProgress(loaded, contentLength);
+      }
+    } catch (err) {
+      try {
+        await reader.cancel().catch(() => {});
+      } catch {}
+      throw err;
     }
 
     // Combine chunks into single ArrayBuffer
@@ -445,6 +466,9 @@ const downloadBufferFromURL = async (data: { url: string; onProgress?: (loaded: 
     arrayBuffer = await response.arrayBuffer();
   }
 
+  if (data.signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
   const audioBuffer = await audioContextManager.decodeAudioData(arrayBuffer);
   return { audioBuffer };
 };
@@ -465,6 +489,7 @@ export const useCanMutate = () => {
 };
 
 export const useGlobalStore = create<GlobalState>((set, get) => {
+  const activeDownloads = new Map<string, { controller: AbortController; isPreload: boolean }>();
   let shuffleFromUrl = "";
   let shuffleNextUrl: string | undefined;
   const getPlannedShuffleNextUrl = (state: GlobalState): string | undefined => {
@@ -530,30 +555,92 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
   };
 
   // Load audio buffer for a source
-  const loadAudioSource = async (url: string, silent = false) => {
+  const loadAudioSource = async (url: string, silent = false, isPreload = false) => {
+    // If this is a secondary background preload:
+    // Only allow it if the active track is loaded and playing, and no priority load is running.
+    if (isPreload) {
+      const state = get();
+      if (!state.selectedAudioUrl || !state.isPlaying) return;
+      const selectedSource = state.audioSources.find((as) => as.source.url === state.selectedAudioUrl);
+      if (!selectedSource || selectedSource.status !== "loaded") return;
+
+      for (const download of activeDownloads.values()) {
+        if (!download.isPreload) return;
+      }
+    } else {
+      // Priority download:
+      // Cancel any active secondary preload downloads or non-selected downloads immediately
+      // to dedicate 100% bandwidth to the requested/playing track.
+      for (const [activeUrl, download] of activeDownloads.entries()) {
+        if (activeUrl !== url) {
+          download.controller.abort();
+          activeDownloads.delete(activeUrl);
+        }
+      }
+      set((currentState) => ({
+        audioSources: currentState.audioSources.map((as) =>
+          as.source.url !== url && as.status === "loading"
+            ? {
+                ...as,
+                status: "idle",
+                loadedBytes: undefined,
+                totalBytes: undefined,
+                transferRateBytesPerSecond: undefined,
+                estimatedRemainingMs: undefined,
+              }
+            : as
+        ),
+      }));
+
+      // Promote in-flight preload to priority if user selected it
+      const current = activeDownloads.get(url);
+      if (current) {
+        current.isPreload = false;
+      }
+    }
+
+    const controller = new AbortController();
     try {
       const state = get();
       const existing = state.audioSources.find((as) => as.source.url === url);
       const loadStartedAt = Date.now();
 
       // Skip if already loaded or in-flight
-      if (existing && existing.status === "loading") {
+      if (existing && existing.status === "loading" && activeDownloads.has(url)) {
         return;
       }
       if (existing && existing.status === "loaded") {
         // Update LRU queue when accessing an already loaded buffer
         addURLToLRU(url);
 
-        const { socket } = getSocket(state);
-        sendWSRequest({
-          ws: socket,
-          request: {
-            type: ClientActionEnum.enum.AUDIO_SOURCE_LOADED,
-            source: { url },
-          },
-        });
+        const socket = state.socket;
+        if (socket?.readyState === WebSocket.OPEN) {
+          sendWSRequest({
+            ws: socket,
+            request: {
+              type: ClientActionEnum.enum.AUDIO_SOURCE_LOADED,
+              source: { url },
+            },
+          });
+        }
+
+        const refreshed = get();
+        if (
+          (refreshed.selectedAudioUrl === url || refreshed.awaitingSyncAfterLoadUrl === url) &&
+          !refreshed.isPlaying
+        ) {
+          set({ awaitingSyncAfterLoadUrl: null });
+          if (socket?.readyState === WebSocket.OPEN) {
+            sendWSRequest({
+              ws: socket,
+              request: { type: ClientActionEnum.enum.SYNC },
+            });
+          }
+        }
         return;
       }
+
+      activeDownloads.set(url, { controller, isPreload });
 
       // Mark as loading
       set((currentState) => ({
@@ -580,7 +667,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       const PROGRESS_THRESHOLD = 100 * 1024; // Report every ~100KB
       const { audioBuffer } = await downloadBufferFromURL({
         url,
+        signal: controller.signal,
         onProgress: (loaded, total) => {
+          if (controller.signal.aborted) return;
           const now = Date.now();
           // Start throughput timing only after response headers arrive. Proxy
           // tracks may spend seconds resolving upstream before the first byte;
@@ -624,6 +713,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         },
       });
 
+      if (controller.signal.aborted) return;
+
       // Analyse after decoding, before announcing this track as ready, so Fly
       // does not stall a scheduled playback start.
       if (useFlyStore.getState().enabled && useFlyStore.getState().mode === "auto") {
@@ -657,7 +748,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         : false;
 
       const refreshedState = get();
-      if (refreshedState.awaitingSyncAfterLoadUrl === url && !refreshedState.isPlaying) {
+      const shouldSync =
+        (refreshedState.awaitingSyncAfterLoadUrl === url || refreshedState.selectedAudioUrl === url) &&
+        !refreshedState.isPlaying;
+
+      if (shouldSync) {
         set({ awaitingSyncAfterLoadUrl: null });
         if (didNotifyServer && socket) {
           sendWSRequest({
@@ -675,8 +770,31 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         }
       }
 
-      eagerLoadIdleSources();
-    } catch (error) {
+      if (get().isPlaying) {
+        eagerLoadIdleSources();
+      }
+    } catch (error: unknown) {
+      const isAbort = (error instanceof Error && error.name === "AbortError") || controller.signal.aborted;
+      if (isAbort) {
+        set((currentState) => ({
+          audioSources: currentState.audioSources.map((as) =>
+            as.source.url === url && as.status === "loading"
+              ? {
+                  ...as,
+                  status: "idle",
+                  buffer: undefined,
+                  error: undefined,
+                  loadedBytes: undefined,
+                  totalBytes: undefined,
+                  transferRateBytesPerSecond: undefined,
+                  estimatedRemainingMs: undefined,
+                }
+              : as
+          ),
+        }));
+        return;
+      }
+
       console.error(`Failed to load audio source ${url}:`, error);
       const currentSocket = get().socket;
       const isConnectionUnavailable =
@@ -704,9 +822,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         });
       }
 
-      if (!isConnectionUnavailable) {
+      if (!isConnectionUnavailable && get().isPlaying) {
         eagerLoadIdleSources();
       }
+    } finally {
+      activeDownloads.delete(url);
     }
   };
 
@@ -719,10 +839,27 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       for (const as of state.audioSources) {
         if (as.source.url === skip) continue;
         if (as.status === "idle") {
-          void loadAudioSource(as.source.url, true);
+          void loadAudioSource(as.source.url, true, true);
         }
       }
       return;
+    }
+
+    // Secondary preloading is strictly allowed only when:
+    // 1. Current selected track is loaded
+    // 2. Playback is actively running (isPlaying === true)
+    // 3. No priority track download is in-flight
+    if (state.selectedAudioUrl) {
+      const selectedSource = state.audioSources.find((as) => as.source.url === state.selectedAudioUrl);
+      if (selectedSource?.status !== "loaded" || !state.isPlaying) {
+        return;
+      }
+    } else if (!state.isPlaying) {
+      return;
+    }
+
+    for (const download of activeDownloads.values()) {
+      if (!download.isPreload) return;
     }
 
     // Wait for the room's hidden shuffle plan instead of starting an unrelated
@@ -737,7 +874,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       state.bufferAccessQueue,
       MAX_CACHED_BUFFERS,
       MAX_BACKGROUND_PRELOADS,
-      getPlannedShuffleNextUrl(state)
+      getPlannedShuffleNextUrl(state),
+      state.isPlaying
     );
     if (plan.loadUrl && plan.loadUrl !== skip) {
       if (plan.evictedUrls.length) {
@@ -748,7 +886,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           ),
         }));
       }
-      void loadAudioSource(plan.loadUrl, true);
+      const isPreloadTarget = plan.loadUrl !== state.selectedAudioUrl;
+      void loadAudioSource(plan.loadUrl, true, isPreloadTarget);
     }
   };
 
@@ -786,11 +925,25 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
     const audioContext = audioContextManager.getContext();
     const gainNode = audioContextManager.getMasterGain();
 
-    // Set up state change callback for iOS suspensions
+    // Set up state change callback for iOS suspensions and autoplay unlocks
     audioContextManager.setStateChangeCallback((state) => {
       console.log(`AudioContext state changed to: ${state}`);
 
-      if (isAudioContextPaused(state)) {
+      if (state === "running") {
+        set({ isAudioContextSuspended: false });
+        const currentState = get();
+        if (currentState.selectedAudioUrl && !currentState.isPlaying) {
+          const socket = currentState.socket;
+          if (socket?.readyState === WebSocket.OPEN) {
+            console.log("[AudioContext] Became running, requesting SYNC from server");
+            sendWSRequest({
+              ws: socket,
+              request: { type: ClientActionEnum.enum.SYNC },
+            });
+          }
+        }
+      } else if (isAudioContextPaused(state)) {
+        set({ isAudioContextSuspended: true });
         // Only reset the init UI if audio was actively playing.
         // iOS frequently toggles AudioContext between running/suspended due to the
         // Bluetooth keepalive oscillator — this is harmless when idle and should NOT
@@ -798,6 +951,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         stopAndResetIfPlaying(`AudioContext ${state} by iOS during playback`);
       }
     });
+
+    if (isAudioContextPaused(audioContext.state)) {
+      set({ isAudioContextSuspended: true });
+    }
 
     // Set initial volume
     const state = get();
@@ -952,7 +1109,6 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       });
 
       void loadAudioSource(url);
-      eagerLoadIdleSources({ skip: url });
 
       // Return the previous playing state for the skip functions to use
       return wasPlaying;
@@ -967,6 +1123,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     schedulePlay: async (data) => {
       toast.dismiss("room-audio-loading");
+      set({ isWaitingForRoom: false });
       const state = get();
       if (state.isInitingSystem) {
         console.log("Not playing audio, still loading");
@@ -1041,6 +1198,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           state.pauseAudio({ when: 0 });
         }
         console.warn(`Cannot play audio: Track not found in audioSources: ${data.audioSource}`);
+        set({ awaitingSyncAfterLoadUrl: data.audioSource });
+        void loadAudioSource(data.audioSource);
         return;
       }
 
@@ -1117,6 +1276,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     schedulePause: ({ targetServerTime, trackTimeSeconds, audioSource }) => {
       toast.dismiss("room-audio-loading");
+      set({ isWaitingForRoom: false });
       const state = get();
       if (audioSource !== state.selectedAudioUrl) return;
       const waitTimeSeconds = getWaitTimeSeconds(state, targetServerTime);
@@ -1417,9 +1577,17 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       // Before any audio playback, ensure the context is running
       if (audioContext.state !== "running") {
-        console.log("AudioContext still suspended, aborting play");
-        toast.error("Audio context is suspended. Please try again.");
+        try {
+          await audioContextManager.resume();
+        } catch {}
+      }
+
+      if (audioContext.state !== "running") {
+        console.log("AudioContext still suspended, awaiting user gesture to unlock");
+        set({ isAudioContextSuspended: true });
         return;
+      } else {
+        set({ isAudioContextSuspended: false });
       }
 
       // Stop any existing source node before creating a new one
@@ -1530,6 +1698,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         },
         awaitingSyncAfterLoadUrl: null,
         isPlaying: true,
+        isWaitingForRoom: false,
         playbackStartTime: startTime,
         playbackOffset: data.offset,
         duration: audioBuffer.duration, // Set the duration
@@ -1558,6 +1727,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       set((state) => ({
         ...state,
         isPlaying: false,
+        isWaitingForRoom: false,
         currentTime: currentTrackPosition,
       }));
     },
@@ -1850,13 +2020,16 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       // If currentAudioSource is provided from server, update selectedAudioUrl and start loading it
       if (replacementCurrentAudioSource) {
-        set({ selectedAudioUrl: replacementCurrentAudioSource });
+        set({
+          selectedAudioUrl: replacementCurrentAudioSource,
+          awaitingSyncAfterLoadUrl: replacementCurrentAudioSource,
+        });
         void loadAudioSource(replacementCurrentAudioSource);
       }
 
       // Preload queue items as soon as they enter the room.
-      // Demo mode waits for sync; production preloads in the background immediately.
-      if (IS_DEMO_MODE ? get().isSynced : true) {
+      // Demo mode waits for sync; production preloads only when playing.
+      if (IS_DEMO_MODE ? get().isSynced : get().isPlaying) {
         eagerLoadIdleSources({ skip: replacementCurrentAudioSource });
       }
 
@@ -1870,7 +2043,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       const currentStillExists = newAudioSources.some((as) => as.source.url === nextSelectedUrl);
 
       if (replacementSelectedUrl && replacementSelectedUrl !== state.selectedAudioUrl) {
-        set({ selectedAudioUrl: replacementSelectedUrl });
+        set({
+          selectedAudioUrl: replacementSelectedUrl,
+          awaitingSyncAfterLoadUrl: replacementSelectedUrl,
+        });
         void loadAudioSource(replacementSelectedUrl);
       }
 
@@ -1887,6 +2063,13 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     // Reset function to clean up state
     resetStore: () => {
+      for (const download of activeDownloads.values()) {
+        try {
+          download.controller.abort();
+        } catch {}
+      }
+      activeDownloads.clear();
+
       const state = get();
 
       // Stop any playing audio
@@ -2036,13 +2219,8 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
     // Audio source methods
     handleLoadAudioSource: ({ audioSourceToPlay }: LoadAudioSourceType) => {
-      toast.info("Waiting for everyone in the room to load the track…", {
-        id: "room-audio-loading",
-        duration: Infinity,
-      });
-      set({ selectedAudioUrl: audioSourceToPlay.url });
+      set({ selectedAudioUrl: audioSourceToPlay.url, isWaitingForRoom: true });
       void loadAudioSource(audioSourceToPlay.url);
-      eagerLoadIdleSources({ skip: audioSourceToPlay.url });
     },
 
     handlePreloadNextAudio: (event) => {

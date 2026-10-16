@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useFlyStore, type FlyMode, type FlyOutputDevice } from "@/store/fly";
-import { Headphones, MoveHorizontal, Radio, ShieldCheck, Speaker, Sparkles } from "lucide-react";
+import { Headphones, MoveHorizontal, Radio, Speaker, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 
 const ModeButton = ({ mode, label }: { mode: FlyMode; label: string }) => {
@@ -256,19 +256,6 @@ export const Fly = () => {
             />
           </div>
         )}
-      </div>
-
-      {/* 5. "Giữ trụ" Frequency Splitting & Producer Touch Info */}
-      <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-3.5 text-xs text-neutral-300 space-y-2">
-        <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
-          <ShieldCheck className="size-4" />
-          <span>{'Bí quyết "Giữ trụ" Active'}</span>
-        </div>
-        <p className="text-[11px] leading-4 text-neutral-400">
-          Dải trầm dưới 200Hz (Sub-bass & Kick) được khóa cố định ở <strong>Center Mono</strong> để giữ nhịp chắc đầm,
-          không gây chóng mặt. Toàn bộ Vocal & Nhạc cụ trên 200Hz được đưa qua bộ xử lý 3D bay lượn kết hợp tiếng vang
-          phòng mỏng (Ambience).
-        </p>
       </div>
     </div>
   );

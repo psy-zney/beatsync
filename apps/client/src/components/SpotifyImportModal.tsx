@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { resolveSpotifyPlaylist, uploadAudioFile, type SpotifyResolveResponse } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { resolveSpotifyPlaylist, uploadAudioFile, uploadYoutubeLink, type SpotifyResolveResponse } from "@/lib/api";
 import { useCanMutate, useGlobalStore } from "@/store/global";
 import { useRoomStore } from "@/store/room";
 import { sendWSRequest } from "@/utils/ws";
@@ -9,6 +9,7 @@ import { ClientActionEnum } from "@beatsync/shared";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CheckSquare, CloudUpload, FolderDown, ListMusic, Loader2, Plus, Square, X } from "lucide-react";
+import { FaYoutube } from "react-icons/fa";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { SavedPlaylistPicker } from "./SavedPlaylistPicker";
 import { cn } from "@/lib/utils";
@@ -19,10 +20,20 @@ interface SpotifyImportModalProps {
 }
 
 export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps) {
-  const [tab, setTab] = useState<"upload" | "saved" | "spotify">("upload");
+  const playlistImportTab = useRoomStore((state) => state.playlistImportTab);
+  const setPlaylistImportTab = useRoomStore((state) => state.setPlaylistImportTab);
+  const [tab, setTab] = useState<"upload" | "saved" | "spotify" | "youtube">("youtube");
   const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [resolvedData, setResolvedData] = useState<SpotifyResolveResponse["data"] | null>(null);
+
+  useEffect(() => {
+    if (isOpen && playlistImportTab) {
+      setTab(playlistImportTab);
+    }
+  }, [isOpen, playlistImportTab]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
 
@@ -77,6 +88,35 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  };
+
+  const handleYoutubeImport = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!canMutate) {
+      toast.error("Only room admins can add tracks.");
+      return;
+    }
+    const cleanUrl = youtubeUrl.trim();
+    if (!cleanUrl) {
+      toast.error("Please enter a YouTube video URL or ID.");
+      return;
+    }
+
+    try {
+      setIsYoutubeImporting(true);
+      const res = await uploadYoutubeLink({
+        url: cleanUrl,
+        roomId,
+      });
+      toast.success(res?.title ? `Added "${res.title}" to room` : "Added YouTube audio to queue");
+      setYoutubeUrl("");
+      onClose();
+    } catch (err: unknown) {
+      console.error("YouTube import error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to import YouTube track");
+    } finally {
+      setIsYoutubeImporting(false);
     }
   };
 
@@ -189,7 +229,7 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
             <div>
               <DialogTitle className="text-base font-bold text-white">Import music & playlists</DialogTitle>
               <DialogDescription className="mt-1 text-xs text-neutral-400">
-                Upload audio files, reuse saved playlists, or import from Spotify
+                Import from YouTube, upload audio files, saved playlists, or Spotify
               </DialogDescription>
             </div>
           </div>
@@ -204,44 +244,121 @@ export function SpotifyImportModal({ isOpen, onClose }: SpotifyImportModalProps)
 
         {/* Modal Body */}
         <div className="p-4 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
-          <div className="grid grid-cols-3 gap-2" aria-label="Import source">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2" aria-label="Import source">
             <button
               type="button"
-              aria-pressed={tab === "upload"}
-              onClick={() => setTab("upload")}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                tab === "upload"
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+              aria-pressed={tab === "youtube"}
+              onClick={() => {
+                setTab("youtube");
+                setPlaylistImportTab("youtube");
+              }}
+              className={`rounded-lg px-2 sm:px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                tab === "youtube"
+                  ? "bg-red-500/15 text-red-400 border border-red-500/30 font-semibold"
                   : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
               }`}
             >
-              Upload audio
+              <FaYoutube className="size-3.5 text-red-500 shrink-0" />
+              <span>YouTube</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === "upload"}
+              onClick={() => {
+                setTab("upload");
+                setPlaylistImportTab("upload");
+              }}
+              className={`rounded-lg px-2 sm:px-3 py-2 text-xs font-medium transition-colors ${
+                tab === "upload"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
+                  : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
+              }`}
+            >
+              Upload
             </button>
             <button
               type="button"
               aria-pressed={tab === "saved"}
-              onClick={() => setTab("saved")}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              onClick={() => {
+                setTab("saved");
+                setPlaylistImportTab("saved");
+              }}
+              className={`rounded-lg px-2 sm:px-3 py-2 text-xs font-medium transition-colors ${
                 tab === "saved"
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
                   : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
               }`}
             >
-              Saved playlists
+              Saved
             </button>
             <button
               type="button"
               aria-pressed={tab === "spotify"}
-              onClick={() => setTab("spotify")}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              onClick={() => {
+                setTab("spotify");
+                setPlaylistImportTab("spotify");
+              }}
+              className={`rounded-lg px-2 sm:px-3 py-2 text-xs font-medium transition-colors ${
                 tab === "spotify"
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
                   : "bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800"
               }`}
             >
               Spotify
             </button>
           </div>
+
+          {tab === "youtube" && (
+            <div className="space-y-4">
+              <form onSubmit={handleYoutubeImport} className="space-y-3.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-neutral-300">YouTube URL or Video ID</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=... or youtu.be/..."
+                      disabled={!canMutate || isYoutubeImporting}
+                      className="w-full bg-neutral-900/80 border border-neutral-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-red-500/60 focus:ring-1 focus:ring-red-500/40 transition-all font-mono"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 text-[11px] text-neutral-400 space-y-1">
+                  <p className="font-medium text-neutral-300">Supported formats:</p>
+                  <p className="text-neutral-500">
+                    • Standard video: <span className="font-mono text-neutral-400">youtube.com/watch?v=...</span>
+                  </p>
+                  <p className="text-neutral-500">
+                    • Short link: <span className="font-mono text-neutral-400">youtu.be/...</span> or Shorts
+                  </p>
+                  <p className="text-neutral-500">
+                    • Length limit: <span className="font-mono text-emerald-400 font-medium">Up to 6m12s (372s)</span>
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!canMutate || isYoutubeImporting || !youtubeUrl.trim()}
+                  className="w-full bg-red-600 hover:bg-red-500 text-white font-medium text-xs py-2.5 rounded-xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isYoutubeImporting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Resolving & Importing YouTube track...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaYoutube className="size-4" />
+                      <span>Import YouTube Track</span>
+                    </>
+                  )}
+                </Button>
+              </form>
+            </div>
+          )}
 
           {tab === "upload" && (
             <div className="space-y-4">

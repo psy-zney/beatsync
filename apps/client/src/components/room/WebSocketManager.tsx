@@ -125,15 +125,19 @@ export const WebSocketManager = ({ roomId, username }: WebSocketManagerProps) =>
         request: { type: ClientActionEnum.enum.UPDATE_PROFILE, avatar: useRoomStore.getState().avatar },
       });
 
-      // Resume an audio load that was requested while the backend was offline.
+      // Resume an audio load that was requested while the backend was offline, or sync if already loaded
       const globalState = useGlobalStore.getState();
-      const pendingAudio = globalState.audioSources.find(
-        (source) => source.source.url === globalState.awaitingSyncAfterLoadUrl
-      );
+      const targetSyncUrl = globalState.selectedAudioUrl || globalState.awaitingSyncAfterLoadUrl;
+      const pendingAudio = globalState.audioSources.find((source) => source.source.url === targetSyncUrl);
       if (pendingAudio && pendingAudio.status !== "loaded" && pendingAudio.status !== "loading") {
         handleLoadAudioSource({
           type: "LOAD_AUDIO_SOURCE",
           audioSourceToPlay: pendingAudio.source,
+        });
+      } else if (pendingAudio && pendingAudio.status === "loaded" && !globalState.isPlaying) {
+        sendWSRequest({
+          ws,
+          request: { type: ClientActionEnum.enum.SYNC },
         });
       }
 
